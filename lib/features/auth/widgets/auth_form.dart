@@ -371,6 +371,20 @@ class _AuthFormState extends State<AuthForm> {
                                     label: buttonLabel,
                                     onPressed: _submit,
                                   ),
+                                  const SizedBox(height: 8),
+                                  TextButton(
+                                    onPressed: () {
+                                      FocusScope.of(context).unfocus();
+                                      Navigator.pushNamed(
+                                        context,
+                                        RouteNames.roleSelection,
+                                      );
+                                    },
+                                    child: const Text(
+                                      'Continue without an account',
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),

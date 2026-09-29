@@ -18,6 +18,23 @@ Future<void> tapVisible(WidgetTester tester, String text) async {
 }
 
 void main() {
+  testWidgets('Continue without an account opens roles with empty forms', (
+    tester,
+  ) async {
+    await openSignIn(tester);
+    await tapVisible(tester, 'Continue without an account');
+    expect(find.text('Roles Selection'), findsOneWidget);
+    expect(find.text('Enter your email address.'), findsNothing);
+    final navigator = tester.state<NavigatorState>(find.byType(Navigator));
+    navigator.pop();
+    await tester.pumpAndSettle();
+    await tapVisible(tester, 'Sign Up');
+    await tapVisible(tester, 'Continue without an account');
+    expect(find.text('Roles Selection'), findsOneWidget);
+    expect(find.text('Enter your full name.'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'Sign in validates, toggles password visibility, and keeps role when switching pages',
     (tester) async {

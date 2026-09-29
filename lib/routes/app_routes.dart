@@ -4,6 +4,7 @@ import '../features/auth/screens/onboarding_screen.dart';
 import '../features/auth/screens/welcome_screen.dart';
 import '../features/auth/screens/sign_in_screen.dart';
 import '../features/auth/screens/sign_up_screen.dart';
+import '../features/auth/screens/role_selection_screen.dart';
 import 'route_names.dart';
 
 class AppRoutes {
@@ -12,6 +13,7 @@ class AppRoutes {
     RouteNames.onboarding: (_) => const OnboardingScreen(),
     RouteNames.signIn: (_) => const SignInScreen(),
     RouteNames.signUp: (_) => const SignUpScreen(),
+    RouteNames.roleSelection: (_) => const RoleSelectionScreen(),
     RouteNames.marketplace: (_) => const Scaffold(
       body: Center(
         child: Text('Artisan Marketplace', style: TextStyle(fontSize: 24)),

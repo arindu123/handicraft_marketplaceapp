@@ -3,5 +3,6 @@ class RouteNames {
   static const onboarding = '/onboarding';
   static const signIn = '/sign-in';
   static const signUp = '/sign-up';
+  static const roleSelection = '/roles';
   static const marketplace = '/marketplace';
 }

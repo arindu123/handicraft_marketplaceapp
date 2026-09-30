@@ -330,8 +330,10 @@ class _AuthFormState extends State<AuthForm> {
                                     Align(
                                       alignment: Alignment.centerRight,
                                       child: TextButton(
-                                        onPressed: () =>
-                                            _unavailable('Password reset'),
+                                        onPressed: () => Navigator.pushNamed(
+                                          context,
+                                          RouteNames.passwordResetRequest,
+                                        ),
                                         child: const Text(
                                           'Forgot password?',
                                           style: TextStyle(fontSize: 12),

@@ -29,14 +29,14 @@ void main() {
   ) async {
     await openSignIn(tester);
     await tapVisible(tester, 'Continue without an account');
-    expect(find.text('Artisan Marketplace'), findsOneWidget);
+    expect(find.text('Artisan Dashboard'), findsOneWidget);
     expect(find.text('Enter your email address.'), findsNothing);
     final navigator = tester.state<NavigatorState>(find.byType(Navigator));
     navigator.pop();
     await tester.pumpAndSettle();
     await tapVisible(tester, 'Sign Up');
     await tapVisible(tester, 'Continue without an account');
-    expect(find.text('Artisan Marketplace'), findsOneWidget);
+    expect(find.text('Artisan Dashboard'), findsOneWidget);
     expect(find.text('Enter your full name.'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -70,7 +70,7 @@ void main() {
         find.text('Sign in is not available yet. Please try again later.'),
         findsOneWidget,
       );
-      expect(find.text('Artisan Marketplace'), findsNothing);
+      expect(find.text('Artisan Dashboard'), findsNothing);
       await tapVisible(tester, 'Sign Up');
       expect(find.text('Create Collector Account'), findsOneWidget);
       expect(find.text('Full name'), findsOneWidget);
@@ -107,7 +107,7 @@ void main() {
         ),
         findsOneWidget,
       );
-      expect(find.text('Artisan Marketplace'), findsNothing);
+      expect(find.text('Artisan Dashboard'), findsNothing);
     },
   );
 

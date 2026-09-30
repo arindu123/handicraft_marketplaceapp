@@ -21,9 +21,11 @@ class AdminOrder {
 }
 
 class AdminDirectoryItem {
-  AdminDirectoryItem(this.name, this.detail);
+  AdminDirectoryItem(this.name, this.detail, {this.verification = 'Pending'});
   final String name, detail;
   bool active = true;
+  String verification;
+  bool get isArtisan => detail.split('·').first.trim() == 'Artisan';
 }
 
 // Session-only sample data: no network, account authorization or real payments.
@@ -145,6 +147,7 @@ class AdminDemoStore extends ChangeNotifier {
       final record = AdminDirectoryItem(
         item.name,
         '${item.type} · ${item.location}',
+        verification: 'Approved',
       );
       (item.type == 'Courier' ? couriers : users).add(record);
     }
@@ -158,6 +161,16 @@ class AdminDemoStore extends ChangeNotifier {
 
   void toggleItem(AdminDirectoryItem item) {
     item.active = !item.active;
+    notifyListeners();
+  }
+
+  void verifyArtisan(AdminDirectoryItem item) {
+    if (!users.contains(item) ||
+        !item.isArtisan ||
+        item.verification == 'Approved') {
+      return;
+    }
+    item.verification = 'Approved';
     notifyListeners();
   }
 

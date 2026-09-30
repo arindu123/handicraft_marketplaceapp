@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../routes/route_names.dart';
 import '../models/delivery_order.dart';
 import '../widgets/delivery_widgets.dart';
+import '../widgets/delivery_status_widgets.dart';
 import 'delivery_request_screen.dart';
 
 class DeliveryHomeScreen extends StatefulWidget {
@@ -510,18 +511,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
                         style: const TextStyle(fontSize: 13),
                       ),
                       const SizedBox(height: 10),
-                      Text(
-                        order.delivered
-                            ? 'Delivered · Demo'
-                            : 'Awaiting pickup · Demo',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: order.delivered
-                              ? const Color(0xFF458269)
-                              : DeliveryStyle.orange,
-                        ),
-                      ),
+                      DeliveryStatusPill(status: order.status),
                     ],
                   ),
                 ),
@@ -538,64 +528,77 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
       isScrollControlled: true,
       showDragHandle: true,
       backgroundColor: Colors.white,
-      builder: (sheetContext) => SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                order.title,
-                style: const TextStyle(
-                  fontSize: 23,
-                  fontWeight: FontWeight.bold,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, updateSheet) => SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  order.title,
+                  style: const TextStyle(
+                    fontSize: 23,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${order.id} · ${order.service} · Demo',
-                style: const TextStyle(color: DeliveryStyle.muted),
-              ),
-              const SizedBox(height: 22),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(
-                  Icons.trip_origin,
-                  color: DeliveryStyle.orange,
+                const SizedBox(height: 8),
+                Text(
+                  '${order.id} · ${order.service} · Demo',
+                  style: const TextStyle(color: DeliveryStyle.muted),
                 ),
-                title: const Text('Pickup'),
-                subtitle: Text(order.pickup),
-              ),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(
-                  Icons.location_on_outlined,
-                  color: DeliveryStyle.orange,
+                const SizedBox(height: 22),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(
+                    Icons.trip_origin,
+                    color: DeliveryStyle.orange,
+                  ),
+                  title: const Text('Pickup'),
+                  subtitle: Text(order.pickup),
                 ),
-                title: const Text('Drop-off'),
-                subtitle: Text(order.destination),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'FRAGILE · Keep upright · Handle with care',
-                style: TextStyle(fontSize: 12, color: DeliveryStyle.orange),
-              ),
-              const SizedBox(height: 20),
-              if (!order.delivered)
-                DeliveryButton(
-                  label: 'Mark delivered (demo)',
-                  onPressed: () {
-                    setState(() => order.delivered = true);
-                    Navigator.pop(sheetContext);
-                  },
-                )
-              else
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(
+                    Icons.location_on_outlined,
+                    color: DeliveryStyle.orange,
+                  ),
+                  title: const Text('Drop-off'),
+                  subtitle: Text(order.destination),
+                ),
+                const SizedBox(height: 12),
                 const Text(
-                  'Delivery completed in this demo.',
-                  textAlign: TextAlign.center,
+                  'FRAGILE · Keep upright · Handle with care',
+                  style: TextStyle(fontSize: 12, color: DeliveryStyle.orange),
                 ),
-            ],
+                const SizedBox(height: 20),
+                DeliveryStatusPill(status: order.status),
+                if (order.status != DeliveryStatus.pending) ...[
+                  const SizedBox(height: 16),
+                  DeliveryStatusTracker(status: order.status),
+                ],
+                const SizedBox(height: 16),
+                if (!order.delivered)
+                  DeliveryButton(
+                    label: order.status.action!,
+                    onPressed: () {
+                      setState(order.advance);
+                      updateSheet(() {});
+                    },
+                  )
+                else
+                  const Text(
+                    'Delivery completed in this demo.',
+                    textAlign: TextAlign.center,
+                  ),
+                if (order.status != DeliveryStatus.pending)
+                  TextButton(
+                    onPressed: () => Navigator.pop(sheetContext),
+                    child: const Text('Back to My Orders'),
+                  ),
+              ],
+            ),
           ),
         ),
       ),

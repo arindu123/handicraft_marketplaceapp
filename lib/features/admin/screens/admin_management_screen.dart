@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/admin_demo_store.dart';
 import '../widgets/admin_widgets.dart';
+import 'admin_artisan_review_screen.dart';
 
 enum AdminSection { users, products, couriers, reports, settings }
 
@@ -162,6 +163,25 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     AdminStatus(item.active ? 'Active' : 'Paused'),
+                    if (widget.section == AdminSection.users && item.isArtisan)
+                      TextButton(
+                        onPressed: () {
+                          FocusScope.of(context).unfocus();
+                          Navigator.push<void>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AdminArtisanReviewScreen(
+                                store: widget.store,
+                                artisan: item,
+                              ),
+                            ),
+                          );
+                        },
+                        child: const Text(
+                          'Review Profile',
+                          style: TextStyle(color: AdminStyle.clay),
+                        ),
+                      ),
                     TextButton(
                       onPressed: () async {
                         final approved = await confirmAdminAction(

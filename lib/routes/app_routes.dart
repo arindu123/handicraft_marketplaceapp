@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../features/buyer/buyer_marketplace.dart';
+import '../features/artisan/artisan_dashboard_screen.dart';
+
 import '../features/auth/screens/onboarding_screen.dart';
 import '../features/auth/screens/welcome_screen.dart';
 import '../features/auth/screens/sign_in_screen.dart';
 import '../features/auth/screens/sign_up_screen.dart';
 import '../features/auth/screens/role_selection_screen.dart';
+import '../features/auth/screens/password_reset_screens.dart';
 import '../features/delivery/screens/delivery_splash_screen.dart';
 import '../features/delivery/screens/delivery_login_screen.dart';
 import '../features/delivery/screens/delivery_home_screen.dart';
@@ -17,15 +21,18 @@ class AppRoutes {
     RouteNames.onboarding: (_) => const OnboardingScreen(),
     RouteNames.signIn: (_) => const SignInScreen(),
     RouteNames.signUp: (_) => const SignUpScreen(),
+    RouteNames.passwordResetRequest: (_) => const PasswordResetRequestScreen(),
+    RouteNames.passwordResetCode: (_) => const PasswordResetCodeScreen(),
+    RouteNames.passwordResetNew: (_) => const PasswordResetNewPasswordScreen(),
+    RouteNames.passwordResetSuccess: (_) => const PasswordResetSuccessScreen(),
     RouteNames.roleSelection: (_) => const RoleSelectionScreen(),
     RouteNames.deliverySplash: (_) => const DeliverySplashScreen(),
     RouteNames.deliveryLogin: (_) => const DeliveryLoginScreen(),
     RouteNames.deliveryHome: (_) => const DeliveryHomeScreen(),
     RouteNames.adminDashboard: (_) => const AdminDashboardScreen(),
-    RouteNames.marketplace: (_) => const Scaffold(
-      body: Center(
-        child: Text('Artisan Marketplace', style: TextStyle(fontSize: 24)),
-      ),
-    ),
+    RouteNames.marketplace: (context) =>
+        ModalRoute.of(context)?.settings.arguments == MarketplaceRole.buyer
+        ? const BuyerMarketplace()
+        : const ArtisanDashboardScreen(),
   };
 }

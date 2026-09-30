@@ -68,7 +68,12 @@ void main() {
     expect(find.text('My Orders'), findsOneWidget);
     await tapText(tester, 'Test ceramic bowl');
     expect(find.text('Pottery Studio'), findsOneWidget);
-    await tapText(tester, 'Mark delivered (demo)');
+    await tapText(tester, 'Accept Delivery');
+    await tapText(tester, 'Mark as Picked Up');
+    await tapText(tester, 'Start Delivery');
+    await tapText(tester, 'Mark as Delivered');
+    await tapText(tester, 'Back to My Orders');
+    await tester.pumpAndSettle();
     await tapText(tester, 'Completed');
     expect(find.text('Test ceramic bowl'), findsOneWidget);
     await tapText(tester, 'Wallet');

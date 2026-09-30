@@ -167,6 +167,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       decoration: BoxDecoration(
         color: AdminStyle.navy,
         borderRadius: BorderRadius.circular(24),
+        image: const DecorationImage(
+          image: AssetImage('lib/features/auth/widgets/pottery_vase.png'),
+          fit: BoxFit.cover,
+          alignment: Alignment(0, 0.3),
+          colorFilter: ColorFilter.mode(Color(0xB3243447), BlendMode.srcATop),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -197,6 +203,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               height: 1.6,
               color: Color(0xFFCFD6DD),
             ),
+          ),
+          _space(18),
+          FilledButton.icon(
+            onPressed: () => _manage(AdminSection.products),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFF2DED3),
+              foregroundColor: AdminStyle.navy,
+            ),
+            icon: const Icon(Icons.arrow_outward, size: 18),
+            label: const Text('Explore catalogue'),
           ),
         ],
       ),
@@ -235,6 +251,33 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             Icons.account_balance_wallet_outlined,
             () => setState(() => _tab = 2),
           ),
+        ],
+      ),
+    ),
+    _space(24),
+    AdminSectionHeading(
+      'Made by our community',
+      action: 'Catalogue',
+      onPressed: () => _manage(AdminSection.products),
+    ),
+    _space(6),
+    const Text(
+      'A closer look at the craft behind your marketplace.',
+      style: TextStyle(fontSize: 12, color: AdminStyle.muted),
+    ),
+    _space(12),
+    LayoutBuilder(
+      builder: (context, constraints) => Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          for (final order in [_store.orders[0], _store.orders[2]])
+            SizedBox(
+              width: constraints.maxWidth < 340
+                  ? constraints.maxWidth
+                  : (constraints.maxWidth - 12) / 2,
+              child: _featuredCraft(order),
+            ),
         ],
       ),
     ),
@@ -288,6 +331,73 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       style: TextStyle(fontSize: 11, color: AdminStyle.muted),
     ),
   ];
+
+  String? _productPhoto(AdminOrder order) => switch (order.product) {
+    'Fluted terracotta vase' => 'lib/features/auth/widgets/pottery_vase.png',
+    'Handmade coffee cups' => 'lib/features/auth/widgets/pottery_mug.png',
+    _ => null,
+  };
+
+  Widget _featuredCraft(AdminOrder order) => Material(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(20),
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: () => _orderDetails(order),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Ink.image(
+            image: AssetImage(_productPhoto(order)!),
+            height: 170,
+            width: double.infinity,
+            fit: BoxFit.cover,
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  order.studio.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    letterSpacing: 1.2,
+                    color: AdminStyle.clay,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                _space(8),
+                Text(
+                  order.product,
+                  style: const TextStyle(
+                    fontFamily: 'CormorantGaramond',
+                    fontSize: 23,
+                    fontWeight: FontWeight.w600,
+                    color: AdminStyle.navy,
+                  ),
+                ),
+                _space(10),
+                Text(
+                  adminMoney(order.amount),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AdminStyle.navy,
+                  ),
+                ),
+                _space(8),
+                const Text(
+                  'View sample order →',
+                  style: TextStyle(fontSize: 12, color: AdminStyle.clay),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 
   Widget _metric(
     double width,
@@ -571,6 +681,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (_productPhoto(order) case final photo?) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: Image.asset(
+                    photo,
+                    width: double.infinity,
+                    height: 120,
+                    fit: BoxFit.cover,
+                    semanticLabel: order.product,
+                  ),
+                ),
+                _space(12),
+              ],
               Wrap(
                 spacing: 12,
                 runSpacing: 6,

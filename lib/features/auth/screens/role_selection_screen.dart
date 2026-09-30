@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../routes/route_names.dart';
 import '../widgets/craftisan_mark.dart';
+import '../models/marketplace_role.dart';
 
-// A navigation preference only; privileged access requires backend authorization.
-enum MarketplaceRole { artisan, buyer, courier, admin }
+export '../models/marketplace_role.dart';
 
 class RoleSelectionScreen extends StatefulWidget {
   const RoleSelectionScreen({super.key});
@@ -16,6 +16,23 @@ class RoleSelectionScreen extends StatefulWidget {
 
 class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
   MarketplaceRole _selected = MarketplaceRole.artisan;
+  bool get _signIn =>
+      ModalRoute.of(context)?.settings.arguments == AuthEntry.signIn;
+
+  void _openAuth({bool? signIn}) {
+    Navigator.pushNamed(
+      context,
+      _selected == MarketplaceRole.courier
+          ? RouteNames.deliverySplash
+          : (signIn ?? _signIn)
+          ? RouteNames.signIn
+          : RouteNames.signUp,
+      arguments: _selected == MarketplaceRole.courier
+          ? ((signIn ?? _signIn) ? AuthEntry.signIn : AuthEntry.signUp)
+          : _selected,
+    );
+  }
+
   static const accent = Color(0xFFC35D3D);
   static const roles = [
     (
@@ -122,11 +139,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                     ],
                     const SizedBox(height: 10),
                     FilledButton(
-                      onPressed: () => Navigator.pushNamed(
-                        context,
-                        RouteNames.marketplace,
-                        arguments: _selected,
-                      ),
+                      onPressed: () => _openAuth(),
                       style: FilledButton.styleFrom(
                         backgroundColor: accent,
                         foregroundColor: Colors.white,
@@ -159,6 +172,15 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
+                    TextButton(
+                      onPressed: () => _openAuth(signIn: !_signIn),
+                      child: Text(
+                        _signIn
+                            ? 'New to Craftisan? Sign Up'
+                            : 'Already have an account? Sign In',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                     const Text(
                       'You can switch roles any time in account settings.',
                       textAlign: TextAlign.center,

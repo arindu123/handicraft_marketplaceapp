@@ -4,6 +4,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../routes/route_names.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../widgets/craftisan_mark.dart';
+import '../models/marketplace_role.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -88,7 +89,8 @@ class WelcomeScreen extends StatelessWidget {
                               TextButton(
                                 onPressed: () => Navigator.pushNamed(
                                   context,
-                                  RouteNames.signIn,
+                                  RouteNames.roleSelection,
+                                  arguments: AuthEntry.signIn,
                                 ),
                                 child: const Text(
                                   'Sign In',

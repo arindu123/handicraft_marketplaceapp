@@ -26,20 +26,23 @@ void main() {
     expect(find.text('Next: Direct Patronage'), findsOneWidget);
     await tester.tap(find.text('Next: Direct Patronage'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Create Account'));
+    await tester.tap(find.text('Choose Your Role'));
     await tester.pumpAndSettle();
-    expect(find.text('Full name'), findsOneWidget);
+    expect(find.text('Roles Selection'), findsOneWidget);
+    expect(find.text('Full name'), findsNothing);
     expect(find.text('Get Started'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Skip reaches the existing app screen', (tester) async {
+  testWidgets('Skip opens role selection before authentication', (
+    tester,
+  ) async {
     await tester.pumpWidget(const MyApp());
     await tester.tap(find.text('Get Started'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Skip'));
     await tester.pumpAndSettle();
-    expect(find.text('Artisan Marketplace'), findsOneWidget);
+    expect(find.text('Roles Selection'), findsOneWidget);
   });
 
   testWidgets('Small screens with large text scroll without overflow', (

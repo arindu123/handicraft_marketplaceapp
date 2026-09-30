@@ -1,0 +1,748 @@
+import 'package:flutter/material.dart';
+
+import '../models/admin_demo_store.dart';
+import '../widgets/admin_widgets.dart';
+import 'admin_management_screen.dart';
+
+class AdminDashboardScreen extends StatefulWidget {
+  const AdminDashboardScreen({super.key});
+  @override
+  State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
+}
+
+class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
+  final _store = AdminDemoStore();
+  final _search = TextEditingController();
+  int _tab = 0;
+  String _approvalFilter = 'Pending', _orderFilter = 'All', _period = 'Week';
+  static const _statuses = ['Pending', 'Processing', 'Shipped', 'Delivered'];
+
+  @override
+  void dispose() {
+    _search.dispose();
+    _store.dispose();
+    super.dispose();
+  }
+
+  void _manage(AdminSection section) => Navigator.push(
+    context,
+    MaterialPageRoute<void>(
+      builder: (_) => AdminManagementScreen(section: section, store: _store),
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _store,
+    builder: (context, _) => Scaffold(
+      backgroundColor: AdminStyle.cream,
+      appBar: AppBar(
+        backgroundColor: AdminStyle.cream,
+        surfaceTintColor: Colors.transparent,
+        foregroundColor: AdminStyle.navy,
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'CRAFTISAN',
+              style: TextStyle(
+                fontSize: 10,
+                letterSpacing: 2,
+                color: AdminStyle.clay,
+              ),
+            ),
+            Text(
+              'Control',
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Review pending applications',
+            onPressed: () => setState(() => _tab = 1),
+            icon: Badge(
+              label: Text('${_store.pending}'),
+              child: const Icon(Icons.notifications_none),
+            ),
+          ),
+          const SizedBox(width: 12),
+        ],
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 650),
+            child: IndexedStack(
+              index: _tab,
+              children: [
+                _page('overview', _overview()),
+                _page('approvals', _approvals()),
+                _page('orders', _orders()),
+                _page('more', _more()),
+              ],
+            ),
+          ),
+        ),
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _tab,
+        onDestinationSelected: (value) => setState(() => _tab = value),
+        backgroundColor: Colors.white,
+        indicatorColor: const Color(0xFFF2DED3),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.grid_view_outlined),
+            selectedIcon: Icon(Icons.grid_view_rounded),
+            label: 'Overview',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.verified_outlined),
+            label: 'Approvals',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.inventory_2_outlined),
+            label: 'Orders',
+          ),
+          NavigationDestination(icon: Icon(Icons.more_horiz), label: 'More'),
+        ],
+      ),
+    ),
+  );
+
+  Widget _page(String key, List<Widget> children) => ListView(
+    key: PageStorageKey(key),
+    padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+    children: children,
+  );
+  Widget _space([double height = 18]) => SizedBox(height: height);
+  Widget _title(String title, String subtitle) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        title,
+        style: const TextStyle(
+          fontSize: 28,
+          fontFamily: 'CormorantGaramond',
+          fontWeight: FontWeight.w600,
+          color: AdminStyle.navy,
+        ),
+      ),
+      _space(6),
+      Text(
+        subtitle,
+        style: const TextStyle(
+          fontSize: 12,
+          height: 1.5,
+          color: AdminStyle.muted,
+        ),
+      ),
+      _space(),
+    ],
+  );
+  Widget _filters(
+    List<String> values,
+    String selected,
+    ValueChanged<String> change,
+  ) => Padding(
+    padding: const EdgeInsets.only(bottom: 18),
+    child: Wrap(
+      spacing: 7,
+      runSpacing: 6,
+      children: [
+        for (final value in values)
+          ChoiceChip(
+            label: Text(value),
+            selected: selected == value,
+            selectedColor: const Color(0xFFF2DED3),
+            onSelected: (_) => setState(() => change(value)),
+          ),
+      ],
+    ),
+  );
+
+  List<Widget> _overview() => [
+    Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AdminStyle.navy,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'GUILD ADMINISTRATION  /  DEMO',
+            style: TextStyle(
+              fontSize: 10,
+              letterSpacing: 1.4,
+              color: Color(0xFFEAC9AE),
+            ),
+          ),
+          _space(14),
+          const Text(
+            'Your marketplace,\nat a glance.',
+            style: TextStyle(
+              fontFamily: 'CormorantGaramond',
+              fontSize: 34,
+              height: 1.05,
+              color: Colors.white,
+            ),
+          ),
+          _space(12),
+          const Text(
+            'A little oversight. A thriving creative community.',
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.6,
+              color: Color(0xFFCFD6DD),
+            ),
+          ),
+        ],
+      ),
+    ),
+    _space(),
+    LayoutBuilder(
+      builder: (context, constraints) => Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          _metric(
+            (constraints.maxWidth - 12) / 2,
+            'Total orders',
+            '${_store.orders.length}',
+            Icons.inventory_2_outlined,
+            () => setState(() => _tab = 2),
+          ),
+          _metric(
+            (constraints.maxWidth - 12) / 2,
+            'Active artisans',
+            '${_store.activeArtisans}',
+            Icons.palette_outlined,
+            () => _manage(AdminSection.users),
+          ),
+          _metric(
+            (constraints.maxWidth - 12) / 2,
+            'Pending approvals',
+            '${_store.pending}',
+            Icons.verified_outlined,
+            () => setState(() => _tab = 1),
+          ),
+          _metric(
+            (constraints.maxWidth - 12) / 2,
+            'Sample order value',
+            adminMoney(_store.revenue),
+            Icons.account_balance_wallet_outlined,
+            () => setState(() => _tab = 2),
+          ),
+        ],
+      ),
+    ),
+    _space(24),
+    const AdminSectionHeading('Needs your attention'),
+    _space(12),
+    AdminPanel(
+      child: Column(
+        children: [
+          if (_store.pending > 0)
+            _action(
+              Icons.person_add_alt,
+              '${_store.pending} applications waiting',
+              'Review studio and courier applications',
+              () => setState(() => _tab = 1),
+            ),
+          if (!_store.productReportResolved)
+            _action(
+              Icons.flag_outlined,
+              'Product listing reported',
+              'Check listing details',
+              () => _manage(AdminSection.reports),
+            ),
+          if (!_store.deliveryIssueResolved)
+            _action(
+              Icons.local_shipping_outlined,
+              'Delivery delay flagged',
+              'Review the sample issue',
+              () => _manage(AdminSection.reports),
+            ),
+          if (_store.attentionCount == 0)
+            const AdminEmptyState('All caught up. No pending issues.'),
+        ],
+      ),
+    ),
+    _space(24),
+    const AdminSectionHeading('Sales overview'),
+    _space(12),
+    _sales(),
+    _space(20),
+    AdminSectionHeading(
+      'Recent orders',
+      action: 'View all',
+      onPressed: () => setState(() => _tab = 2),
+    ),
+    _space(8),
+    for (final order in _store.orders.take(3)) _orderCard(order),
+    const Text(
+      'Frontend preview · Sample data · Session-only changes',
+      textAlign: TextAlign.center,
+      style: TextStyle(fontSize: 11, color: AdminStyle.muted),
+    ),
+  ];
+
+  Widget _metric(
+    double width,
+    String label,
+    String value,
+    IconData icon,
+    VoidCallback action,
+  ) => SizedBox(
+    width: width,
+    child: Semantics(
+      button: true,
+      child: GestureDetector(
+        onTap: action,
+        child: AdminPanel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(icon, color: AdminStyle.clay, size: 22),
+              _space(14),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 23,
+                  fontWeight: FontWeight.w700,
+                  color: AdminStyle.navy,
+                ),
+              ),
+              _space(6),
+              Text(
+                label,
+                style: const TextStyle(fontSize: 11, color: AdminStyle.muted),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _action(
+    IconData icon,
+    String title,
+    String subtitle,
+    VoidCallback action,
+  ) => Material(
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: action,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Row(
+          children: [
+            Icon(icon, color: AdminStyle.clay, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: AdminStyle.navy,
+                    ),
+                  ),
+                  _space(4),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AdminStyle.muted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AdminStyle.muted, size: 20),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  Widget _sales() {
+    final values = switch (_period) {
+      'Today' => [0, 0, 2500, 3200, 4300, 4000],
+      'Month' => [24000, 32500, 41200, 53400],
+      _ => [3500, 4200, 6800, 4900, 7400, 12600, 14000],
+    };
+    final labels = switch (_period) {
+      'Today' => ['08', '10', '12', '14', '16', '18'],
+      'Month' => ['W1', 'W2', 'W3', 'W4'],
+      _ => ['M', 'T', 'W', 'T', 'F', 'S', 'S'],
+    };
+    return AdminPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _filters(['Today', 'Week', 'Month'], _period, (v) => _period = v),
+          Text(
+            adminMoney(values.fold<int>(0, (a, b) => a + b)),
+            style: const TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w700,
+              color: AdminStyle.navy,
+            ),
+          ),
+          const Text(
+            'Illustrative sales activity',
+            style: TextStyle(fontSize: 11, color: AdminStyle.muted),
+          ),
+          _space(22),
+          AdminSalesChart(values: values, labels: labels),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _approvals() {
+    final items = _store.approvals.where(
+      (a) => _approvalFilter == 'All' || a.status == _approvalFilter,
+    );
+    return [
+      _title(
+        'Make room for great craft.',
+        'Review sample studio and courier applications.',
+      ),
+      _filters(
+        ['Pending', 'Approved', 'Rejected', 'All'],
+        _approvalFilter,
+        (v) => _approvalFilter = v,
+      ),
+      if (items.isEmpty) const AdminEmptyState('No applications in this view.'),
+      for (final item in items)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: AdminPanel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                AdminStatus(item.status),
+                _space(12),
+                Text(
+                  item.name,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AdminStyle.navy,
+                  ),
+                ),
+                _space(6),
+                Text(
+                  '${item.type} · ${item.location}',
+                  style: const TextStyle(fontSize: 12, color: AdminStyle.muted),
+                ),
+                _space(8),
+                TextButton(
+                  onPressed: () => _review(item),
+                  child: const Text('Review application →'),
+                ),
+              ],
+            ),
+          ),
+        ),
+    ];
+  }
+
+  Future<void> _review(AdminApproval item) => showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (sheetContext) => SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 30),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _title(item.name, '${item.id} · ${item.type} · ${item.location}'),
+            AdminStatus(item.status),
+            _space(),
+            Text(item.description, style: const TextStyle(height: 1.6)),
+            _space(),
+            const Text(
+              'Demo application. Decisions affect only this preview.',
+              style: TextStyle(fontSize: 12, color: AdminStyle.muted),
+            ),
+            _space(),
+            if (item.status == 'Pending')
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                children: [
+                  for (final approved in [false, true])
+                    FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: approved
+                            ? AdminStyle.sage
+                            : AdminStyle.navy,
+                      ),
+                      onPressed: () async {
+                        final confirmed = await confirmAdminAction(
+                          sheetContext,
+                          approved
+                              ? 'Approve sample application?'
+                              : 'Reject sample application?',
+                          'This updates the demo workspace only.',
+                        );
+                        if (!mounted || !sheetContext.mounted || !confirmed) {
+                          return;
+                        }
+                        _store.decide(item, approved);
+                        Navigator.pop(sheetContext);
+                      },
+                      child: Text(approved ? 'Approve' : 'Reject'),
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  List<Widget> _orders() {
+    final query = _search.text.trim().toLowerCase();
+    final orders = _store.orders.where(
+      (o) =>
+          (_orderFilter == 'All' || o.status == _orderFilter) &&
+          '${o.id} ${o.customer} ${o.product}'.toLowerCase().contains(query),
+    );
+    return [
+      _title(
+        'Every piece has a journey.',
+        'Browse and update sample marketplace orders.',
+      ),
+      TextField(
+        controller: _search,
+        onChanged: (_) => setState(() {}),
+        decoration: InputDecoration(
+          hintText: 'Search orders or customers',
+          prefixIcon: const Icon(Icons.search),
+          suffixIcon: IconButton(
+            tooltip: 'Clear search',
+            onPressed: () {
+              _search.clear();
+              setState(() {});
+            },
+            icon: const Icon(Icons.close),
+          ),
+          filled: true,
+          fillColor: Colors.white,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: const BorderSide(color: AdminStyle.border),
+          ),
+        ),
+      ),
+      _space(),
+      _filters(['All', ..._statuses], _orderFilter, (v) => _orderFilter = v),
+      if (orders.isEmpty)
+        const AdminEmptyState(
+          'No matching orders. Try another search or status.',
+        ),
+      for (final order in orders) _orderCard(order),
+    ];
+  }
+
+  Widget _orderCard(AdminOrder order) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: () => _orderDetails(order),
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 12,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  Text(
+                    order.id,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AdminStyle.clay,
+                    ),
+                  ),
+                  AdminStatus(order.status),
+                ],
+              ),
+              _space(10),
+              Text(
+                order.product,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w600,
+                  color: AdminStyle.navy,
+                ),
+              ),
+              _space(6),
+              Text(
+                order.customer,
+                style: const TextStyle(fontSize: 12, color: AdminStyle.muted),
+              ),
+              _space(10),
+              Text(
+                adminMoney(order.amount),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: AdminStyle.navy,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Future<void> _orderDetails(AdminOrder order) {
+    FocusScope.of(context).unfocus();
+    var status = order.status;
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, change) => SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 8, 24, 30),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _title(order.id, 'Sample order details'),
+                Text(
+                  order.product,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                _space(),
+                Text(
+                  'Customer: ${order.customer}\nStudio: ${order.studio}',
+                  style: const TextStyle(height: 1.7),
+                ),
+                _space(),
+                Text(
+                  adminMoney(order.amount),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                _space(),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    for (final value in _statuses)
+                      ChoiceChip(
+                        label: Text(value),
+                        selected: value == status,
+                        onSelected: (_) => change(() => status = value),
+                      ),
+                  ],
+                ),
+                _space(),
+                const Text(
+                  'Preview only. No real dispatch or payment is changed.',
+                  style: TextStyle(fontSize: 12, color: AdminStyle.muted),
+                ),
+                _space(),
+                FilledButton(
+                  onPressed: status == order.status
+                      ? null
+                      : () async {
+                          final confirmed = await confirmAdminAction(
+                            sheetContext,
+                            'Update sample order?',
+                            'Change ${order.id} to $status in this preview?',
+                          );
+                          if (!mounted || !sheetContext.mounted || !confirmed) {
+                            return;
+                          }
+                          _store.updateOrder(order, status);
+                          Navigator.pop(sheetContext);
+                        },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AdminStyle.navy,
+                  ),
+                  child: const Text('Update demo status'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _more() => [
+    _title(
+      'Your guild workspace.',
+      'Manage the details that keep the community moving.',
+    ),
+    AdminPanel(
+      child: Column(
+        children: [
+          _action(
+            Icons.people_outline,
+            'Users & artisans',
+            '${_store.users.length} sample profiles',
+            () => _manage(AdminSection.users),
+          ),
+          _action(
+            Icons.category_outlined,
+            'Product catalogue',
+            '${_store.products.length} sample listings',
+            () => _manage(AdminSection.products),
+          ),
+          _action(
+            Icons.local_shipping_outlined,
+            'Courier directory',
+            '${_store.couriers.length} sample partners',
+            () => _manage(AdminSection.couriers),
+          ),
+          _action(
+            Icons.bar_chart,
+            'Reports & issues',
+            'Order snapshot and flagged issues',
+            () => _manage(AdminSection.reports),
+          ),
+          _action(
+            Icons.tune,
+            'Preview settings',
+            'Demo notification preferences',
+            () => _manage(AdminSection.settings),
+          ),
+        ],
+      ),
+    ),
+    _space(24),
+    const Text(
+      'You are exploring a frontend demo. Changes reset when you leave this dashboard. Authentication and backend services can be connected later.',
+      style: TextStyle(fontSize: 12, height: 1.6, color: AdminStyle.muted),
+    ),
+  ];
+}

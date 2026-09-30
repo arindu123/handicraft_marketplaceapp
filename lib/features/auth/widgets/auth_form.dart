@@ -5,6 +5,7 @@ import '../../../routes/route_names.dart';
 import '../../../shared/widgets/custom_button.dart';
 import '../../../shared/widgets/custom_text_field.dart';
 import 'craftisan_mark.dart';
+import '../models/marketplace_role.dart';
 
 class AuthForm extends StatefulWidget {
   const AuthForm({super.key, required this.isSignUp});
@@ -20,7 +21,9 @@ class _AuthFormState extends State<AuthForm> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _confirmation = TextEditingController();
-  bool _artisan = true;
+  MarketplaceRole _role = MarketplaceRole.artisan;
+  bool get _artisan => _role == MarketplaceRole.artisan;
+  bool get _admin => _role == MarketplaceRole.admin;
   bool _remember = false;
   bool _roleInitialized = false;
   String? _message;
@@ -30,7 +33,7 @@ class _AuthFormState extends State<AuthForm> {
     super.didChangeDependencies();
     if (!_roleInitialized) {
       final role = ModalRoute.of(context)?.settings.arguments;
-      if (role is bool) _artisan = role;
+      if (role is MarketplaceRole) _role = role;
       _roleInitialized = true;
     }
   }
@@ -81,20 +84,10 @@ class _AuthFormState extends State<AuthForm> {
     return null;
   }
 
-  void _switchRole(bool artisan) {
-    if (_artisan == artisan) return;
-    setState(() {
-      _artisan = artisan;
-      _message = null;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final signUp = widget.isSignUp;
-    final buttonLabel = signUp
-        ? (_artisan ? 'Create Studio Account' : 'Create Collector Account')
-        : (_artisan ? 'Sign In to Studio' : 'Sign In to Collection');
+    final buttonLabel = signUp ? _role.signUpLabel : _role.signInLabel;
     return Scaffold(
       body: SafeArea(
         child: Center(
@@ -161,7 +154,9 @@ class _AuthFormState extends State<AuthForm> {
                             ),
                             const SizedBox(height: 14),
                             Text(
-                              _artisan
+                              _admin
+                                  ? 'MARKETPLACE CURATOR · GUILD EDITION'
+                                  : _artisan
                                   ? 'ARTISAN POTTER · GUILD EDITION'
                                   : 'THOUGHTFUL COLLECTOR · GUILD EDITION',
                               textAlign: TextAlign.center,
@@ -187,7 +182,11 @@ class _AuthFormState extends State<AuthForm> {
                             ),
                             const SizedBox(height: 10),
                             Text(
-                              signUp
+                              _admin
+                                  ? (signUp
+                                        ? 'Create your curator profile. Administrative access requires approval.'
+                                        : 'Sign in to your approved marketplace administration account.')
+                                  : signUp
                                   ? (_artisan
                                         ? 'Create your studio account and share your craft with thoughtful collectors.'
                                         : 'Find pieces with a story. Create an account and begin your collection.')
@@ -200,22 +199,37 @@ class _AuthFormState extends State<AuthForm> {
                             ),
                             const SizedBox(height: 24),
                             Container(
-                              padding: const EdgeInsets.all(4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 18,
+                                vertical: 14,
+                              ),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFEFEEEB),
                                 borderRadius: BorderRadius.circular(30),
                               ),
                               child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  _roleTab(
-                                    true,
-                                    'Artisan / Maker',
-                                    Icons.palette_outlined,
+                                  Icon(
+                                    _admin
+                                        ? Icons.workspace_premium_outlined
+                                        : _artisan
+                                        ? Icons.palette_outlined
+                                        : Icons.diamond_outlined,
+                                    size: 19,
+                                    color: AppColors.terracotta,
                                   ),
-                                  _roleTab(
-                                    false,
-                                    'Buyer / Collector',
-                                    Icons.diamond_outlined,
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text(
+                                      _role.label,
+                                      textAlign: TextAlign.center,
+                                      style: const TextStyle(
+                                        color: AppColors.terracotta,
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
                                   ),
                                 ],
                               ),
@@ -377,11 +391,16 @@ class _AuthFormState extends State<AuthForm> {
                                       FocusScope.of(context).unfocus();
                                       Navigator.pushNamed(
                                         context,
-                                        RouteNames.roleSelection,
+                                        _admin
+                                            ? RouteNames.adminDashboard
+                                            : RouteNames.marketplace,
+                                        arguments: _role,
                                       );
                                     },
-                                    child: const Text(
-                                      'Continue without an account',
+                                    child: Text(
+                                      _admin
+                                          ? 'Preview Admin Dashboard'
+                                          : 'Continue without an account',
                                       textAlign: TextAlign.center,
                                     ),
                                   ),
@@ -441,7 +460,9 @@ class _AuthFormState extends State<AuthForm> {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          _artisan
+                                          _admin
+                                              ? 'Care for the Craftisan community'
+                                              : _artisan
                                               ? 'A home for your craft'
                                               : 'A collection with meaning',
                                           style: const TextStyle(
@@ -451,7 +472,9 @@ class _AuthFormState extends State<AuthForm> {
                                         ),
                                         const SizedBox(height: 4),
                                         Text(
-                                          _artisan
+                                          _admin
+                                              ? 'Curator permissions are granted only to approved accounts.'
+                                              : _artisan
                                               ? 'Connect your studio with people who value the art of making.'
                                               : 'Meet independent makers and find handcrafted pieces to cherish.',
                                           style: const TextStyle(
@@ -487,7 +510,7 @@ class _AuthFormState extends State<AuthForm> {
                                         signUp
                                             ? RouteNames.signIn
                                             : RouteNames.signUp,
-                                        arguments: _artisan,
+                                        arguments: _role,
                                       ),
                                   child: Text(
                                     signUp ? 'Sign In' : 'Sign Up',
@@ -506,40 +529,6 @@ class _AuthFormState extends State<AuthForm> {
                 ),
               ],
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _roleTab(bool artisan, String label, IconData icon) {
-    final selected = artisan == _artisan;
-    return Expanded(
-      child: Semantics(
-        selected: selected,
-        child: TextButton(
-          onPressed: () => _switchRole(artisan),
-          style: TextButton.styleFrom(
-            backgroundColor: selected ? Colors.white : Colors.transparent,
-            foregroundColor: selected ? AppColors.terracotta : AppColors.muted,
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(26),
-            ),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 17),
-              const SizedBox(width: 5),
-              Flexible(
-                child: Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 12),
-                ),
-              ),
-            ],
           ),
         ),
       ),

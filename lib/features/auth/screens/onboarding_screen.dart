@@ -33,7 +33,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   void _finish() {
     Navigator.pushNamedAndRemoveUntil(
       context,
-      RouteNames.marketplace,
+      RouteNames.roleSelection,
       (_) => false,
     );
   }
@@ -162,12 +162,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                               label: [
                                 'Next: Kiln Provenance',
                                 'Next: Direct Patronage',
-                                'Create Account',
+                                'Choose Your Role',
                               ][_page],
                               onPressed: () => _page == 2
                                   ? Navigator.pushNamed(
                                       context,
-                                      RouteNames.signUp,
+                                      RouteNames.roleSelection,
                                     )
                                   : _goTo(_page + 1),
                             ),

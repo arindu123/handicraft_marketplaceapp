@@ -2,11 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:artisan_marketplace/app.dart';
 
-Future<void> openSignIn(WidgetTester tester) async {
+Future<void> openSignIn(
+  WidgetTester tester, {
+  String role = 'Artisan / Studio Maker',
+}) async {
   await tester.pumpWidget(const MyApp());
   await tester.ensureVisible(find.text('Sign In'));
   await tester.tap(find.text('Sign In'));
   await tester.pumpAndSettle();
+  expect(find.text('Roles Selection'), findsOneWidget);
+  await tapVisible(tester, role);
+  await tapVisible(tester, 'Continue');
 }
 
 Future<void> tapVisible(WidgetTester tester, String text) async {
@@ -18,19 +24,19 @@ Future<void> tapVisible(WidgetTester tester, String text) async {
 }
 
 void main() {
-  testWidgets('Continue without an account opens roles with empty forms', (
+  testWidgets('Guest entry skips account validation after choosing a role', (
     tester,
   ) async {
     await openSignIn(tester);
     await tapVisible(tester, 'Continue without an account');
-    expect(find.text('Roles Selection'), findsOneWidget);
+    expect(find.text('Artisan Marketplace'), findsOneWidget);
     expect(find.text('Enter your email address.'), findsNothing);
     final navigator = tester.state<NavigatorState>(find.byType(Navigator));
     navigator.pop();
     await tester.pumpAndSettle();
     await tapVisible(tester, 'Sign Up');
     await tapVisible(tester, 'Continue without an account');
-    expect(find.text('Roles Selection'), findsOneWidget);
+    expect(find.text('Artisan Marketplace'), findsOneWidget);
     expect(find.text('Enter your full name.'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -38,9 +44,8 @@ void main() {
   testWidgets(
     'Sign in validates, toggles password visibility, and keeps role when switching pages',
     (tester) async {
-      await openSignIn(tester);
-      expect(find.text('Studio Email'), findsOneWidget);
-      await tapVisible(tester, 'Buyer / Collector');
+      await openSignIn(tester, role: 'Buyer / Patron');
+      expect(find.text('Buyer / Patron'), findsOneWidget);
       expect(find.text('Email address'), findsOneWidget);
       await tapVisible(tester, 'Sign In to Collection');
       expect(find.text('Enter your email address.'), findsOneWidget);
@@ -122,8 +127,7 @@ void main() {
       await tapVisible(tester, 'Sign In to Studio');
       expect(tester.takeException(), isNull);
       await tapVisible(tester, 'Sign Up');
-      await tapVisible(tester, 'Buyer / Collector');
-      await tapVisible(tester, 'Create Collector Account');
+      await tapVisible(tester, 'Create Studio Account');
       expect(tester.takeException(), isNull);
       await tapVisible(tester, 'Google');
       expect(

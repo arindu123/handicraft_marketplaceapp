@@ -7,7 +7,7 @@ import 'package:artisan_marketplace/routes/route_names.dart';
 
 void main() {
   testWidgets(
-    'Roles route selects one role and forwards the choice on Continue',
+    'Roles route selects one role and forwards the choice to sign up',
     (tester) async {
       Object? selected;
       await tester.pumpWidget(
@@ -16,7 +16,7 @@ void main() {
           initialRoute: RouteNames.roleSelection,
           routes: {
             ...AppRoutes.routes,
-            RouteNames.marketplace: (context) {
+            RouteNames.signUp: (context) {
               selected = ModalRoute.of(context)?.settings.arguments;
               return const Scaffold(body: Text('Destination'));
             },

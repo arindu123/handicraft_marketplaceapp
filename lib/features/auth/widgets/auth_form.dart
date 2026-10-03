@@ -1,11 +1,15 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../routes/route_names.dart';
+import '../../../shared/models/domain_models.dart' show UserRole;
 import '../../../shared/widgets/custom_button.dart';
 import '../../../shared/widgets/custom_text_field.dart';
 import 'craftisan_mark.dart';
 import '../models/marketplace_role.dart';
+import '../services/auth_session.dart';
 
 class AuthForm extends StatefulWidget {
   const AuthForm({super.key, required this.isSignUp});
@@ -26,6 +30,8 @@ class _AuthFormState extends State<AuthForm> {
   bool get _admin => _role == MarketplaceRole.admin;
   bool _remember = false;
   bool _roleInitialized = false;
+  bool _submitting = false;
+  User? _incompleteSignup;
   String? _message;
 
   @override
@@ -47,16 +53,110 @@ class _AuthFormState extends State<AuthForm> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_submitting) return;
     setState(() => _message = null);
     if (!_formKey.currentState!.validate()) return;
+    if (widget.isSignUp && _admin) {
+      setState(
+        () => _message = 'Administrator accounts cannot be created here.',
+      );
+      return;
+    }
     FocusScope.of(context).unfocus();
-    // Validation does not authenticate. Connect an auth service here later.
-    setState(
-      () => _message = widget.isSignUp
-          ? 'Account creation is not available yet. Please try again later.'
-          : 'Sign in is not available yet. Please try again later.',
-    );
+    setState(() => _submitting = true);
+    try {
+      UserRole? savedRole;
+      if (widget.isSignUp) {
+        // Capture form values before awaiting; the form may be disposed meanwhile.
+        final displayName = _name.text.trim();
+        final email = _email.text.trim();
+        final password = _password.text;
+        final role = switch (_role) {
+          MarketplaceRole.buyer => UserRole.buyer,
+          MarketplaceRole.artisan => UserRole.artisan,
+          MarketplaceRole.courier => UserRole.courier,
+          MarketplaceRole.admin => throw StateError('Unsupported signup role'),
+        };
+        if (_incompleteSignup != null) {
+          if (!await _cleanUpSignup()) return;
+        }
+        final credential = await FirebaseAuth.instance
+            .createUserWithEmailAndPassword(email: email, password: password);
+        final user = credential.user!;
+        try {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .set({
+                'uid': user.uid,
+                'email': user.email ?? '',
+                'displayName': displayName,
+                'role': role.name,
+                'createdAt': FieldValue.serverTimestamp(),
+                'updatedAt': FieldValue.serverTimestamp(),
+              });
+          savedRole = role;
+        } catch (_) {
+          _incompleteSignup = user;
+          if (await _cleanUpSignup() && mounted) {
+            setState(
+              () => _message = 'We could not save your profile. Your new account was removed. Please try signing up again.',
+            );
+          }
+          return;
+        }
+      } else {
+        savedRole = await AuthSession.signIn(_email.text, _password.text);
+      }
+      if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AuthSession.route(savedRole),
+        (_) => false,
+        arguments: AuthSession.selection(savedRole),
+      );
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) return;
+      setState(
+        () => _message = switch (error.code) {
+          'email-already-in-use' =>
+            'An account already exists with this email. Please sign in.',
+          'invalid-email' => 'Enter a valid email address.',
+          'weak-password' => 'Please choose a stronger password.',
+          'user-not-found' || 'invalid-credential' || 'wrong-password' =>
+            'The email or password is incorrect. Please try again.',
+          'network-request-failed' =>
+            'Check your internet connection and try again.',
+          'too-many-requests' =>
+            'Too many attempts. Please wait a moment and try again.',
+          'user-disabled' =>
+            'This account has been disabled. Please contact support.',
+          _ => 'Unable to authenticate. Please try again later.',
+        },
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _message = AuthSession.message(error));
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<bool> _cleanUpSignup() async {
+    try {
+      // Delete only the user returned by this form's signup, never an existing user.
+      await _incompleteSignup!.delete();
+      _incompleteSignup = null;
+      return true;
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _message = 'We could not finish account setup or remove the incomplete account. Check your connection and submit again to retry cleanup. If this continues, contact support.',
+        );
+      }
+      return false;
+    }
   }
 
   void _unavailable(String feature) {

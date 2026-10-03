@@ -38,11 +38,13 @@ void main() {
     expect(find.text('Demo Visa ending in 4092'), findsOneWidget);
     await tap('Track Order');
     expect(find.text('Order Tracking'), findsOneWidget);
-    for (final stage in BuyerOrderStatus.values) {
+    for (final stage in BuyerOrderStatus.values.where(
+      (s) => s != BuyerOrderStatus.cancelled,
+    )) {
       expect(find.text(stage.label), findsOneWidget);
     }
     expect(find.text('Current'), findsOneWidget);
-    expect(find.text('Guild Courier · Marco V.'), findsOneWidget);
+    expect(find.text('Assigned Guild Courier'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('Order Details'), findsOneWidget);

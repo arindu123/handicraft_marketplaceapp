@@ -1,3 +1,4 @@
+import '../../../shared/data/marketplace_repository.dart';
 import 'package:flutter/material.dart';
 
 import '../models/admin_demo_store.dart';
@@ -20,7 +21,7 @@ class AdminArtisanReviewScreen extends StatelessWidget {
           : artisan.active
           ? 'Pause ${artisan.name}?'
           : 'Reactivate ${artisan.name}?',
-      'This updates only the selected sample profile in this preview session.',
+      MarketplaceBackend.enabled ? 'This updates the selected Firestore record.' : 'This updates only the selected sample profile in this preview session.',
     );
     if (!context.mounted || !confirmed) return;
     if (verify) {
@@ -73,8 +74,8 @@ class AdminArtisanReviewScreen extends StatelessWidget {
               return ListView(
                 padding: const EdgeInsets.all(20),
                 children: [
-                  const Text(
-                    'DEMO WORKSPACE',
+                  Text(
+                    MarketplaceBackend.enabled ? 'ADMIN WORKSPACE' : 'DEMO WORKSPACE',
                     style: TextStyle(
                       fontSize: 10,
                       letterSpacing: 1.5,
@@ -83,8 +84,8 @@ class AdminArtisanReviewScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Sample data only. Changes last for this preview session.',
+                  Text(
+                    MarketplaceBackend.enabled ? 'Changes are saved to the shared marketplace.' : 'Sample data only. Changes last for this preview session.',
                     style: TextStyle(
                       fontSize: 12,
                       height: 1.5,

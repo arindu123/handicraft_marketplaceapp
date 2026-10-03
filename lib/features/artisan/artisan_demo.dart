@@ -1,9 +1,37 @@
+import '../../shared/data/community_repository.dart';
+
+import 'dart:async';
+
+import '../../shared/data/marketplace_repository.dart';
+import '../../shared/models/domain_models.dart' as canonical;
+
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
 import 'artisan_demo_images.dart';
 
+final artisanRemotePhotos = <int, String>{};
+final artisanLocalPhotos = <int, Uint8List>{};
+int _photoId = 100;
+int registerArtisanPhoto({String? url, Uint8List? bytes}) {
+  final id = _photoId++;
+  if (url != null) artisanRemotePhotos[id] = url;
+  if (bytes != null) artisanLocalPhotos[id] = bytes;
+  return id;
+}
+
+ArtisanProduct artisanProduct(canonical.Product p) => ArtisanProduct(
+  id: p.id,
+  name: p.name,
+  category: p.category,
+  price: p.price,
+  description: p.description,
+  stock: p.stock,
+  images: p.imageUrls.isEmpty
+      ? [-1]
+      : p.imageUrls.map((url) => registerArtisanPhoto(url: url)).toList(),
+);
 final artisanPhotos = artisanDemoImages.map(base64Decode).toList();
 String artisanMoney(num amount) => '\$${amount.toStringAsFixed(2)}';
 const artisanCategories = ['Terracotta', 'Stoneware', 'Planters', 'Tableware'];
@@ -81,6 +109,124 @@ class ArtisanOrder {
 
 /// One session's local UI data. No persistence or cross-role connections.
 class ArtisanDemo extends ChangeNotifier {
+  MarketplaceRepository? repository;
+  final _subscriptions = <StreamSubscription<dynamic>>[];
+  String? error;
+  bool _disposed = false;
+  bool saving = false;
+  Map<String, dynamic> profile = {};
+  ArtisanDemo() {
+    if (!MarketplaceBackend.enabled) return;
+    products.clear();
+    orders.clear();
+    repository = MarketplaceRepository();
+    try {
+      CommunityRepository().ensureArtisanProfile().catchError(_failed);
+      _subscriptions.add(
+        CommunityRepository().profile(repository!.uid).listen((snapshot) {
+          profile = snapshot.data() ?? {};
+          notifyListeners();
+        }, onError: _failed),
+      );
+      _subscriptions.add(
+        repository!.products(own: true).listen((rows) {
+          products.clear();
+          products.addAll(rows.map(artisanProduct));
+          notifyListeners();
+        }, onError: _failed),
+      );
+      _subscriptions.add(
+        repository!.orders('artisanId').listen((rows) {
+          orders.clear();
+          for (final order in rows) {
+            for (final item in order.items) {
+              orders.add(
+                ArtisanOrder(
+                  order.id,
+                  order.buyerId,
+                  order.deliveryAddress,
+                  ArtisanProduct(
+                    id: item.productId,
+                    name: item.productName,
+                    category: '',
+                    price: item.unitPrice,
+                    description: '',
+                    images: item.imageUrl == null
+                        ? [-1]
+                        : [registerArtisanPhoto(url: item.imageUrl)],
+                  ),
+                  item.quantity,
+                  switch (order.status) {
+                    canonical.OrderStatus.pending => 'Needs packing',
+                    canonical.OrderStatus.confirmed => 'Ready for dispatch',
+                    _ => order.status.name,
+                  },
+                  order.courierId ?? 'Awaiting courier assignment',
+                ),
+              );
+            }
+          }
+          notifyListeners();
+        }, onError: _failed),
+      );
+    } catch (e) {
+      _failed(e);
+    }
+  }
+  void _failed(Object e) {
+    if (_disposed) return;
+    error = marketplaceError(e);
+    notifyListeners();
+  }
+
+  Future<ArtisanProduct> persist(ArtisanProduct product) async {
+    if (saving) throw const MarketplaceFailure('Your product is being saved.');
+    saving = true;
+    try {
+      if (repository == null) {
+        save(product);
+        return product;
+      }
+      final draft = canonical.Product(
+        id: product.id,
+        artisanId: '',
+        name: product.name,
+        category: product.category,
+        price: product.price,
+        currency: 'USD',
+        description: product.description,
+        imageUrls: product.images
+            .where(artisanRemotePhotos.containsKey)
+            .map((i) => artisanRemotePhotos[i]!)
+            .toList(),
+        stock: product.stock,
+        status: canonical.ProductStatus.active,
+        createdAt: DateTime.now().toUtc(),
+      );
+      final stored = await repository!.saveProduct(
+        draft,
+        product.images
+            .where(artisanLocalPhotos.containsKey)
+            .map((i) => artisanLocalPhotos[i]!)
+            .toList(),
+      );
+      final result = artisanProduct(stored);
+      save(result);
+      return result;
+    } finally {
+      saving = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    for (final subscription in _subscriptions) {
+      subscription.cancel();
+    }
+    super.dispose();
+  }
+
   final products = List<ArtisanProduct>.of(_products);
   final orders = [
     ArtisanOrder(
@@ -112,7 +258,9 @@ class ArtisanDemo extends ChangeNotifier {
     ),
   ];
   int _nextId = 1;
-  String nextProductId() => 'STUDIO-${_nextId++}';
+  String nextProductId() => repository != null
+      ? repository!.db.collection('products').doc().id
+      : 'STUDIO-${_nextId++}';
   ArtisanProduct product(String id) => products.firstWhere((p) => p.id == id);
   void save(ArtisanProduct product) {
     final index = products.indexWhere((p) => p.id == product.id);
@@ -121,10 +269,14 @@ class ArtisanDemo extends ChangeNotifier {
     } else {
       products[index] = product;
     }
-    notifyListeners();
+    if (!_disposed) notifyListeners();
   }
 
   void markPacked(String id) {
+    if (repository != null) {
+      repository!.advanceOrder(id).catchError(_failed);
+      return;
+    }
     final index = orders.indexWhere((o) => o.id == id);
     final o = orders[index];
     orders[index] = ArtisanOrder(

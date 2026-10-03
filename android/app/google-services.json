@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "471804613144",
+    "project_id": "craftisan-we114-2026",
+    "storage_bucket": "craftisan-we114-2026.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:471804613144:android:7abeb80c0aa20e1db7e96d",
+        "android_client_info": {
+          "package_name": "com.example.artisan_marketplace"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDebAZ9jk20J0GnmgxuyFz8Ff-f0OMpRPI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

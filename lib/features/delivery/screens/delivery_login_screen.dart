@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../routes/route_names.dart';
 import '../../auth/models/marketplace_role.dart';
+import '../../auth/services/auth_session.dart';
 import '../widgets/delivery_widgets.dart';
 import '../widgets/delivery_banner.dart';
 
@@ -17,6 +18,7 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
   final _password = TextEditingController();
   final _name = TextEditingController();
   bool _hidden = true;
+  bool _submitting = false;
   bool _remember = true;
   bool _register = false;
   bool _entryInitialized = false;
@@ -39,9 +41,34 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_submitting) return;
     if (!_form.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
+    if (!_register) {
+      setState(() => _submitting = true);
+      try {
+        final role = await AuthSession.signIn(_email.text, _password.text);
+        if (!mounted) return;
+        Navigator.pushNamedAndRemoveUntil(
+          context,
+          AuthSession.route(role),
+          (_) => false,
+          arguments: AuthSession.selection(role),
+        );
+      } catch (error) {
+        if (mounted) {
+          showDeliveryNotice(
+            context,
+            'Unable to sign in',
+            AuthSession.message(error),
+          );
+        }
+      } finally {
+        if (mounted) setState(() => _submitting = false);
+      }
+      return;
+    }
     showDeliveryNotice(
       context,
       _register ? 'Registration unavailable' : 'Sign-in unavailable',

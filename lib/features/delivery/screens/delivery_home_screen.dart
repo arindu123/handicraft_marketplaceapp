@@ -1,3 +1,8 @@
+import 'dart:async';
+
+import '../../../shared/data/marketplace_repository.dart';
+import '../../../shared/models/domain_models.dart' as canonical;
+
 import 'package:flutter/material.dart';
 
 import '../../../routes/route_names.dart';
@@ -13,7 +18,64 @@ class DeliveryHomeScreen extends StatefulWidget {
 }
 
 class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
-  final _orders = DeliveryOrder.demoOrders();
+  final _orders = MarketplaceBackend.enabled
+      ? <DeliveryOrder>[]
+      : DeliveryOrder.demoOrders();
+  StreamSubscription<List<canonical.Order>>? _subscription;
+  final _advancing = <String>{};
+  @override
+  void initState() {
+    super.initState();
+    if (!MarketplaceBackend.enabled) return;
+    try {
+      _subscription = MarketplaceRepository().orders('courierId').listen((
+        rows,
+      ) {
+        if (!mounted) return;
+        setState(() {
+          final previous = {for (final o in _orders) o.id: o};
+          _orders.clear();
+          for (final row in rows) {
+            if (![
+              canonical.OrderStatus.courierAssigned,
+              canonical.OrderStatus.pickedUp,
+              canonical.OrderStatus.onTheWay,
+              canonical.OrderStatus.delivered,
+            ].contains(row.status)) {
+              continue;
+            }
+            final status = switch (row.status) {
+              canonical.OrderStatus.courierAssigned => DeliveryStatus.accepted,
+              canonical.OrderStatus.pickedUp => DeliveryStatus.pickedUp,
+              canonical.OrderStatus.onTheWay => DeliveryStatus.onTheWay,
+              _ => DeliveryStatus.delivered,
+            };
+            final order =
+                previous[row.id] ??
+                DeliveryOrder(
+                  id: row.id,
+                  title: row.items.map((i) => i.productName).join(', '),
+                  pickup: row.artisanId,
+                  destination: row.deliveryAddress,
+                  service: 'Fragile parcel',
+                );
+            order.syncStatus(status);
+            _orders.add(order);
+          }
+        });
+      }, onError: _error);
+    } catch (e) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _error(e));
+    }
+  }
+
+  void _error(Object e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(marketplaceError(e))));
+    }
+  }
+
   final _search = TextEditingController();
   int _tab = 0;
   String _filter = 'All';
@@ -35,11 +97,20 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
   ];
   @override
   void dispose() {
+    _subscription?.cancel();
     _search.dispose();
     super.dispose();
   }
 
   Future<void> _book(String service) async {
+    if (MarketplaceBackend.enabled) {
+      _error(
+        const MarketplaceFailure(
+          'Deliveries appear here when an order is assigned to you.',
+        ),
+      );
+      return;
+    }
     final order = await Navigator.push<DeliveryOrder>(
       context,
       MaterialPageRoute(
@@ -582,7 +653,19 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
                 if (!order.delivered)
                   DeliveryButton(
                     label: order.status.action!,
-                    onPressed: () {
+                    onPressed: () async {
+                      if (MarketplaceBackend.enabled) {
+                        if (!_advancing.add(order.id)) return;
+                        try {
+                          await MarketplaceRepository().advanceOrder(order.id);
+                          if (sheetContext.mounted) updateSheet(() {});
+                        } catch (e) {
+                          _error(e);
+                        } finally {
+                          _advancing.remove(order.id);
+                        }
+                        return;
+                      }
                       setState(order.advance);
                       updateSheet(() {});
                     },

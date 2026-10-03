@@ -28,6 +28,7 @@ class DeliveryOrder {
   final String service;
   DeliveryStatus _status;
   DeliveryStatus get status => _status;
+  void syncStatus(DeliveryStatus value) => _status = value;
   bool get delivered => _status == DeliveryStatus.delivered;
 
   /// Advances one milestone only; completion is terminal for this demo session.

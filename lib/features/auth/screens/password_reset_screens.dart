@@ -1,3 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart';
+
+import '../services/auth_session.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
@@ -105,20 +109,35 @@ class _PasswordResetRequestScreenState
     extends State<PasswordResetRequestScreen> {
   final _form = GlobalKey<FormState>();
   final _email = TextEditingController();
+  bool _sending = false;
+  String? _error;
   @override
   void dispose() {
     _email.dispose();
     super.dispose();
   }
 
-  void _next() {
-    if (!_form.currentState!.validate()) return;
+  Future<void> _next() async {
+    if (_sending || !_form.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
-    Navigator.pushNamed(
-      context,
-      RouteNames.passwordResetCode,
-      arguments: _email.text.trim(),
-    );
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    final email = _email.text.trim();
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      if (!mounted) return;
+      Navigator.pushNamed(
+        context,
+        RouteNames.passwordResetSuccess,
+        arguments: email,
+      );
+    } catch (error) {
+      if (mounted) setState(() => _error = AuthSession.message(error));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 
   @override
@@ -135,7 +154,7 @@ class _PasswordResetRequestScreenState
         ),
         const SizedBox(height: 10),
         const Text(
-          'Enter the verified email linked to your Craftisan atelier or collector archive. We’ll prepare a demo 6-digit code to restore access.',
+          'Enter your Craftisan email address. We will send a link to reset your password.',
           textAlign: TextAlign.center,
           style: TextStyle(color: AppColors.muted, height: 1.5),
         ),
@@ -171,11 +190,16 @@ class _PasswordResetRequestScreenState
                 ),
                 const SizedBox(height: 12),
                 const Text(
-                  'Demo preview only — no email or code will be sent.',
+                  'Open the reset link in your email to choose a new password.',
                   style: TextStyle(fontSize: 12, color: AppColors.muted),
                 ),
                 const SizedBox(height: 18),
-                CustomButton(label: 'Send Verification Code', onPressed: _next),
+                if (_error != null)
+                  Text(
+                    _error!,
+                    style: const TextStyle(color: AppColors.terracotta),
+                  ),
+                CustomButton(label: 'Send Reset Email', onPressed: _next),
               ],
             ),
           ),
@@ -193,250 +217,16 @@ class _PasswordResetRequestScreenState
   );
 }
 
-class PasswordResetCodeScreen extends StatefulWidget {
+class PasswordResetCodeScreen extends StatelessWidget {
   const PasswordResetCodeScreen({super.key});
   @override
-  State<PasswordResetCodeScreen> createState() =>
-      _PasswordResetCodeScreenState();
+  Widget build(BuildContext context) => const PasswordResetRequestScreen();
 }
 
-class _PasswordResetCodeScreenState extends State<PasswordResetCodeScreen> {
-  final _controllers = List.generate(6, (_) => TextEditingController());
-  final _nodes = List.generate(6, (_) => FocusNode());
-  String? _error;
-  String get _email =>
-      ModalRoute.of(context)?.settings.arguments as String? ??
-      'your registered email';
-  @override
-  void dispose() {
-    for (final c in _controllers) {
-      c.dispose();
-    }
-    for (final n in _nodes) {
-      n.dispose();
-    }
-    super.dispose();
-  }
-
-  void _next() {
-    final code = _controllers.map((c) => c.text).join();
-    if (code.length != 6) {
-      setState(() => _error = 'Enter all 6 code digits.');
-      return;
-    }
-    FocusScope.of(context).unfocus();
-    Navigator.pushNamed(
-      context,
-      RouteNames.passwordResetNew,
-      arguments: _email,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) => _ResetFrame(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const _ResetHeader(step: 'STEP 02 / 03 · AUTHENTICATION'),
-        Text(
-          'Verify Your Identity',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineLarge
-              ?.copyWith(fontSize: 32, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'We’ve prepared a demo 6-digit authentication code for $_email. Enter any six digits to continue.',
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: AppColors.muted, height: 1.5),
-        ),
-        _ResetCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const Text(
-                'SECURITY PASSCODE',
-                style: TextStyle(
-                  fontSize: 10,
-                  letterSpacing: 1,
-                  color: AppColors.terracotta,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: List.generate(
-                  6,
-                  (i) => Expanded(
-                    child: Padding(
-                      padding: EdgeInsets.only(right: i == 5 ? 0 : 7),
-                      child: TextField(
-                        controller: _controllers[i],
-                        focusNode: _nodes[i],
-                        keyboardType: TextInputType.number,
-                        textAlign: TextAlign.center,
-                        maxLength: 1,
-                        onChanged: (value) {
-                          if (value.isNotEmpty && i < 5) {
-                            _nodes[i + 1].requestFocus();
-                          }
-                          setState(() => _error = null);
-                        },
-                        decoration: const InputDecoration(
-                          counterText: '',
-                          contentPadding: EdgeInsets.symmetric(vertical: 14),
-                          filled: true,
-                          fillColor: AppColors.surface,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              if (_error != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 10),
-                  child: Text(
-                    _error!,
-                    style: const TextStyle(color: AppColors.terracotta),
-                  ),
-                ),
-              const SizedBox(height: 16),
-              const Text(
-                'End-to-end encrypted demo flow',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 12, color: AppColors.muted),
-              ),
-              const SizedBox(height: 18),
-              CustomButton(label: 'Verify & Proceed', onPressed: _next),
-              TextButton(
-                onPressed: () => setState(() {
-                  for (final c in _controllers) {
-                    c.clear();
-                  }
-                  _error = 'A new demo code is ready to enter.';
-                }),
-                child: const Text('Request new code'),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Try another email'),
-              ),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class PasswordResetNewPasswordScreen extends StatefulWidget {
+class PasswordResetNewPasswordScreen extends StatelessWidget {
   const PasswordResetNewPasswordScreen({super.key});
   @override
-  State<PasswordResetNewPasswordScreen> createState() =>
-      _PasswordResetNewPasswordScreenState();
-}
-
-class _PasswordResetNewPasswordScreenState
-    extends State<PasswordResetNewPasswordScreen> {
-  final _form = GlobalKey<FormState>();
-  final _password = TextEditingController();
-  final _confirmation = TextEditingController();
-  String get _email =>
-      ModalRoute.of(context)?.settings.arguments as String? ??
-      'your registered email';
-  @override
-  void dispose() {
-    _password.dispose();
-    _confirmation.dispose();
-    super.dispose();
-  }
-
-  void _next() {
-    if (!_form.currentState!.validate()) return;
-    FocusScope.of(context).unfocus();
-    Navigator.pushNamed(
-      context,
-      RouteNames.passwordResetSuccess,
-      arguments: _email,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) => _ResetFrame(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const _ResetHeader(step: 'STEP 3 OF 3 · CREDENTIAL UPDATE'),
-        Text(
-          'Create New Password',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineLarge
-              ?.copyWith(fontSize: 32, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 10),
-        const Text(
-          'Choose a new passcode for this demo flow. No account credentials will be changed.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: AppColors.muted, height: 1.5),
-        ),
-        _ResetCard(
-          child: Form(
-            key: _form,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                CustomTextField(
-                  label: 'New Password',
-                  controller: _password,
-                  icon: Icons.lock_outline,
-                  isPassword: true,
-                  autofillHints: const [AutofillHints.newPassword],
-                  validator: (v) =>
-                      (v?.isEmpty ?? true) ? 'Enter a new password.' : null,
-                ),
-                const Padding(
-                  padding: EdgeInsets.only(top: 8, left: 4),
-                  child: Text(
-                    'Use at least 8 characters, including a number and symbol.',
-                    style: TextStyle(fontSize: 12, color: AppColors.muted),
-                  ),
-                ),
-                const SizedBox(height: 18),
-                CustomTextField(
-                  label: 'Confirm New Password',
-                  controller: _confirmation,
-                  icon: Icons.lock_outline,
-                  isPassword: true,
-                  textInputAction: TextInputAction.done,
-                  onFieldSubmitted: (_) => _next(),
-                  validator: (v) {
-                    if (v?.isEmpty ?? true) return 'Confirm your new password.';
-                    return v == _password.text
-                        ? null
-                        : 'Passwords do not match.';
-                  },
-                ),
-                const SizedBox(height: 18),
-                CustomButton(
-                  label: 'Reset Password & Continue',
-                  onPressed: _next,
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pushNamedAndRemoveUntil(
-                    context,
-                    RouteNames.signIn,
-                    (route) => route.isFirst,
-                  ),
-                  child: const Text('Cancel and return to Sign In'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) => const PasswordResetRequestScreen();
 }
 
 class PasswordResetSuccessScreen extends StatelessWidget {
@@ -449,18 +239,18 @@ class PasswordResetSuccessScreen extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _ResetHeader(step: 'STEP 4 OF 4 · VERIFIED', backToSignIn: true),
+        const _ResetHeader(step: 'CHECK YOUR EMAIL', backToSignIn: true),
         const Icon(Icons.verified, color: AppColors.sage, size: 72),
         const SizedBox(height: 18),
         Text(
-          'Password Reset Successful!',
+          'Check Your Email',
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.headlineLarge
               ?.copyWith(fontSize: 32, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 10),
         const Text(
-          'Your demo credentials have been updated. Your Craftisan workspace is ready for your next session.',
+          'If an account exists for this email, you will receive a reset link. Follow it to change your password, then return to sign in.',
           textAlign: TextAlign.center,
           style: TextStyle(color: AppColors.muted, height: 1.5),
         ),
@@ -469,7 +259,7 @@ class PasswordResetSuccessScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'WORKSPACE SYNCHRONIZED',
+                'PASSWORD RESET REQUEST',
                 style: TextStyle(
                   fontSize: 10,
                   letterSpacing: 1,
@@ -479,7 +269,7 @@ class PasswordResetSuccessScreen extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               const Text(
-                'Account Updated',
+                'Email address',
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 4),
@@ -489,7 +279,7 @@ class PasswordResetSuccessScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Secured with demo 2FA',
+                'Your password changes only after completing the emailed reset link.',
                 style: TextStyle(color: AppColors.sage),
               ),
             ],

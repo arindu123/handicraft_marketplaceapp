@@ -1,3 +1,8 @@
+import 'dart:async';
+
+import '../../shared/data/marketplace_repository.dart';
+import '../../shared/models/domain_models.dart' as canonical;
+
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -13,8 +18,30 @@ class DemoProduct {
     this.studio,
     this.description,
     this.location,
-    this.imageIndex,
+    this.imageIndex, {
+    this.id = '',
+    this.imageUrl,
+  });
+  final String id;
+  final String? imageUrl;
+  factory DemoProduct.fromProduct(canonical.Product p) => DemoProduct(
+    p.name,
+    p.category,
+    p.price,
+    p.artisanId,
+    '',
+    p.description,
+    '',
+    0,
+    id: p.id,
+    imageUrl: p.imageUrls.firstOrNull,
   );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (id.isNotEmpty && other is DemoProduct && other.id == id);
+  @override
+  int get hashCode => id.isEmpty ? identityHashCode(this) : id.hashCode;
   final String name, category, artisan, studio, description, location;
   final double price;
   final int imageIndex;
@@ -144,17 +171,29 @@ const buyerArtisans = [
   ),
 ];
 
-BuyerArtisan artisanFor(String name) =>
-    buyerArtisans.firstWhere((artisan) => artisan.name == name);
+BuyerArtisan artisanFor(String name) => buyerArtisans.firstWhere(
+  (artisan) => artisan.name == name,
+  orElse: () => BuyerArtisan(
+    name: name,
+    studio: '',
+    location: '',
+    bio: '',
+    rating: 0,
+    reviewCount: 0,
+    reviews: const [],
+  ),
+);
 
 String money(num value) => '\$${value.toStringAsFixed(2)}';
 
 enum BuyerOrderStatus {
+  pending('Pending'),
   confirmed('Confirmed'),
   courierAssigned('Courier Assigned'),
   pickedUp('Picked Up'),
   onTheWay('On The Way'),
-  delivered('Delivered');
+  delivered('Delivered'),
+  cancelled('Cancelled');
 
   const BuyerOrderStatus(this.label);
   final String label;
@@ -172,7 +211,7 @@ class BuyerDemoOrder {
   });
   final String id, date, address, payment;
   final Map<DemoProduct, int> items;
-  final BuyerOrderStatus status;
+  BuyerOrderStatus status;
   final double deliveryFee;
   double get subtotal => items.entries.fold(
     0,
@@ -185,6 +224,140 @@ class BuyerDemoOrder {
 
 /// Ephemeral UI state, owned and disposed by the Buyer marketplace.
 class BuyerDemo extends ChangeNotifier {
+  final _subscriptions = <StreamSubscription<dynamic>>[];
+  MarketplaceRepository? repository;
+  List<DemoProduct> products = List.of(demoProducts);
+  String? error;
+  bool _disposed = false;
+  Map<String, int> _cartIds = {};
+  Set<String> _favoriteIds = {};
+  BuyerDemo() {
+    if (!MarketplaceBackend.enabled) return;
+    products.clear();
+    favorites.clear();
+    orders.clear();
+    repository = MarketplaceRepository();
+    try {
+      _subscriptions.add(
+        repository!.products().listen((rows) {
+          products = rows.map(DemoProduct.fromProduct).toList();
+          _resolve();
+        }, onError: _failed),
+      );
+      _subscriptions.add(
+        repository!.userCollection('cart').snapshots().listen((s) {
+          _cartIds = {
+            for (final d in s.docs) d.id: d.data()['quantity'] as int,
+          };
+          _resolve();
+        }, onError: _failed),
+      );
+      _subscriptions.add(
+        repository!.userCollection('favorites').snapshots().listen((s) {
+          _favoriteIds = s.docs.map((d) => d.id).toSet();
+          _resolve();
+        }, onError: _failed),
+      );
+      _subscriptions.add(
+        repository!.orders('buyerId').listen((rows) {
+          final previous = {for (final o in orders) o.id: o};
+          orders.clear();
+          for (final row in rows) {
+            final order = fromOrder(row);
+            final old = previous[row.id];
+            if (old != null) {
+              old.status = order.status;
+              orders.add(old);
+            } else {
+              orders.add(order);
+            }
+          }
+          notifyListeners();
+        }, onError: _failed),
+      );
+    } catch (e) {
+      _failed(e);
+    }
+  }
+  void _failed(Object e) {
+    if (_disposed) return;
+    error = marketplaceError(e);
+    notifyListeners();
+  }
+
+  void _resolve() {
+    DemoProduct resolve(String id) =>
+        products.where((p) => p.id == id).firstOrNull ??
+        DemoProduct('Unavailable product', '', 0, '', '', '', '', 0, id: id);
+    cart.clear();
+    cart.addAll({for (final e in _cartIds.entries) resolve(e.key): e.value});
+    favorites.clear();
+    favorites.addAll(_favoriteIds.map(resolve));
+    notifyListeners();
+  }
+
+  static BuyerDemoOrder fromOrder(canonical.Order o) => BuyerDemoOrder(
+    id: o.id,
+    date: o.createdAt.toLocal().toString().split(' ').first,
+    items: {
+      for (final i in o.items)
+        DemoProduct(
+          i.productName,
+          '',
+          i.unitPrice,
+          o.artisanId,
+          '',
+          '',
+          '',
+          0,
+          id: i.productId,
+          imageUrl: i.imageUrl,
+        ): i.quantity,
+    },
+    status: BuyerOrderStatus.values.byName(o.status.name),
+    address: o.deliveryAddress,
+    payment: o.paymentMethod,
+    deliveryFee: o.deliveryFee,
+  );
+  String? _checkoutId;
+  bool checkingOut = false;
+  Future<BuyerDemoOrder> checkout() async {
+    if (checkingOut) {
+      throw const MarketplaceFailure('Your order is being submitted.');
+    }
+    checkingOut = true;
+    try {
+      if (repository == null) {
+        final result = createOrder(Map.of(cart), total);
+        clearCart();
+        return result;
+      }
+      _checkoutId ??= repository!.db.collection('orders').doc().id;
+      final result = await repository!.checkout(
+        _checkoutId!,
+        destination,
+        payment,
+      );
+      _checkoutId = null;
+      final receipt =
+          orders.where((o) => o.id == result.id).firstOrNull ??
+          fromOrder(result);
+      if (!orders.any((o) => o.id == result.id)) orders.insert(0, receipt);
+      return receipt;
+    } finally {
+      checkingOut = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    for (final subscription in _subscriptions) {
+      subscription.cancel();
+    }
+    super.dispose();
+  }
+
   final Map<DemoProduct, int> cart = {};
   final Set<DemoProduct> favorites = {demoProducts.first};
   final Set<String> followedArtisans = {};
@@ -226,11 +399,21 @@ class BuyerDemo extends ChangeNotifier {
       '$name\n$address\n$city, $postalCode\n$country\n$phone';
 
   void add(DemoProduct product, [int quantity = 1]) {
+    if (repository != null) {
+      repository!
+          .cartQuantity(product.id, quantity, increment: true)
+          .catchError(_failed);
+      return;
+    }
     cart[product] = (cart[product] ?? 0) + quantity;
     notifyListeners();
   }
 
   void quantity(DemoProduct product, int value) {
+    if (repository != null) {
+      repository!.cartQuantity(product.id, value).catchError(_failed);
+      return;
+    }
     if (value <= 0) {
       cart.remove(product);
     } else {
@@ -240,6 +423,12 @@ class BuyerDemo extends ChangeNotifier {
   }
 
   void favorite(DemoProduct product) {
+    if (repository != null) {
+      repository!
+          .favorite(product.id, !favorites.contains(product))
+          .catchError(_failed);
+      return;
+    }
     if (!favorites.remove(product)) favorites.add(product);
     notifyListeners();
   }

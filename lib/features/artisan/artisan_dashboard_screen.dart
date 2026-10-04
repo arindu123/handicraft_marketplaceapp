@@ -1,3 +1,9 @@
+import '../../shared/data/community_repository.dart';
+
+import 'package:image_picker/image_picker.dart';
+
+import '../../shared/data/marketplace_repository.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -23,6 +29,25 @@ class ArtisanDashboardScreen extends StatefulWidget {
 
 class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
   final demo = ArtisanDemo();
+  @override
+  void initState() {
+    super.initState();
+    demo.addListener(_showError);
+  }
+
+  void _showError() {
+    if (mounted && demo.error != null) {
+      final message = demo.error!;
+      demo.error = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(message)));
+        }
+      });
+    }
+  }
+
   int tab = 0;
   @override
   void dispose() {
@@ -120,7 +145,13 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
                   ),
                 ),
                 _Stat('ORDERS', '${demo.orders.length}'),
-                const _Stat('STUDIO STATUS', 'Guild certified'),
+                _Stat(
+                  'STUDIO STATUS',
+                  MarketplaceBackend.enabled
+                      ? (demo.profile['verificationStatus'] as String? ??
+                            'pending')
+                      : 'Guild certified',
+                ),
               ],
             ),
           ),
@@ -193,38 +224,64 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
               backgroundImage: MemoryImage(artisanPhotos[4]),
             ),
           ),
-          const _Heading('Elena Vance'),
-          const Text('@elenavance.ceramics'),
-          const _Caption('GUILD CERTIFIED POTTER'),
+          _Heading(
+            MarketplaceBackend.enabled
+                ? (demo.profile['studioName'] as String? ?? '')
+                : 'Elena Vance',
+          ),
+          Text(
+            MarketplaceBackend.enabled
+                ? (demo.profile['location'] as String? ?? '')
+                : '@elenavance.ceramics',
+          ),
+          _Caption(
+            MarketplaceBackend.enabled
+                ? (demo.profile['verificationStatus'] as String? ?? 'pending')
+                : 'GUILD CERTIFIED POTTER',
+          ),
           _Card(
             child: Wrap(
               spacing: 28,
               runSpacing: 16,
               children: [
                 _Stat('CREATIONS', '${demo.products.length}'),
-                const _Stat('188 REVIEWS', '4.9 ★'),
-                const _Stat('IN GUILD', '3 years'),
+                _Stat('REVIEWS', MarketplaceBackend.enabled ? '' : '4.9'),
+                _Stat('IN GUILD', MarketplaceBackend.enabled ? '' : '3 years'),
               ],
             ),
           ),
           const _Heading('Studio Information'),
-          const _Card(
+          _Card(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _Caption('ATELIER NAME'),
-                Text('St. Ives Hearth & Clay'),
+                const _Caption('ATELIER NAME'),
+                Text(
+                  MarketplaceBackend.enabled
+                      ? (demo.profile['studioName'] as String? ?? '')
+                      : 'St. Ives Hearth & Clay',
+                ),
                 SizedBox(height: 18),
                 _Caption('PUBLIC BIO'),
                 Text(
-                  'Specializing in wheel-thrown fluted terracotta and wood-ash stoneware. Every piece is shaped, fired and finished by hand in our coastal studio.',
+                  MarketplaceBackend.enabled
+                      ? (demo.profile['bio'] as String? ?? '')
+                      : 'Specializing in wheel-thrown fluted terracotta and wood-ash stoneware. Every piece is shaped, fired and finished by hand in our coastal studio.',
                 ),
                 SizedBox(height: 18),
                 _Caption('STUDIO LOCATION'),
-                Text('St. Ives, Cornwall, UK'),
+                Text(
+                  MarketplaceBackend.enabled
+                      ? (demo.profile['location'] as String? ?? '')
+                      : 'St. Ives, Cornwall, UK',
+                ),
                 SizedBox(height: 18),
                 _Caption('KILN SPECIFICATIONS'),
-                Text('Wood-Fired Noborigama · Cone 10 (1280°C)'),
+                Text(
+                  MarketplaceBackend.enabled
+                      ? (demo.profile['kilnSpecifications'] as String? ?? '')
+                      : 'Wood-Fired Noborigama',
+                ),
               ],
             ),
           ),
@@ -236,7 +293,12 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
                 color: AppColors.sage,
               ),
               title: const Text('Verification Status'),
-              subtitle: const Text('Verified Provenance Seal · Active'),
+              subtitle: Text(
+                MarketplaceBackend.enabled
+                    ? (demo.profile['verificationStatus'] as String? ??
+                          'pending')
+                    : 'Verified Provenance Seal',
+              ),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => _open(context, const ArtisanVerificationScreen()),
             ),
@@ -365,19 +427,37 @@ class _Photo extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ClipRRect(
     borderRadius: BorderRadius.circular(14),
-    child: Image.memory(
-      artisanPhotos[index],
-      height: height,
-      width: double.infinity,
-      fit: BoxFit.cover,
-      semanticLabel: const [
-        'Terracotta vase',
-        'Stoneware mug',
-        'Clay planter',
-        'Glazed bowl',
-        'Artisan portrait',
-      ][index],
-    ),
+    child: artisanRemotePhotos.containsKey(index)
+        ? Image.network(
+            artisanRemotePhotos[index]!,
+            height: height,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => SizedBox(
+              height: height,
+              child: const Icon(Icons.image_not_supported_outlined),
+            ),
+          )
+        : index < 0
+        ? SizedBox(
+            height: height,
+            child: const Icon(Icons.add_photo_alternate_outlined),
+          )
+        : Image.memory(
+            artisanLocalPhotos[index] ?? artisanPhotos[index],
+            height: height,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            semanticLabel: index >= 100
+                ? 'Product photo'
+                : const [
+                    'Terracotta vase',
+                    'Stoneware mug',
+                    'Clay planter',
+                    'Glazed bowl',
+                    'Artisan portrait',
+                  ][index],
+          ),
   );
 }
 
@@ -452,7 +532,9 @@ class _ArtisanProductFormState extends State<ArtisanProductForm> {
   late final description = TextEditingController(
     text: widget.product?.description ?? '',
   );
-  late final images = List<int>.of(widget.product?.images ?? [0]);
+  late final images = List<int>.of(
+    widget.product?.images ?? (MarketplaceBackend.enabled ? [] : [0]),
+  );
   late String? category = widget.product?.category;
   int step = 0;
   bool get editing => widget.product != null;
@@ -481,12 +563,11 @@ class _ArtisanProductFormState extends State<ArtisanProductForm> {
     }
   }
 
-  void next() {
+  Future<void> next() async {
+    if (widget.demo.saving) return;
     if (step == 0 && images.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Select at least one demo product image.'),
-        ),
+        const SnackBar(content: Text('Select at least one product image.')),
       );
       return;
     }
@@ -497,7 +578,7 @@ class _ArtisanProductFormState extends State<ArtisanProductForm> {
       return;
     }
     final p = draft();
-    final saved = ArtisanProduct(
+    var saved = ArtisanProduct(
       id: editing ? p.id : widget.demo.nextProductId(),
       name: p.name,
       category: p.category,
@@ -506,7 +587,16 @@ class _ArtisanProductFormState extends State<ArtisanProductForm> {
       images: p.images,
       stock: p.stock,
     );
-    widget.demo.save(saved);
+    try {
+      saved = await widget.demo.persist(saved);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(marketplaceError(e))));
+      }
+      return;
+    }
+    if (!mounted) return;
     if (editing) {
       Navigator.pop(context);
     } else {
@@ -570,7 +660,7 @@ class _ArtisanProductFormState extends State<ArtisanProductForm> {
           if (images.isNotEmpty) _Photo(images.first, height: 270),
           const SizedBox(height: 14),
           const Text(
-            'Select sample photos for this UI preview. The first selected image is the cover. No files are uploaded.',
+            'Select product photos. The first selected image is the cover.',
           ),
           const SizedBox(height: 12),
           Wrap(
@@ -584,18 +674,55 @@ class _ArtisanProductFormState extends State<ArtisanProductForm> {
                   color: AppColors.surface,
                   borderRadius: BorderRadius.circular(12),
                   child: InkWell(
-                    onTap: () => setState(() {
-                      if (images.contains(i)) {
-                        images.remove(i);
-                      } else {
-                        images.add(i);
+                    onTap: () async {
+                      if (MarketplaceBackend.enabled) {
+                        try {
+                          final photo = await ImagePicker().pickImage(
+                            source: ImageSource.gallery,
+                            imageQuality: 85,
+                          );
+                          if (photo == null) return;
+                          final bytes = await photo.readAsBytes();
+                          if (!mounted) return;
+                          setState(() {
+                            final id = registerArtisanPhoto(bytes: bytes);
+                            if (i < images.length) {
+                              images[i] = id;
+                            } else {
+                              images.add(id);
+                            }
+                          });
+                        } catch (_) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Unable to select this image. Please try again.',
+                                ),
+                              ),
+                            );
+                          }
+                        }
+                        return;
                       }
-                    }),
+                      setState(() {
+                        if (images.contains(i)) {
+                          images.remove(i);
+                        } else {
+                          images.add(i);
+                        }
+                      });
+                    },
                     child: Padding(
                       padding: const EdgeInsets.all(8),
                       child: Column(
                         children: [
-                          _Photo(i, height: 100),
+                          _Photo(
+                            MarketplaceBackend.enabled
+                                ? (i < images.length ? images[i] : -1)
+                                : i,
+                            height: 100,
+                          ),
                           const SizedBox(height: 6),
                           Row(
                             children: [
@@ -606,7 +733,11 @@ class _ArtisanProductFormState extends State<ArtisanProductForm> {
                                 color: AppColors.terracotta,
                               ),
                               const SizedBox(width: 6),
-                              Flexible(child: Text('Sample ${i + 1}')),
+                              Flexible(
+                                child: Text(
+                                  '${MarketplaceBackend.enabled ? 'Photo' : 'Sample'} ${i + 1}',
+                                ),
+                              ),
                             ],
                           ),
                         ],
@@ -694,9 +825,7 @@ class _ArtisanProductFormState extends State<ArtisanProductForm> {
             ),
           ),
         if (step == 2) ...[
-          const Text(
-            'Review your piece before publishing. This demo listing is kept only for the current session.',
-          ),
+          const Text('Review your piece before publishing.'),
           ..._productInformation(draft()),
           TextButton(
             onPressed: () => setState(() => step = 1),
@@ -765,13 +894,19 @@ class ArtisanPublishedScreen extends StatelessWidget {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: demo,
     builder: (_, _) {
-      final p = demo.product(productId);
+      final p = demo.products.where((p) => p.id == productId).firstOrNull;
+      if (p == null) {
+        return const _Page(
+          title: 'Product',
+          children: [Text('This product is no longer available.')],
+        );
+      }
       return _Page(
         title: 'Product Published',
         children: [
           const Icon(Icons.check_circle, color: AppColors.sage, size: 72),
           const _Heading('Your product successfully added!'),
-          const Text('Your handcrafted piece is now in your demo catalog.'),
+          const Text('Your handcrafted piece is now in your catalog.'),
           _Card(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -829,7 +964,13 @@ class ArtisanProductScreen extends StatelessWidget {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: demo,
     builder: (_, _) {
-      final p = demo.product(productId);
+      final p = demo.products.where((p) => p.id == productId).firstOrNull;
+      if (p == null) {
+        return const _Page(
+          title: 'Product',
+          children: [Text('This product is no longer available.')],
+        );
+      }
       return _Page(
         title: 'View Product',
         footer: CustomButton(
@@ -867,7 +1008,13 @@ class ArtisanOrderDetails extends StatelessWidget {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: demo,
     builder: (_, _) {
-      final o = demo.orders.firstWhere((o) => o.id == orderId);
+      final o = demo.orders.where((o) => o.id == orderId).firstOrNull;
+      if (o == null) {
+        return const _Page(
+          title: 'Order Details',
+          children: [Text('This order is no longer available.')],
+        );
+      }
       return _Page(
         title: 'Order Details',
         children: [
@@ -921,24 +1068,57 @@ class ArtisanOrderDetails extends StatelessWidget {
 class ArtisanVerificationScreen extends StatelessWidget {
   const ArtisanVerificationScreen({super.key});
   @override
-  Widget build(BuildContext context) => const _Page(
-    title: 'Verification Status',
-    children: [
-      Icon(Icons.verified, color: AppColors.sage, size: 80),
-      _Heading('Guild Certified Potter'),
-      _Card(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) => MarketplaceBackend.enabled
+      ? StreamBuilder(
+          stream: CommunityRepository().profile(CommunityRepository().uid),
+          builder: (context, snapshot) {
+            final p = snapshot.data?.data() ?? {};
+            return _Page(
+              title: 'Verification Status',
+              children: [
+                const Icon(Icons.verified, color: AppColors.sage, size: 80),
+                _Heading(p['verificationStatus'] as String? ?? 'pending'),
+                _Card(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _Caption(p['verificationStatus'] as String? ?? 'pending'),
+                      const SizedBox(height: 16),
+                      Text('${p['studioName'] ?? ''}\n${p['location'] ?? ''}'),
+                      const SizedBox(height: 16),
+                      Text(p['bio'] as String? ?? ''),
+                    ],
+                  ),
+                ),
+                Text(
+                  snapshot.hasError ? marketplaceError(snapshot.error!) : 'Verification is reviewed by the Craftisan administration.',
+                ),
+              ],
+            );
+          },
+        )
+      : const _Page(
+          title: 'Verification Status',
           children: [
-            _Caption('VERIFIED PROVENANCE SEAL · ACTIVE'),
-            SizedBox(height: 16),
-            Text('Elena Vance\nSt. Ives Hearth & Clay\nSt. Ives, Cornwall, UK'),
-            SizedBox(height: 16),
-            Text('Digital Seal #ST-IV-88\nCraftisan Guild · St. Ives Chapter'),
+            Icon(Icons.verified, color: AppColors.sage, size: 80),
+            _Heading('Guild Certified Potter'),
+            _Card(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _Caption('VERIFIED PROVENANCE SEAL · ACTIVE'),
+                  SizedBox(height: 16),
+                  Text(
+                    'Elena Vance\nSt. Ives Hearth & Clay\nSt. Ives, Cornwall, UK',
+                  ),
+                  SizedBox(height: 16),
+                  Text(
+                    'Digital Seal #ST-IV-88\nCraftisan Guild · St. Ives Chapter',
+                  ),
+                ],
+              ),
+            ),
+            Text('Demo verification status for the studio preview.'),
           ],
-        ),
-      ),
-      Text('Demo verification status for the studio preview.'),
-    ],
-  );
+        );
 }

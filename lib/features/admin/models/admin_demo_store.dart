@@ -1,3 +1,10 @@
+import '../../../shared/data/community_repository.dart';
+
+import 'dart:async';
+
+import '../../../shared/data/marketplace_repository.dart';
+import '../../../shared/models/domain_models.dart' as canonical;
+
 import 'package:flutter/foundation.dart';
 
 class AdminApproval {
@@ -21,15 +28,131 @@ class AdminOrder {
 }
 
 class AdminDirectoryItem {
-  AdminDirectoryItem(this.name, this.detail, {this.verification = 'Pending'});
-  final String name, detail;
+  AdminDirectoryItem(
+    this.name,
+    this.detail, {
+    this.verification = 'Pending',
+    this.id = '',
+    this.collection = 'users',
+  });
+  final String name, detail, id, collection;
   bool active = true;
   String verification;
-  bool get isArtisan => detail.split('·').first.trim() == 'Artisan';
+  bool get isArtisan => detail.startsWith('Artisan');
 }
 
 // Session-only sample data: no network, account authorization or real payments.
 class AdminDemoStore extends ChangeNotifier {
+  final _subscriptions = <StreamSubscription<dynamic>>[];
+  String? error;
+  AdminDemoStore() {
+    if (!MarketplaceBackend.enabled) return;
+    orders.clear();
+    products.clear();
+    users.clear();
+    couriers.clear();
+    approvals.clear();
+    // Read the canonical collections. Deployed rules deny these global reads
+    // until a trusted administrative authorization mechanism is supplied.
+    final repo = MarketplaceRepository();
+    _subscriptions.add(
+      repo.db.collection('users').snapshots().listen((snapshot) {
+        final previous = {for (final u in users) u.id: u};
+        users.clear();
+        couriers.clear();
+        for (final d in snapshot.docs) {
+          final data = d.data();
+          final role = data['role'] as String? ?? '';
+          final item =
+              previous[d.id] ??
+              AdminDirectoryItem(
+                data['displayName'] as String? ?? d.id,
+                '${role.isEmpty ? '' : role[0].toUpperCase() + role.substring(1)} ? ${data['email'] ?? ''}',
+                id: d.id,
+              );
+          item.active = data['active'] != false;
+          users.add(item);
+          if (role == 'courier') couriers.add(item);
+        }
+        notifyListeners();
+      }, onError: _failed),
+    );
+    _subscriptions.add(
+      repo.db.collection('artisanProfiles').snapshots().listen((snapshot) {
+        approvals.clear();
+        for (final d in snapshot.docs) {
+          final data = d.data();
+          final status = data['verificationStatus'] as String? ?? 'pending';
+          final item = AdminApproval(
+            d.id,
+            data['studioName'] as String? ?? d.id,
+            'Artisan',
+            data['location'] as String? ?? '',
+            data['bio'] as String? ?? '',
+          );
+          item.status = status == 'verified'
+              ? 'Approved'
+              : status == 'rejected'
+              ? 'Rejected'
+              : 'Pending';
+          approvals.add(item);
+          for (final u in users.where((u) => u.id == d.id)) {
+            u.verification = item.status;
+          }
+        }
+        notifyListeners();
+      }, onError: _failed),
+    );
+    _subscriptions.add(
+      repo.db.collection('orders').snapshots().listen((snapshot) {
+        orders.clear();
+        orders.addAll(
+          snapshot.docs.map((d) {
+            final o = canonical.Order.fromMap(d.data());
+            return AdminOrder(
+              o.id,
+              o.buyerId,
+              o.items.map((i) => i.productName).join(', '),
+              o.artisanId,
+              o.total.round(),
+              o.status.name,
+            );
+          }),
+        );
+        notifyListeners();
+      }, onError: _failed),
+    );
+    _subscriptions.add(
+      repo.db.collection('products').snapshots().listen((snapshot) {
+        products.clear();
+        products.addAll(
+          snapshot.docs.map((d) {
+            final p = canonical.Product.fromMap(d.data());
+            return AdminDirectoryItem(
+              p.name,
+              '${p.artisanId} - ${p.price}',
+              id: p.id,
+              collection: 'products',
+            )..active = p.status == canonical.ProductStatus.active;
+          }),
+        );
+        notifyListeners();
+      }, onError: _failed),
+    );
+  }
+  void _failed(Object e) {
+    error = marketplaceError(e);
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    for (final s in _subscriptions) {
+      s.cancel();
+    }
+    super.dispose();
+  }
+
   final approvals = <AdminApproval>[
     AdminApproval(
       'AP-108',
@@ -141,6 +264,17 @@ class AdminDemoStore extends ChangeNotifier {
       (deliveryIssueResolved ? 0 : 1);
 
   void decide(AdminApproval item, bool approved) {
+    if (MarketplaceBackend.enabled) {
+      CommunityRepository()
+          .verify(
+            item.id,
+            approved
+                ? canonical.VerificationStatus.verified
+                : canonical.VerificationStatus.rejected,
+          )
+          .catchError(_failed);
+      return;
+    }
     if (item.status != 'Pending') return;
     item.status = approved ? 'Approved' : 'Rejected';
     if (approved) {
@@ -155,16 +289,53 @@ class AdminDemoStore extends ChangeNotifier {
   }
 
   void updateOrder(AdminOrder order, String status) {
+    if (MarketplaceBackend.enabled) {
+      final mapped = {
+        'Pending': 'pending',
+        'Processing': 'confirmed',
+        'Shipped': 'onTheWay',
+        'Delivered': 'delivered',
+      }[status];
+      if (mapped != null) {
+        MarketplaceRepository().db
+            .collection('orders')
+            .doc(order.id)
+            .update({
+              'status': mapped,
+              'updatedAt': DateTime.now().toUtc().toIso8601String(),
+            })
+            .catchError(_failed);
+      }
+      return;
+    }
     order.status = status;
     notifyListeners();
   }
 
   void toggleItem(AdminDirectoryItem item) {
+    if (MarketplaceBackend.enabled) {
+      MarketplaceRepository().db
+          .collection(item.collection)
+          .doc(item.id)
+          .update(
+            item.collection == 'products'
+                ? {'status': item.active ? 'hidden' : 'active'}
+                : {'active': !item.active},
+          )
+          .catchError(_failed);
+      return;
+    }
     item.active = !item.active;
     notifyListeners();
   }
 
   void verifyArtisan(AdminDirectoryItem item) {
+    if (MarketplaceBackend.enabled) {
+      CommunityRepository()
+          .verify(item.id, canonical.VerificationStatus.verified)
+          .catchError(_failed);
+      return;
+    }
     if (!users.contains(item) ||
         !item.isArtisan ||
         item.verification == 'Approved') {
@@ -175,6 +346,11 @@ class AdminDemoStore extends ChangeNotifier {
   }
 
   void resolveIssue(bool product) {
+    if (MarketplaceBackend.enabled) {
+      error = 'No persisted issue record is available for this action.';
+      notifyListeners();
+      return;
+    }
     if (product) {
       productReportResolved = true;
     } else {
@@ -184,6 +360,11 @@ class AdminDemoStore extends ChangeNotifier {
   }
 
   void setNotifications({bool? applications, bool? orders}) {
+    if (MarketplaceBackend.enabled) {
+      error = 'Notification delivery is not configured.';
+      notifyListeners();
+      return;
+    }
     applicationNotifications = applications ?? applicationNotifications;
     orderNotifications = orders ?? orderNotifications;
     notifyListeners();

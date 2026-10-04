@@ -1,3 +1,6 @@
+import '../../shared/data/community_repository.dart';
+import '../../shared/data/marketplace_repository.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
@@ -19,6 +22,16 @@ class BuyerMarketplace extends StatefulWidget {
 
 class _BuyerMarketplaceState extends State<BuyerMarketplace> {
   final demo = BuyerDemo();
+  @override
+  void initState() {
+    super.initState();
+    demo.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
   @override
   void dispose() {
     demo.dispose();
@@ -51,7 +64,7 @@ class _BuyerMarketplaceState extends State<BuyerMarketplace> {
       const SizedBox(height: 24),
       const _Heading('Browse categories'),
       const _Eyebrow('CURATED BY MATERIAL & CLAY BODIES'),
-      for (final p in demoProducts)
+      for (final p in demo.products)
         _Panel(
           child: ListTile(
             contentPadding: EdgeInsets.zero,
@@ -66,7 +79,7 @@ class _BuyerMarketplaceState extends State<BuyerMarketplace> {
       const SizedBox(height: 16),
       const _Eyebrow('MOST CHERISHED THIS WEEK'),
       const _Heading('Popular Today'),
-      for (final p in demoProducts) _ProductCard(demo: demo, product: p),
+      for (final p in demo.products) _ProductCard(demo: demo, product: p),
       const _Panel(
         child: Text(
           '“Every ridge on this vessel is carved by hand while the clay rests leather-hard.”\n\n— From the artisan’s workbench',
@@ -119,7 +132,14 @@ class _BuyerPage extends StatelessWidget {
           constraints: const BoxConstraints(maxWidth: 640),
           child: ListView(
             padding: const EdgeInsets.all(20),
-            children: children,
+            children: [
+              if (demo.error != null)
+                Text(
+                  demo.error!,
+                  style: const TextStyle(color: AppColors.terracotta),
+                ),
+              ...children,
+            ],
           ),
         ),
       ),
@@ -226,13 +246,26 @@ class _Photo extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ClipRRect(
     borderRadius: BorderRadius.circular(14),
-    child: Image.memory(
-      product.image,
-      height: height,
-      width: double.infinity,
-      fit: BoxFit.cover,
-      semanticLabel: product.name,
-    ),
+    child: product.imageUrl != null
+        ? Image.network(
+            product.imageUrl!,
+            height: height,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            errorBuilder: (_, _, _) => SizedBox(
+              height: height,
+              child: const Icon(Icons.image_not_supported_outlined),
+            ),
+          )
+        : MarketplaceBackend.enabled
+        ? SizedBox(height: height, child: const Icon(Icons.image_outlined))
+        : Image.memory(
+            product.image,
+            height: height,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            semanticLabel: product.name,
+          ),
   );
 }
 
@@ -320,19 +353,30 @@ class BuyerSearch extends StatefulWidget {
 
 class _BuyerSearchState extends State<BuyerSearch> {
   final query = TextEditingController();
+  @override
+  void initState() {
+    super.initState();
+    widget.demo.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
   late String category = widget.category;
   String location = 'All';
   String artisan = 'All';
   RangeValues prices = const RangeValues(0, 200);
   @override
   void dispose() {
+    widget.demo.removeListener(_refresh);
     query.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final results = demoProducts
+    final results = widget.demo.products
         .where(
           (p) =>
               (category == 'All' || p.category == category) &&
@@ -390,52 +434,75 @@ class _BuyerSearchState extends State<BuyerSearch> {
               const _Eyebrow('CATEGORY'),
               Wrap(
                 spacing: 8,
-                children: ['All', ...demoProducts.map((p) => p.category)]
-                    .map(
-                      (c) => ChoiceChip(
-                        label: Text(c),
-                        selected: c == category,
-                        selectedColor: AppColors.terracotta.withValues(
-                          alpha: .18,
-                        ),
-                        onSelected: (_) => setState(() => category = c),
-                      ),
-                    )
-                    .toList(),
+                children:
+                    [
+                          'All',
+                          ...widget.demo.products
+                              .map((p) => p.category)
+                              .toSet(),
+                        ]
+                        .map(
+                          (c) => ChoiceChip(
+                            label: Text(c),
+                            selected: c == category,
+                            selectedColor: AppColors.terracotta.withValues(
+                              alpha: .18,
+                            ),
+                            onSelected: (_) => setState(() => category = c),
+                          ),
+                        )
+                        .toList(),
               ),
               const SizedBox(height: 16),
               const _Eyebrow('LOCATION'),
               Wrap(
                 spacing: 8,
-                children: ['All', 'Colombo', 'Kandy', 'Galle', 'Matara']
-                    .map(
-                      (value) => ChoiceChip(
-                        label: Text(value),
-                        selected: value == location,
-                        selectedColor: AppColors.terracotta.withValues(
-                          alpha: .18,
-                        ),
-                        onSelected: (_) => setState(() => location = value),
-                      ),
-                    )
-                    .toList(),
+                children:
+                    (MarketplaceBackend.enabled
+                            ? [
+                                'All',
+                                ...widget.demo.products
+                                    .map((p) => p.location)
+                                    .where((v) => v.isNotEmpty)
+                                    .toSet(),
+                              ]
+                            : ['All', 'Colombo', 'Kandy', 'Galle', 'Matara'])
+                        .map(
+                          (value) => ChoiceChip(
+                            label: Text(value),
+                            selected: value == location,
+                            selectedColor: AppColors.terracotta.withValues(
+                              alpha: .18,
+                            ),
+                            onSelected: (_) => setState(() => location = value),
+                          ),
+                        )
+                        .toList(),
               ),
               const SizedBox(height: 16),
               const _Eyebrow('ARTISAN'),
               Wrap(
                 spacing: 8,
-                children: ['All', ...buyerArtisans.map((a) => a.name)]
-                    .map(
-                      (value) => ChoiceChip(
-                        label: Text(value),
-                        selected: value == artisan,
-                        selectedColor: AppColors.terracotta.withValues(
-                          alpha: .18,
-                        ),
-                        onSelected: (_) => setState(() => artisan = value),
-                      ),
-                    )
-                    .toList(),
+                children:
+                    [
+                          'All',
+                          ...(MarketplaceBackend.enabled
+                              ? widget.demo.products
+                                    .map((p) => p.artisan)
+                                    .toSet()
+                              : buyerArtisans.map((a) => a.name)),
+                        ]
+                        .map(
+                          (value) => ChoiceChip(
+                            label: Text(value),
+                            selected: value == artisan,
+                            selectedColor: AppColors.terracotta.withValues(
+                              alpha: .18,
+                            ),
+                            onSelected: (_) => setState(() => artisan = value),
+                          ),
+                        )
+                        .toList(),
               ),
               const SizedBox(height: 16),
               _Eyebrow(
@@ -480,8 +547,34 @@ class BuyerProductDetails extends StatefulWidget {
 class _BuyerProductDetailsState extends State<BuyerProductDetails> {
   int quantity = 1;
   @override
+  void initState() {
+    super.initState();
+    widget.demo.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    widget.demo.removeListener(_refresh);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final p = widget.product;
+    final current = widget.demo.products
+        .where((p) => p == widget.product)
+        .firstOrNull;
+    if (MarketplaceBackend.enabled && current == null) {
+      return _BuyerPage(
+        demo: widget.demo,
+        title: 'Product Detail',
+        children: const [Text('This product is no longer available.')],
+      );
+    }
+    final p = current ?? widget.product;
     return _BuyerPage(
       demo: widget.demo,
       title: 'Product Detail',
@@ -537,7 +630,8 @@ class _BuyerProductDetailsState extends State<BuyerProductDetails> {
           child: TextButton.icon(
             onPressed: () => _open(
               context,
-              const CraftisanConversationScreen(
+              CraftisanConversationScreen(
+                artisanId: p.artisan,
                 viewer: DemoMessageAuthor.buyer,
               ),
             ),
@@ -582,11 +676,63 @@ class BuyerArtisanProfile extends StatelessWidget {
   final DemoProduct avatarProduct;
 
   @override
-  Widget build(BuildContext context) => ListenableBuilder(
+  Widget build(BuildContext context) => MarketplaceBackend.enabled
+      ? StreamBuilder(
+          stream: CommunityRepository().reviews(avatarProduct.artisan),
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return _BuyerPage(
+                demo: demo,
+                title: 'Artisan Profile',
+                children: [Text(marketplaceError(snapshot.error!))],
+              );
+            }
+            final rows = snapshot.data?.docs ?? [];
+            final reviews = rows
+                .map(
+                  (d) => BuyerReview(
+                    d.data()['buyerId'] as String,
+                    (d.data()['rating'] as num).toDouble(),
+                    d.data()['comment'] as String,
+                    '',
+                  ),
+                )
+                .toList();
+            return StreamBuilder(
+              stream: CommunityRepository().profile(avatarProduct.artisan),
+              builder: (context, profile) {
+                final data = profile.data?.data() ?? {};
+                return _content(
+                  context,
+                  BuyerArtisan(
+                    name: avatarProduct.artisan,
+                    studio: data['studioName'] as String? ?? '',
+                    location: data['location'] as String? ?? '',
+                    bio: data['bio'] as String? ?? '',
+                    rating: reviews.isEmpty
+                        ? 0
+                        : reviews.fold<double>(
+                                0,
+                                (total, r) => total + r.rating,
+                              ) /
+                              reviews.length,
+                    reviewCount: reviews.length,
+                    reviews: reviews,
+                  ),
+                );
+              },
+            );
+          },
+        )
+      : _content(context, artisan);
+  Widget _content(
+    BuildContext context,
+    BuyerArtisan artisan,
+  ) => ListenableBuilder(
     listenable: demo,
     builder: (context, _) {
       final following = demo.followedArtisans.contains(artisan.name);
-      final products = demoProducts
+      final products = demo.products
           .where((product) => product.artisan == artisan.name)
           .toList();
       return _BuyerPage(
@@ -631,7 +777,8 @@ class BuyerArtisanProfile extends StatelessWidget {
           TextButton.icon(
             onPressed: () => _open(
               context,
-              const CraftisanConversationScreen(
+              CraftisanConversationScreen(
+                artisanId: avatarProduct.artisan,
                 viewer: DemoMessageAuthor.buyer,
               ),
             ),
@@ -998,8 +1145,9 @@ class _BuyerCheckoutState extends State<BuyerCheckout> {
     super.dispose();
   }
 
-  void next() {
+  Future<void> next() async {
     final d = widget.demo;
+    if (d.checkingOut) return;
     if (d.cart.isEmpty) return;
     if (widget.step == 0) {
       if (!form.currentState!.validate()) return;
@@ -1015,10 +1163,17 @@ class _BuyerCheckoutState extends State<BuyerCheckout> {
     if (widget.step < 2) {
       _open(context, BuyerCheckout(demo: d, step: widget.step + 1));
     } else {
-      final receipt = Map<DemoProduct, int>.of(d.cart);
-      final total = d.total;
-      final order = d.createOrder(receipt, total);
-      d.clearCart();
+      BuyerDemoOrder order;
+      try {
+        order = await d.checkout();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text(marketplaceError(e))));
+        }
+        return;
+      }
+      if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
         MaterialPageRoute<void>(
           builder: (_) => BuyerOrderSuccess(demo: d, order: order),
@@ -1236,7 +1391,7 @@ class _BuyerCheckoutState extends State<BuyerCheckout> {
               ),
             _Totals(d),
             const Text(
-              'Demo order only · No charge will be made.',
+              'Cash on delivery · No charge will be made.',
               textAlign: TextAlign.center,
             ),
           ],
@@ -1340,64 +1495,67 @@ class BuyerOrderDetails extends StatelessWidget {
   final BuyerDemoOrder order;
 
   @override
-  Widget build(BuildContext context) => _BuyerPage(
-    demo: demo,
-    title: 'Order Details',
-    footer: CustomButton(
-      label: 'Track Order',
-      onPressed: () =>
-          _open(context, BuyerOrderTracking(demo: demo, order: order)),
-    ),
-    children: [
-      const _Eyebrow('ORDER REFERENCE'),
-      _Heading(order.id),
-      _BuyerOrderStatus(status: order.status),
-      const SizedBox(height: 18),
-      const _Heading('Consigned Pieces'),
-      for (final entry in order.items.entries)
-        _Panel(
-          child: Row(
-            children: [
-              SizedBox(width: 70, height: 78, child: _Photo(entry.key)),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  '${entry.key.name}\n${entry.key.artisan}\nQty: ${entry.value}',
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: demo,
+    builder: (context, _) => _BuyerPage(
+      demo: demo,
+      title: 'Order Details',
+      footer: CustomButton(
+        label: 'Track Order',
+        onPressed: () =>
+            _open(context, BuyerOrderTracking(demo: demo, order: order)),
+      ),
+      children: [
+        const _Eyebrow('ORDER REFERENCE'),
+        _Heading(order.id),
+        _BuyerOrderStatus(status: order.status),
+        const SizedBox(height: 18),
+        const _Heading('Consigned Pieces'),
+        for (final entry in order.items.entries)
+          _Panel(
+            child: Row(
+              children: [
+                SizedBox(width: 70, height: 78, child: _Photo(entry.key)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '${entry.key.name}\n${entry.key.artisan}\nQty: ${entry.value}',
+                  ),
                 ),
-              ),
-              Text(money(entry.key.price * entry.value)),
+                Text(money(entry.key.price * entry.value)),
+              ],
+            ),
+          ),
+        _Panel(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const _Eyebrow('DELIVERY ADDRESS'),
+              const SizedBox(height: 8),
+              Text(order.address),
+              const SizedBox(height: 16),
+              const _Eyebrow('PAYMENT METHOD'),
+              const SizedBox(height: 8),
+              Text(order.payment),
             ],
           ),
         ),
-      _Panel(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const _Eyebrow('DELIVERY ADDRESS'),
-            const SizedBox(height: 8),
-            Text(order.address),
-            const SizedBox(height: 16),
-            const _Eyebrow('PAYMENT METHOD'),
-            const SizedBox(height: 8),
-            Text(order.payment),
-          ],
+        const _Heading('Order Summary'),
+        _Panel(
+          child: Column(
+            children: [
+              _Amount('Items subtotal (${order.count})', money(order.subtotal)),
+              _Amount(
+                'Delivery fee',
+                order.deliveryFee == 0 ? 'Free' : money(order.deliveryFee),
+              ),
+              const Divider(),
+              _Amount('Total', money(order.total)),
+            ],
+          ),
         ),
-      ),
-      const _Heading('Order Summary'),
-      _Panel(
-        child: Column(
-          children: [
-            _Amount('Items subtotal (${order.count})', money(order.subtotal)),
-            _Amount(
-              'Delivery fee',
-              order.deliveryFee == 0 ? 'Free' : money(order.deliveryFee),
-            ),
-            const Divider(),
-            _Amount('Total', money(order.total)),
-          ],
-        ),
-      ),
-    ],
+      ],
+    ),
   );
 }
 
@@ -1409,58 +1567,75 @@ class BuyerOrderTracking extends StatelessWidget {
   });
   final BuyerDemo demo;
   final BuyerDemoOrder order;
-  static const _stages = BuyerOrderStatus.values;
+  static const _stages = [
+    BuyerOrderStatus.pending,
+    BuyerOrderStatus.confirmed,
+    BuyerOrderStatus.courierAssigned,
+    BuyerOrderStatus.pickedUp,
+    BuyerOrderStatus.onTheWay,
+    BuyerOrderStatus.delivered,
+  ];
 
   @override
-  Widget build(BuildContext context) => _BuyerPage(
-    demo: demo,
-    title: 'Order Tracking',
-    children: [
-      const _Eyebrow('STUDIO CONSIGNMENT'),
-      _Heading(order.id),
-      Text(
-        '${order.primaryProduct.name}\n${order.primaryProduct.studio}',
-        style: Theme.of(context).textTheme.bodyLarge,
-      ),
-      const SizedBox(height: 20),
-      const _Heading('Delivery progress'),
-      _Panel(
-        child: Column(
-          children: [
-            for (var index = 0; index < _stages.length; index++) ...[
-              _TrackingStage(stage: _stages[index], current: order.status),
-              if (index < _stages.length - 1)
-                Container(
-                  width: 2,
-                  height: 24,
-                  color: index < order.status.index
-                      ? AppColors.terracotta
-                      : const Color(0xFFE5DCD4),
-                ),
-            ],
-          ],
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: demo,
+    builder: (context, _) => _BuyerPage(
+      demo: demo,
+      title: 'Order Tracking',
+      children: [
+        const _Eyebrow('STUDIO CONSIGNMENT'),
+        _Heading(order.id),
+        Text(
+          '${order.primaryProduct.name}\n${order.primaryProduct.studio}',
+          style: Theme.of(context).textTheme.bodyLarge,
         ),
-      ),
-      if (order.status.index >= BuyerOrderStatus.courierAssigned.index)
+        const SizedBox(height: 20),
+        const _Heading('Delivery progress'),
         _Panel(
-          child: ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const CircleAvatar(
-              backgroundColor: AppColors.surface,
-              child: Icon(Icons.local_shipping_outlined, color: AppColors.sage),
-            ),
-            title: const Text('Guild Courier · Marco V.'),
-            subtitle: const Text(
-              'Demo dispatch contact\nYour handcrafted parcel is being handled with care.',
-            ),
+          child: Column(
+            children: [
+              if (order.status == BuyerOrderStatus.cancelled)
+                const Text('Order cancelled'),
+              if (order.status != BuyerOrderStatus.cancelled)
+                for (var index = 0; index < _stages.length; index++) ...[
+                  _TrackingStage(stage: _stages[index], current: order.status),
+                  if (index < _stages.length - 1)
+                    Container(
+                      width: 2,
+                      height: 24,
+                      color: index < order.status.index
+                          ? AppColors.terracotta
+                          : const Color(0xFFE5DCD4),
+                    ),
+                ],
+            ],
           ),
         ),
-      const _Panel(
-        child: Text(
-          'Tracking is a static demo preview. No location services or live delivery updates are connected.',
+        if (order.status != BuyerOrderStatus.cancelled &&
+            order.status.index >= BuyerOrderStatus.courierAssigned.index)
+          _Panel(
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const CircleAvatar(
+                backgroundColor: AppColors.surface,
+                child: Icon(
+                  Icons.local_shipping_outlined,
+                  color: AppColors.sage,
+                ),
+              ),
+              title: const Text('Assigned Guild Courier'),
+              subtitle: const Text(
+                'Your handcrafted parcel is being handled with care.',
+              ),
+            ),
+          ),
+        const _Panel(
+          child: Text(
+            'Order status updates appear here as your parcel moves through delivery.',
+          ),
         ),
-      ),
-    ],
+      ],
+    ),
   );
 }
 

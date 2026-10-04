@@ -1,0 +1,38 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "craftisan-we114-2026",
+          "appId": "1:471804613144:android:7abeb80c0aa20e1db7e96d",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "craftisan-we114-2026",
+          "configurations": {
+            "android": "1:471804613144:android:7abeb80c0aa20e1db7e96d"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "emulators": {
+    "firestore": {
+      "port": 8187
+    },
+    "ui": {
+      "enabled": false
+    },
+    "hub": {
+      "port": 4497
+    },
+    "logging": {
+      "port": 4597
+    }
+  }
+}

@@ -12,6 +12,24 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final _store = AdminDemoStore();
+  @override
+  void initState() {
+    super.initState();
+    _store.addListener(_showError);
+  }
+
+  void _showError() {
+    if (!mounted || _store.error == null) return;
+    final error = _store.error!;
+    _store.error = null;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error)));
+      }
+    });
+  }
+
   final _search = TextEditingController();
   int _tab = 0;
   String _approvalFilter = 'Pending', _orderFilter = 'All', _period = 'Week';

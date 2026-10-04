@@ -1,0 +1,166 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isAdmin() { return signedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'; }
+    function owner(uid) { return signedIn() && request.auth.uid == uid; }
+    function role(value) { return signedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == value; }
+    match /users/{uid} {
+      allow read: if owner(uid) || isAdmin();
+      allow create: if owner(uid)
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'displayName', 'role', 'createdAt', 'updatedAt'])
+        && request.resource.data.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.displayName is string
+        && request.resource.data.role in ['buyer', 'artisan', 'courier']
+        && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
+      // Role and ownership are immutable from the client.
+      allow update: if isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active']) && request.resource.data.active is bool;
+      allow delete: if false;
+      match /cart/{productId} {
+        allow read, delete: if owner(uid);
+        allow create, update: if owner(uid) && role('buyer')
+          && request.resource.data.keys().hasOnly(['productId', 'quantity', 'addedAt'])
+          && request.resource.data.productId == productId
+          && request.resource.data.quantity is int && request.resource.data.quantity > 0
+          && request.resource.data.quantity <= get(/databases/$(database)/documents/products/$(productId)).data.stock
+          && get(/databases/$(database)/documents/products/$(productId)).data.status == 'active'
+          && request.resource.data.addedAt is timestamp;
+      }
+      match /favorites/{productId} {
+        allow read, delete: if owner(uid);
+        allow create, update: if owner(uid) && role('buyer')
+          && request.resource.data.keys().hasOnly(['productId', 'addedAt'])
+          && request.resource.data.productId == productId
+          && request.resource.data.addedAt is timestamp
+          && get(/databases/$(database)/documents/products/$(productId)).data.status == 'active';
+      }
+    }
+    function validProduct(id) {
+      let p = request.resource.data;
+      return p.keys().hasOnly(['id','artisanId','name','category','price','currency','description','imageUrls','stock','status','createdAt'])
+        && p.id == id && p.artisanId == request.auth.uid
+        && p.name is string && p.name.size() > 0 && p.category is string && p.description is string
+        && p.price is number && p.price >= 0 && p.price < 1000000
+        && p.currency == 'USD' && p.stock is int && p.stock >= 0
+        && p.imageUrls is list && p.imageUrls.size() <= 4
+        && p.status in ['draft','active','hidden'] && p.createdAt is string;
+    }
+    match /products/{id} {
+      allow get: if isAdmin() || signedIn() && (!exists(/databases/$(database)/documents/products/$(id)) || resource.data.status == 'active' || resource.data.artisanId == request.auth.uid);
+      allow list: if isAdmin() || signedIn() && (resource.data.status == 'active' || resource.data.artisanId == request.auth.uid);
+      allow create: if role('artisan') && validProduct(id);
+      allow update: if (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) && request.resource.data.status in ['active','hidden']) || role('artisan') && resource.data.artisanId == request.auth.uid
+        && validProduct(id) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if role('artisan') && resource.data.artisanId == request.auth.uid;
+    }
+    function validItem(items, index, artisan) {
+      return index >= items.size() || validPresentItem(items[index], artisan);
+    }
+    function validPresentItem(i, artisan) {
+      let p = get(/databases/$(database)/documents/products/$(i.productId)).data;
+      return i.keys().hasOnly(['productId','productName','imageUrl','unitPrice','quantity'])
+        && p.status == 'active' && p.artisanId == artisan && p.currency == 'USD'
+        && i.productName == p.name && i.unitPrice == p.price
+        && i.quantity is int && i.quantity > 0 && i.quantity <= p.stock
+        && i.imageUrl == (p.imageUrls.size() > 0 ? p.imageUrls[0] : null);
+    }
+    function amount(items, index) { return index < items.size() ? items[index].unitPrice * items[index].quantity : 0; }
+    function validOrder(id) {
+      let o = request.resource.data;
+      let subtotal = amount(o.items,0) + amount(o.items,1) + amount(o.items,2) + amount(o.items,3) + amount(o.items,4) + amount(o.items,5) + amount(o.items,6) + amount(o.items,7);
+      return o.keys().hasOnly(['id','buyerId','artisanId','courierId','items','status','deliveryAddress','paymentMethod','subtotal','deliveryFee','total','createdAt','updatedAt'])
+        && o.id == id && o.buyerId == request.auth.uid && o.courierId == null
+        && o.status == 'pending' && o.items is list && o.items.size() > 0 && o.items.size() <= 8
+        && validItem(o.items,0,o.artisanId) && validItem(o.items,1,o.artisanId)
+        && validItem(o.items,2,o.artisanId) && validItem(o.items,3,o.artisanId)
+        && validItem(o.items,4,o.artisanId) && validItem(o.items,5,o.artisanId)
+        && validItem(o.items,6,o.artisanId) && validItem(o.items,7,o.artisanId)
+        && o.subtotal == subtotal && o.deliveryFee == (subtotal >= 250 ? 0 : 14)
+        && o.total == subtotal + o.deliveryFee
+        && o.deliveryAddress is string && o.deliveryAddress.size() > 0
+        && o.paymentMethod == 'Cash on delivery' && o.createdAt is string && o.updatedAt == null;
+    }
+    match /orders/{id} {
+      // Permits reading an unused ID so an idempotent creation transaction can start.
+      allow get: if isAdmin() || signedIn() && (!exists(/databases/$(database)/documents/orders/$(id))
+        || resource.data.buyerId == request.auth.uid || resource.data.artisanId == request.auth.uid || resource.data.courierId == request.auth.uid);
+      allow list: if isAdmin() || signedIn() && (resource.data.buyerId == request.auth.uid || resource.data.artisanId == request.auth.uid || resource.data.courierId == request.auth.uid);
+      allow create: if role('buyer') && validOrder(id);
+      allow update: if (isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt','courierId'])
+        && request.resource.data.updatedAt is string
+        && ((request.resource.data.status == 'courierAssigned' && resource.data.status in ['confirmed','courierAssigned']
+            && get(/databases/$(database)/documents/users/$(request.resource.data.courierId)).data.role == 'courier')
+          || (request.resource.data.courierId == resource.data.courierId
+            && ((resource.data.status == 'pending' && request.resource.data.status == 'confirmed')
+              || (resource.data.status == 'pickedUp' && request.resource.data.status == 'onTheWay')
+              || (resource.data.status == 'onTheWay' && request.resource.data.status == 'delivered')))))
+        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt'])
+        && request.resource.data.updatedAt is string
+        && ((role('artisan') && resource.data.artisanId == request.auth.uid
+            && resource.data.status == 'pending' && request.resource.data.status == 'confirmed')
+          || (role('courier') && resource.data.courierId == request.auth.uid
+            && ((resource.data.status == 'courierAssigned' && request.resource.data.status == 'pickedUp')
+              || (resource.data.status == 'pickedUp' && request.resource.data.status == 'onTheWay')
+              || (resource.data.status == 'onTheWay' && request.resource.data.status == 'delivered'))));
+      allow delete: if false;
+    }
+
+    match /artisanProfiles/{id} {
+      allow read: if signedIn();
+      function fields() { return request.resource.data.keys().hasOnly(['userId','studioName','bio','location','kilnSpecifications','verificationStatus'])
+        && request.resource.data.userId == id && request.resource.data.studioName is string
+        && request.resource.data.bio is string && request.resource.data.location is string
+        && request.resource.data.kilnSpecifications is string; }
+      allow create: if owner(id) && role('artisan') && fields() && request.resource.data.verificationStatus == 'pending';
+      allow update: if (owner(id) && role('artisan') && fields()
+        && request.resource.data.verificationStatus == resource.data.verificationStatus)
+        || (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['verificationStatus'])
+          && request.resource.data.verificationStatus in ['pending','verified','rejected']);
+    }
+    function deliveredItem(items, id, index) { return index < items.size() && items[index].productId == id; }
+    match /reviews/{id} {
+      allow read: if signedIn();
+      allow create: if role('buyer') && reviewEligible(id);
+      function reviewEligible(id) {
+        let r = request.resource.data;
+        let o = get(/databases/$(database)/documents/orders/$(r.orderId)).data;
+        return r.keys().hasOnly(['buyerId','artisanId','productId','orderId','rating','comment','createdAt'])
+          && r.buyerId == request.auth.uid && o.buyerId == request.auth.uid && o.status == 'delivered'
+          && r.artisanId == o.artisanId && id == r.buyerId + '_' + r.orderId + '_' + r.productId
+          && r.rating is number && r.rating >= 1 && r.rating <= 5
+          && r.comment is string && r.comment.size() > 0 && r.comment.size() <= 2000 && r.createdAt == request.time
+          && (deliveredItem(o.items,r.productId,0) || deliveredItem(o.items,r.productId,1)
+            || deliveredItem(o.items,r.productId,2) || deliveredItem(o.items,r.productId,3)
+            || deliveredItem(o.items,r.productId,4) || deliveredItem(o.items,r.productId,5)
+            || deliveredItem(o.items,r.productId,6) || deliveredItem(o.items,r.productId,7));
+      }
+      allow update, delete: if false;
+    }
+    match /conversations/{id} {
+      function participant() { return signedIn() && request.auth.uid in resource.data.participantIds; }
+      allow get: if participant() || (role('buyer') && !exists(/databases/$(database)/documents/conversations/$(id)));
+      allow list: if participant();
+      allow create: if role('buyer') && request.resource.data.keys().hasOnly(['participantIds','buyerId','artisanId','lastMessage','lastMessageAt','updatedAt'])
+        && request.resource.data.buyerId == request.auth.uid
+        && get(/databases/$(database)/documents/users/$(request.resource.data.artisanId)).data.role == 'artisan'
+        && request.resource.data.participantIds == [request.auth.uid, request.resource.data.artisanId]
+        && id == request.auth.uid + '_' + request.resource.data.artisanId
+        && request.resource.data.lastMessage == '' && request.resource.data.lastMessageAt == null && request.resource.data.updatedAt == request.time;
+      allow update: if participant() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastMessage','lastMessageAt','updatedAt'])
+        && request.resource.data.lastMessage is string && request.resource.data.lastMessage.size() <= 4000
+        && request.resource.data.lastMessageAt == request.time && request.resource.data.updatedAt == request.time;
+      match /messages/{messageId} {
+        function member() { return signedIn() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(id)).data.participantIds; }
+        allow read: if member();
+        allow create: if member() && request.resource.data.keys().hasOnly(['senderId','text','createdAt','readAt'])
+          && request.resource.data.senderId == request.auth.uid && request.resource.data.text is string
+          && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 4000
+          && request.resource.data.createdAt == request.time && request.resource.data.readAt == null;
+        allow update: if member() && resource.data.senderId != request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']) && request.resource.data.readAt == request.time;
+      }
+    }
+  }
+}

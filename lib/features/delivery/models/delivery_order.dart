@@ -17,6 +17,7 @@ class DeliveryOrder {
     required this.pickup,
     required this.destination,
     required this.service,
+    this.earnings = 0,
     DeliveryStatus status = DeliveryStatus.pending,
     // Keep status read-only to callers so demo actions cannot skip milestones.
     // ignore: prefer_initializing_formals
@@ -26,6 +27,7 @@ class DeliveryOrder {
   final String pickup;
   final String destination;
   final String service;
+  final double earnings;
   DeliveryStatus _status;
   DeliveryStatus get status => _status;
   bool get delivered => _status == DeliveryStatus.delivered;
@@ -42,6 +44,7 @@ class DeliveryOrder {
       pickup: 'Oread Pottery Studio, Colombo 07',
       destination: '42 Flower Road, Colombo 03',
       service: 'Fragile parcel',
+      earnings: 850,
     ),
     DeliveryOrder(
       id: 'CR-2047',
@@ -49,6 +52,7 @@ class DeliveryOrder {
       pickup: 'Clay House, Nugegoda',
       destination: '18 Lake Road, Rajagiriya',
       service: 'Truck',
+      earnings: 1200,
     ),
     DeliveryOrder(
       id: 'CR-2046',
@@ -56,6 +60,7 @@ class DeliveryOrder {
       pickup: 'Kiln & Co, Colombo 05',
       destination: '8 Park Avenue, Colombo 06',
       service: 'Ride',
+      earnings: 650,
       status: DeliveryStatus.delivered,
     ),
   ];

@@ -83,6 +83,14 @@ void main() {
     expect(find.text('Accept Delivery'), findsNothing);
     await tap('Back to My Orders');
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Completed'),
+      -200,
+      scrollable: find.descendant(
+        of: find.byKey(const PageStorageKey('delivery-orders')),
+        matching: find.byType(Scrollable),
+      ),
+    );
     await tap('Completed');
     await tap('Handcrafted ceramic vase');
     expect(

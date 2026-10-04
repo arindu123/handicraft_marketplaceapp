@@ -4,7 +4,6 @@ import '../../../routes/route_names.dart';
 import '../models/delivery_order.dart';
 import '../widgets/delivery_widgets.dart';
 import '../widgets/delivery_status_widgets.dart';
-import 'delivery_request_screen.dart';
 
 class DeliveryHomeScreen extends StatefulWidget {
   const DeliveryHomeScreen({super.key});
@@ -15,43 +14,19 @@ class DeliveryHomeScreen extends StatefulWidget {
 class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
   final _orders = DeliveryOrder.demoOrders();
   final _search = TextEditingController();
+  final _ordersScroll = ScrollController();
   int _tab = 0;
   String _filter = 'All';
   bool _notifications = true;
-  static const _services = [
-    (name: 'Ride', icon: Icons.delivery_dining, color: Color(0xFFE8763E)),
-    (
-      name: 'Transit',
-      icon: Icons.directions_bus_rounded,
-      color: Color(0xFFCE584C),
-    ),
-    (name: 'Car', icon: Icons.directions_car_rounded, color: Color(0xFFE6AD39)),
-    (
-      name: 'Truck',
-      icon: Icons.local_shipping_rounded,
-      color: Color(0xFFD59749),
-    ),
-    (name: 'Send', icon: Icons.inventory_2_rounded, color: Color(0xFFCEA254)),
-  ];
+  bool _online = true;
+  // Display profile until delivery accounts are connected.
+  static const _riderName = 'Kasun Perera';
+  static const _riderArea = 'Colombo';
   @override
   void dispose() {
     _search.dispose();
+    _ordersScroll.dispose();
     super.dispose();
-  }
-
-  Future<void> _book(String service) async {
-    final order = await Navigator.push<DeliveryOrder>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => DeliveryRequestScreen(service: service),
-      ),
-    );
-    if (!mounted || order == null) return;
-    setState(() {
-      _orders.insert(0, order);
-      _tab = 1;
-      _filter = 'Active';
-    });
   }
 
   @override
@@ -78,12 +53,12 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
             Icons.account_balance_wallet,
             color: DeliveryStyle.orange,
           ),
-          label: 'Wallet',
+          label: 'Earnings',
         ),
         NavigationDestination(
           icon: Icon(Icons.person_outline),
           selectedIcon: Icon(Icons.person, color: DeliveryStyle.orange),
-          label: 'Account',
+          label: 'Profile',
         ),
       ],
     ),
@@ -95,9 +70,12 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
 
   Widget _home() {
     final query = _search.text.trim().toLowerCase();
-    final services = _services
-        .where((service) => service.name.toLowerCase().contains(query))
+    final orders = _orders
+        .where((order) => order.id.toLowerCase().contains(query))
         .toList();
+    final waiting = _orders
+        .where((order) => order.status == DeliveryStatus.pending)
+        .length;
     return SingleChildScrollView(
       key: const PageStorageKey('delivery-home'),
       child: Container(
@@ -116,7 +94,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
               children: [
                 const CircleAvatar(
                   backgroundColor: Colors.white,
-                  child: Icon(Icons.person, color: DeliveryStyle.ink),
+                  child: Text('KP', style: TextStyle(color: DeliveryStyle.ink)),
                 ),
                 const SizedBox(width: 10),
                 const Expanded(
@@ -131,7 +109,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
                         ),
                       ),
                       Text(
-                        'Guest Courier',
+                        _riderName,
                         style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -157,12 +135,14 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: 8),
+            _availability(),
             const SizedBox(height: 18),
             TextField(
               controller: _search,
               onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
-                hintText: 'Find Local Services',
+                hintText: 'Search order ID',
                 hintStyle: const TextStyle(
                   fontSize: 13,
                   color: DeliveryStyle.muted,
@@ -204,7 +184,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Text(
-                            'MOVE WITH CARE',
+                            'DELIVERIES TODAY',
                             style: TextStyle(
                               fontSize: 9,
                               color: DeliveryStyle.orange,
@@ -213,8 +193,8 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
                           ),
                         ),
                         const SizedBox(height: 9),
-                        const Text(
-                          'Moving day,\nmade simple',
+                        Text(
+                          '$waiting ${waiting == 1 ? 'delivery' : 'deliveries'}\nwaiting today',
                           style: TextStyle(
                             fontSize: 23,
                             height: 1.1,
@@ -224,7 +204,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
                         ),
                         const SizedBox(height: 8),
                         const Text(
-                          'A careful ride for every\nhandcrafted piece.',
+                          'Accept an order and\nstart your delivery.',
                           style: TextStyle(
                             fontSize: 11,
                             color: Color(0xFF70665E),
@@ -233,14 +213,17 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
                         ),
                         const SizedBox(height: 12),
                         FilledButton(
-                          onPressed: () => _book('Truck'),
+                          onPressed: () => setState(() {
+                            _tab = 1;
+                            _filter = 'Active';
+                          }),
                           style: FilledButton.styleFrom(
                             backgroundColor: DeliveryStyle.orange,
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(horizontal: 13),
                           ),
                           child: const Text(
-                            'Book now →',
+                            'View orders',
                             style: TextStyle(fontSize: 12),
                           ),
                         ),
@@ -255,75 +238,34 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
             _balanceCard(),
             const SizedBox(height: 20),
             const Text(
-              'Services',
+              "Today's orders",
               style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
-            if (services.isEmpty)
+            if (orders.isEmpty)
               const Padding(
                 padding: EdgeInsets.all(12),
-                child: Text(
-                  'No services found. Try Ride, Transit, Car, Truck or Send.',
-                  style: TextStyle(color: DeliveryStyle.muted),
-                ),
+                child: Text('No orders found for this ID.'),
               ),
-            LayoutBuilder(
-              builder: (context, constraints) => Wrap(
-                spacing: 8,
-                runSpacing: 12,
-                children: services
-                    .map(
-                      (service) => SizedBox(
-                        width: ((constraints.maxWidth - 32) / 5).clamp(
-                          58.0,
-                          85.0,
-                        ),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(15),
-                          onTap: () => _book(service.name),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 5),
-                            child: Column(
-                              children: [
-                                Container(
-                                  height: 57,
-                                  width: double.infinity,
-                                  decoration: BoxDecoration(
-                                    color: DeliveryStyle.surface,
-                                    borderRadius: BorderRadius.circular(15),
-                                  ),
-                                  child: Icon(
-                                    service.icon,
-                                    size: 33,
-                                    color: service.color,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  service.name,
-                                  textAlign: TextAlign.center,
-                                  style: const TextStyle(fontSize: 11),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-              ),
-            ),
-            const SizedBox(height: 18),
-            const Text(
-              'DEMO PREVIEW · Sample balances and deliveries',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 10, color: DeliveryStyle.muted),
-            ),
+            for (final order in orders) _orderCard(order),
           ],
         ),
       ),
     );
   }
+
+  Widget _availability() => SwitchListTile(
+    contentPadding: EdgeInsets.zero,
+    title: Text(_online ? 'Online' : 'Offline'),
+    subtitle: const Text('$_riderArea \u00b7 \u2605 4.8'),
+    value: _online,
+    activeThumbColor: DeliveryStyle.orange,
+    onChanged: (value) => setState(() => _online = value),
+  );
+
+  double get _earned => _orders
+      .where((order) => order.delivered)
+      .fold(0.0, (total, order) => total + order.earnings);
 
   Widget _balanceCard() => Container(
     padding: const EdgeInsets.all(16),
@@ -334,102 +276,90 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Total Balance',
-                style: TextStyle(fontSize: 12, color: DeliveryStyle.muted),
-              ),
-            ),
-            Text(
-              'DEMO',
-              style: TextStyle(
-                fontSize: 10,
-                color: DeliveryStyle.orange,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 5),
-        const Text.rich(
-          TextSpan(
-            children: [
-              TextSpan(
-                text: '\$1,280.87 ',
-                style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.w800,
-                  color: DeliveryStyle.ink,
-                ),
-              ),
-              TextSpan(
-                text: 'USD',
-                style: TextStyle(fontSize: 11, color: DeliveryStyle.muted),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(child: _walletAction('Pay', Icons.credit_card)),
-            const SizedBox(width: 8),
-            Expanded(child: _walletAction('Top Up', Icons.add_box_outlined)),
-            const SizedBox(width: 8),
-            Expanded(child: _walletAction('More', Icons.more_horiz)),
-          ],
+        const Text(
+          'Earnings',
+          style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 14),
-        const Wrap(
+        Wrap(
           spacing: 24,
           runSpacing: 12,
           children: [
             _MoneyStat(
-              label: 'Income',
-              amount: '\$3,420.00',
-              icon: Icons.south_west,
-              color: Color(0xFF65A887),
+              label: 'Today',
+              amount: 'Rs. ${_earned.toStringAsFixed(2)}',
+              icon: Icons.today,
+              color: const Color(0xFF65A887),
             ),
             _MoneyStat(
-              label: 'Spending',
-              amount: '\$2,139.13',
-              icon: Icons.north_east,
-              color: Color(0xFFC77989),
+              label: 'This week',
+              amount: 'Rs. ${_earned.toStringAsFixed(2)}',
+              icon: Icons.date_range,
+              color: DeliveryStyle.orange,
             ),
           ],
+        ),
+        const SizedBox(height: 14),
+        FilledButton.icon(
+          onPressed: () => showDeliveryNotice(
+            context,
+            'Cash out unavailable',
+            'Payouts are not connected yet. No cash out has been made.',
+          ),
+          icon: const Icon(Icons.account_balance_outlined),
+          label: const Text('Cash out'),
         ),
       ],
     ),
   );
 
-  Widget _walletAction(String label, IconData icon) => TextButton(
-    style: TextButton.styleFrom(
-      backgroundColor: Colors.white,
-      foregroundColor: DeliveryStyle.ink,
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-    ),
-    onPressed: () {
-      if (label == 'More') {
-        setState(() => _tab = 2);
-        return;
-      }
-      showDeliveryNotice(
-        context,
-        '$label unavailable',
-        'This is a demo wallet. No funds are held and no payments or top-ups can be made.',
-      );
-    },
-    child: Wrap(
-      alignment: WrapAlignment.center,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 4,
-      children: [
-        Icon(icon, size: 16),
-        Text(label, style: const TextStyle(fontSize: 11)),
-      ],
+  Widget _orderCard(DeliveryOrder order) => Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Material(
+      color: DeliveryStyle.surface,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: () => _showOrder(order),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                order.title,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                order.id,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: DeliveryStyle.muted,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '${order.pickup} \u2192 ${order.destination}',
+                style: const TextStyle(fontSize: 13),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 12,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  DeliveryStatusPill(status: order.status),
+                  Text(
+                    'Earn Rs. ${order.earnings.toStringAsFixed(2)}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     ),
   );
 
@@ -443,6 +373,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
         .toList();
     return ListView(
       key: const PageStorageKey('delivery-orders'),
+      controller: _ordersScroll,
       padding: const EdgeInsets.all(20),
       children: [
         _heading('My Orders', 'Sample deliveries for your courier workspace.'),
@@ -454,7 +385,10 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
                 (filter) => ChoiceChip(
                   label: Text(filter),
                   selected: _filter == filter,
-                  onSelected: (_) => setState(() => _filter = filter),
+                  onSelected: (_) {
+                    setState(() => _filter = filter);
+                    _ordersScroll.jumpTo(0);
+                  },
                 ),
               )
               .toList(),
@@ -465,59 +399,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
             padding: EdgeInsets.all(24),
             child: Text('No deliveries in this view.'),
           ),
-        for (final order in filtered)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Material(
-              color: DeliveryStyle.surface,
-              borderRadius: BorderRadius.circular(18),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(18),
-                onTap: () => _showOrder(order),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.inventory_2_outlined,
-                            color: DeliveryStyle.orange,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              order.title,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          const Icon(Icons.chevron_right, size: 18),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        order.id,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: DeliveryStyle.muted,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        order.destination,
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                      const SizedBox(height: 10),
-                      DeliveryStatusPill(status: order.status),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
+        for (final order in filtered) _orderCard(order),
       ],
     );
   }
@@ -608,7 +490,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
   Widget _wallet() => ListView(
     padding: const EdgeInsets.all(20),
     children: [
-      _heading('My Wallet', 'A preview of your delivery earnings.'),
+      _heading('My Earnings', 'Your completed delivery earnings.'),
       const SizedBox(height: 20),
       _balanceCard(),
       const SizedBox(height: 24),
@@ -617,67 +499,51 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
       ),
       const SizedBox(height: 10),
-      for (final item in [
-        (title: 'Ceramic collection delivery', amount: '+\$24.00'),
-        (title: 'Studio pickup', amount: '+\$18.50'),
-        (title: 'Packing materials', amount: '-\$8.00'),
-      ])
+      for (final order in _orders.where((order) => order.delivered))
         ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: const CircleAvatar(
-            backgroundColor: DeliveryStyle.surface,
-            child: Icon(
-              Icons.receipt_long_outlined,
-              color: DeliveryStyle.orange,
-            ),
+          leading: const Icon(
+            Icons.receipt_long_outlined,
+            color: DeliveryStyle.orange,
           ),
-          title: Text(item.title, style: const TextStyle(fontSize: 14)),
-          subtitle: const Text(
-            'Sample transaction',
-            style: TextStyle(fontSize: 11),
-          ),
-          trailing: Text(
-            item.amount,
-            style: const TextStyle(fontWeight: FontWeight.w600),
+          title: Text(order.title, style: const TextStyle(fontSize: 14)),
+          subtitle: Text(
+            '${order.id} \u00b7 Rs. ${order.earnings.toStringAsFixed(2)}',
           ),
         ),
-      const SizedBox(height: 12),
-      const Text(
-        'Demo only. Balances and transactions are illustrative.',
-        style: TextStyle(fontSize: 12, color: DeliveryStyle.muted),
-      ),
     ],
   );
 
   Widget _account() => ListView(
     padding: const EdgeInsets.all(20),
     children: [
-      _heading('Account', 'Your Craftisan delivery workspace.'),
+      _heading('Profile', 'Your Craftisan delivery workspace.'),
       const SizedBox(height: 24),
       const CircleAvatar(
         radius: 35,
         backgroundColor: DeliveryStyle.peach,
-        child: Icon(
-          Icons.person_outline,
-          size: 40,
-          color: DeliveryStyle.orange,
+        child: Text(
+          'KP',
+          style: TextStyle(fontSize: 28, color: DeliveryStyle.orange),
         ),
       ),
       const SizedBox(height: 12),
       const Text(
-        'Guest Courier',
+        _riderName,
         textAlign: TextAlign.center,
         style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
       ),
       const Text(
-        'Demo profile',
+        '$_riderArea \u00b7 \u2605 4.8',
         textAlign: TextAlign.center,
         style: TextStyle(color: DeliveryStyle.muted),
       ),
+      const SizedBox(height: 12),
+      _availability(),
       const SizedBox(height: 24),
       SwitchListTile(
         contentPadding: EdgeInsets.zero,
-        title: const Text('Demo notification preference'),
+        title: const Text('Notifications'),
         subtitle: const Text('For this preview session only'),
         value: _notifications,
         onChanged: (value) => setState(() => _notifications = value),

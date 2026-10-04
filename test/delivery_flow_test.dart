@@ -43,62 +43,77 @@ void main() {
     await tapText(tester, 'Log In');
     expect(find.text('Enter your email or phone number.'), findsOneWidget);
     await tapText(tester, 'Quick Track as Guest  →');
-    expect(find.text('Guest Courier'), findsOneWidget);
-    expect(find.text('Services'), findsOneWidget);
-    await tapText(tester, 'Account');
+    expect(find.text('Kasun Perera'), findsOneWidget);
+    expect(find.text("Today's orders"), findsOneWidget);
+    await tapText(tester, 'Profile');
     await tapText(tester, 'Back to role selection');
     expect(find.text('Roles Selection'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Demo booking validates addresses and updates only demo orders', (
+  testWidgets('Rider views, accepts and completes an order with earnings', (
     tester,
   ) async {
     await openRoute(tester, RouteNames.deliveryHome);
-    await tapText(tester, 'Book now →');
-    await tapText(tester, 'Create demo request');
-    expect(find.text('Please complete this field.'), findsNWidgets(3));
-    await tester.enterText(find.byType(TextFormField).at(0), 'Pottery Studio');
-    await tester.enterText(find.byType(TextFormField).at(1), 'Collector House');
-    await tester.enterText(
-      find.byType(TextFormField).at(2),
-      'Test ceramic bowl',
-    );
-    await tapText(tester, 'Create demo request');
+    expect(find.text('2 deliveries\nwaiting today'), findsOneWidget);
+    expect(find.text('Book now'), findsNothing);
+    await tapText(tester, 'View orders');
     expect(find.text('My Orders'), findsOneWidget);
-    await tapText(tester, 'Test ceramic bowl');
-    expect(find.text('Pottery Studio'), findsOneWidget);
+    await tapText(tester, 'Handcrafted ceramic vase');
     await tapText(tester, 'Accept Delivery');
     await tapText(tester, 'Mark as Picked Up');
     await tapText(tester, 'Start Delivery');
     await tapText(tester, 'Mark as Delivered');
     await tapText(tester, 'Back to My Orders');
-    await tester.pumpAndSettle();
     await tapText(tester, 'Completed');
-    expect(find.text('Test ceramic bowl'), findsOneWidget);
-    await tapText(tester, 'Wallet');
-    await tapText(tester, 'Top Up');
+    expect(find.text('Handcrafted ceramic vase'), findsOneWidget);
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Earnings'));
+    await tester.pumpAndSettle();
+    expect(find.text('Rs. 1500.00'), findsNWidgets(2));
+    await tapText(tester, 'Cash out');
     expect(
-      find.text(
-        'This is a demo wallet. No funds are held and no payments or top-ups can be made.',
-      ),
+      find.text('Payouts are not connected yet. No cash out has been made.'),
       findsOneWidget,
     );
     await tapText(tester, 'Got it');
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Home'));
+    await tester.pumpAndSettle();
+    expect(find.text('1 delivery\nwaiting today'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Service search filters and resets', (tester) async {
+  testWidgets('Order ID search filters and resets', (tester) async {
     await openRoute(tester, RouteNames.deliveryHome);
     await tester.enterText(find.byType(TextField), 'unavailable');
     await tester.pumpAndSettle();
-    expect(
-      find.text('No services found. Try Ride, Transit, Car, Truck or Send.'),
-      findsOneWidget,
-    );
+    expect(find.text('No orders found for this ID.'), findsOneWidget);
     await tester.tap(find.byTooltip('Clear search'));
     await tester.pumpAndSettle();
-    expect(find.text('Truck'), findsOneWidget);
+    expect(find.text('CR-2048'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'cr-2047');
+    await tester.pumpAndSettle();
+    expect(find.text('CR-2047'), findsOneWidget);
+    expect(find.text('CR-2048'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Availability is shared between home and profile', (
+    tester,
+  ) async {
+    await openRoute(tester, RouteNames.deliveryHome);
+    expect(find.text('Online'), findsOneWidget);
+    await tester.tap(find.byType(Switch));
+    await tester.pumpAndSettle();
+    expect(find.text('Offline'), findsOneWidget);
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Profile'));
+    await tester.pumpAndSettle();
+    expect(find.text('Kasun Perera'), findsOneWidget);
+    expect(find.text('Offline'), findsOneWidget);
+    await tester.tap(find.byType(Switch).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(NavigationDestination, 'Home'));
+    await tester.pumpAndSettle();
+    expect(find.text('Online'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -117,7 +132,7 @@ void main() {
     expect(tester.takeException(), isNull);
     await tapText(tester, 'Quick Track as Guest  →');
     expect(tester.takeException(), isNull);
-    for (final tab in ['Orders', 'Wallet', 'Account', 'Home']) {
+    for (final tab in ['Orders', 'Earnings', 'Profile', 'Home']) {
       await tester.tap(find.widgetWithText(NavigationDestination, tab));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);

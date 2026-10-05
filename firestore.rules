@@ -15,6 +15,15 @@ service cloud.firestore {
         && request.resource.data.role in ['buyer', 'artisan', 'courier']
         && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
       // Role and ownership are immutable from the client.
+      allow update: if owner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'area', 'photoUrl', 'updatedAt'])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0 && request.resource.data.displayName.size() <= 100
+        && request.resource.data.get('area', '') is string && request.resource.data.get('area', '').size() <= 100
+        && request.resource.data.get('photoUrl', '') is string
+        && request.resource.data.get('photoUrl', '').size() <= 2048
+        && (request.resource.data.get('photoUrl', '') == '' || request.resource.data.photoUrl.matches('https://.*'))
+        && request.resource.data.updatedAt == request.time;
       allow update: if isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active']) && request.resource.data.active is bool;
       allow delete: if false;
       match /cart/{productId} {
@@ -69,7 +78,12 @@ service cloud.firestore {
     function validOrder(id) {
       let o = request.resource.data;
       let subtotal = amount(o.items,0) + amount(o.items,1) + amount(o.items,2) + amount(o.items,3) + amount(o.items,4) + amount(o.items,5) + amount(o.items,6) + amount(o.items,7);
-      return o.keys().hasOnly(['id','buyerId','artisanId','courierId','items','status','deliveryAddress','paymentMethod','subtotal','deliveryFee','total','createdAt','updatedAt'])
+      return o.keys().hasOnly(['id','buyerId','artisanId','courierId','items','status','deliveryAddress','paymentMethod','subtotal','deliveryFee','total','createdAt','updatedAt','recipientName','recipientPhone','pickupAddress','pickupName','deliveryInstructions'])
+        && o.get('recipientName', '') is string && o.get('recipientName', '').size() <= 100
+        && o.get('recipientPhone', '') is string && o.get('recipientPhone', '').size() <= 40
+        && o.get('pickupAddress', '') is string && o.get('pickupAddress', '').size() <= 2000
+        && o.get('pickupName', '') is string && o.get('pickupName', '').size() <= 200
+        && o.get('deliveryInstructions', '') is string && o.get('deliveryInstructions', '').size() <= 1000
         && o.id == id && o.buyerId == request.auth.uid && o.courierId == null
         && o.status == 'pending' && o.items is list && o.items.size() > 0 && o.items.size() <= 8
         && validItem(o.items,0,o.artisanId) && validItem(o.items,1,o.artisanId)
@@ -82,6 +96,17 @@ service cloud.firestore {
         && o.paymentMethod == 'Cash on delivery' && o.createdAt is string && o.updatedAt == null;
     }
     match /orders/{id} {
+      function courierTransition() {
+        let keys = request.resource.data.diff(resource.data).affectedKeys();
+        return (keys.hasOnly(['status','updatedAt'])
+          && ((resource.data.status == 'courierAssigned' && request.resource.data.status == 'pickedUp')
+            || (resource.data.status == 'pickedUp' && request.resource.data.status == 'onTheWay')))
+          || (keys.hasOnly(['status','updatedAt','deliveryConfirmationCode'])
+            && resource.data.status == 'onTheWay' && request.resource.data.status == 'delivered'
+            && request.resource.data.deliveryConfirmationCode is string
+            && request.resource.data.deliveryConfirmationCode.matches('[0-9]{6}')
+            && request.resource.data.deliveryConfirmationCode == get(/databases/$(database)/documents/deliveryConfirmations/$(id)).data.code);
+      }
       // Permits reading an unused ID so an idempotent creation transaction can start.
       allow get: if isAdmin() || signedIn() && (!exists(/databases/$(database)/documents/orders/$(id))
         || resource.data.buyerId == request.auth.uid || resource.data.artisanId == request.auth.uid || resource.data.courierId == request.auth.uid);
@@ -96,15 +121,39 @@ service cloud.firestore {
             && ((resource.data.status == 'pending' && request.resource.data.status == 'confirmed')
               || (resource.data.status == 'pickedUp' && request.resource.data.status == 'onTheWay')
               || (resource.data.status == 'onTheWay' && request.resource.data.status == 'delivered')))))
-        || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt'])
+        || signedIn()
         && request.resource.data.updatedAt is string
         && ((role('artisan') && resource.data.artisanId == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt'])
             && resource.data.status == 'pending' && request.resource.data.status == 'confirmed')
           || (role('courier') && resource.data.courierId == request.auth.uid
-            && ((resource.data.status == 'courierAssigned' && request.resource.data.status == 'pickedUp')
-              || (resource.data.status == 'pickedUp' && request.resource.data.status == 'onTheWay')
-              || (resource.data.status == 'onTheWay' && request.resource.data.status == 'delivered'))));
+            && courierTransition()));
       allow delete: if false;
+      match /deliveryIssues/{reportId} {
+        function order() { return get(/databases/$(database)/documents/orders/$(id)).data; }
+        allow read: if isAdmin() || signedIn() && (order().buyerId == request.auth.uid
+          || order().artisanId == request.auth.uid || order().courierId == request.auth.uid);
+        allow create: if role('courier') && order().courierId == request.auth.uid
+          && order().status in ['courierAssigned','pickedUp','onTheWay']
+          && request.resource.data.keys().hasOnly(['courierId','reason','notes','createdAt'])
+          && request.resource.data.courierId == request.auth.uid
+          && request.resource.data.reason in ['Customer unavailable','Wrong address','Damaged parcel','Unable to accept delivery','Other']
+          && request.resource.data.notes is string && request.resource.data.notes.size() <= 1000
+          && (request.resource.data.reason != 'Other' || request.resource.data.notes.size() > 0)
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+    }
+
+    match /deliveryConfirmations/{orderId} {
+      function order() { return get(/databases/$(database)/documents/orders/$(orderId)).data; }
+      allow get: if signedIn() && order().buyerId == request.auth.uid;
+      allow create: if role('buyer') && order().buyerId == request.auth.uid
+        && !(order().status in ['delivered','cancelled'])
+        && request.resource.data.keys().hasOnly(['code','createdAt'])
+        && request.resource.data.code is string && request.resource.data.code.matches('[0-9]{6}')
+        && request.resource.data.createdAt == request.time;
+      allow list, update, delete: if false;
     }
 
     match /artisanProfiles/{id} {

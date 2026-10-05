@@ -1,3 +1,5 @@
+import '../../../shared/models/domain_models.dart' as domain;
+
 enum DeliveryStatus {
   pending('Pending', 'Accept Delivery'),
   accepted('Accepted', 'Mark as Picked Up'),
@@ -17,6 +19,12 @@ class DeliveryOrder {
     required this.pickup,
     required this.destination,
     required this.service,
+    this.earnings = 0,
+    this.recipientName = '',
+    this.recipientPhone = '',
+    this.pickupName = '',
+    this.instructions = '',
+    this.deliveryFee,
     DeliveryStatus status = DeliveryStatus.pending,
     // Keep status read-only to callers so demo actions cannot skip milestones.
     // ignore: prefer_initializing_formals
@@ -26,6 +34,41 @@ class DeliveryOrder {
   final String pickup;
   final String destination;
   final String service;
+  final double earnings;
+  final String recipientName, recipientPhone, pickupName, instructions;
+  final double? deliveryFee;
+
+  factory DeliveryOrder.fromOrder(domain.Order order) {
+    final lines = order.deliveryAddress.split('\n');
+    final legacy =
+        order.recipientName.isEmpty &&
+        order.recipientPhone.isEmpty &&
+        lines.length >= 5 &&
+        RegExp(r'^\+?[\d ()-]{7,40}$').hasMatch(lines.last.trim());
+    return DeliveryOrder(
+      id: order.id,
+      title: order.items
+          .map((item) => '${item.productName} × ${item.quantity}')
+          .join(', '),
+      pickup: order.pickupAddress,
+      pickupName: order.pickupName,
+      destination: legacy
+          ? lines.sublist(1, lines.length - 1).join('\n')
+          : order.deliveryAddress,
+      recipientName: legacy ? lines.first : order.recipientName,
+      recipientPhone: legacy ? lines.last : order.recipientPhone,
+      instructions: order.deliveryInstructions,
+      deliveryFee: order.deliveryFee,
+      service: 'Fragile parcel',
+      status: switch (order.status) {
+        domain.OrderStatus.courierAssigned => DeliveryStatus.accepted,
+        domain.OrderStatus.pickedUp => DeliveryStatus.pickedUp,
+        domain.OrderStatus.onTheWay => DeliveryStatus.onTheWay,
+        domain.OrderStatus.delivered => DeliveryStatus.delivered,
+        _ => DeliveryStatus.pending,
+      },
+    );
+  }
   DeliveryStatus _status;
   DeliveryStatus get status => _status;
   void syncStatus(DeliveryStatus value) => _status = value;
@@ -43,6 +86,7 @@ class DeliveryOrder {
       pickup: 'Oread Pottery Studio, Colombo 07',
       destination: '42 Flower Road, Colombo 03',
       service: 'Fragile parcel',
+      earnings: 850,
     ),
     DeliveryOrder(
       id: 'CR-2047',
@@ -50,6 +94,7 @@ class DeliveryOrder {
       pickup: 'Clay House, Nugegoda',
       destination: '18 Lake Road, Rajagiriya',
       service: 'Truck',
+      earnings: 1200,
     ),
     DeliveryOrder(
       id: 'CR-2046',
@@ -57,6 +102,7 @@ class DeliveryOrder {
       pickup: 'Kiln & Co, Colombo 05',
       destination: '8 Park Avenue, Colombo 06',
       service: 'Ride',
+      earnings: 650,
       status: DeliveryStatus.delivered,
     ),
   ];

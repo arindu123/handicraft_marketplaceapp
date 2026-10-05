@@ -1,6 +1,7 @@
 import '../../shared/data/community_repository.dart';
 import '../../shared/data/marketplace_repository.dart';
 import '../../shared/widgets/delivery_confirmation_card.dart';
+import '../../shared/widgets/role_selection_back_button.dart';
 
 import 'package:flutter/material.dart';
 
@@ -106,6 +107,7 @@ class _BuyerPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
+      leading: tab != null ? const RoleSelectionBackButton() : null,
       title: Text(
         title,
         style: Theme.of(context).textTheme.headlineLarge
@@ -1197,10 +1199,12 @@ class _BuyerCheckoutState extends State<BuyerCheckout> {
         footer: d.cart.isEmpty
             ? null
             : CustomButton(
-                label: step == 2
+                label: d.checkingOut
+                    ? 'Placing order...'
+                    : step == 2
                     ? 'Place Order · ${money(d.total)}'
                     : 'Continue to ${labels[step + 1]}',
-                onPressed: next,
+                onPressed: d.checkingOut ? null : next,
               ),
         children: [
           Row(
@@ -1242,7 +1246,7 @@ class _BuyerCheckoutState extends State<BuyerCheckout> {
             ),
           if (step == 0) ...[
             const Text(
-              'Where should your hand-packaged studio items journey to?',
+              'Enter your delivery details. Check out up to 4 different products from one artisan per order.',
             ),
             Form(
               key: form,
@@ -1287,11 +1291,11 @@ class _BuyerCheckoutState extends State<BuyerCheckout> {
             ),
           ],
           if (step == 1) ...[
-            const Text('Choose a payment method for this demo order.'),
+            const Text('Pay cash when your order is delivered.'),
             for (final method in [
               'Cash on delivery',
-              'Demo Visa ending in 4092',
-              'Studio Guild Credits',
+              if (!MarketplaceBackend.enabled) 'Demo Visa ending in 4092',
+              if (!MarketplaceBackend.enabled) 'Studio Guild Credits',
             ])
               _Panel(
                 child: ListTile(
@@ -1392,7 +1396,7 @@ class _BuyerCheckoutState extends State<BuyerCheckout> {
               ),
             _Totals(d),
             const Text(
-              'Cash on delivery · No charge will be made.',
+              'Cash on delivery · Pay the courier on delivery.',
               textAlign: TextAlign.center,
             ),
           ],

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../shared/data/profile_repository.dart';
+import '../../../shared/widgets/role_selection_back_button.dart';
 import '../widgets/delivery_profile_editor.dart';
 
 import '../../../shared/data/marketplace_repository.dart';
@@ -36,6 +37,9 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
       : DeliveryOrder.demoOrders();
 
   StreamSubscription<List<canonical.Order>>? _subscription;
+  StreamSubscription<List<canonical.Order>>? _availableSubscription;
+  List<canonical.Order> _assignedOrders = [];
+  List<canonical.Order> _availableOrders = [];
 
   final _advancing = <String>{};
   final _alertIds = <String>{};
@@ -78,78 +82,91 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
     }, onError: _error);
 
     try {
-      _subscription = MarketplaceRepository().orders('courierId').listen((
-        rows,
-      ) {
-        if (!mounted) return;
-
-        final incoming = rows
-            .where(
-              (row) =>
-                  row.status == canonical.OrderStatus.courierAssigned &&
-                  !_orders.any((old) => old.id == row.id),
-            )
-            .toList();
-        if (_receivedOrders && _notifications && incoming.isNotEmpty) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('${incoming.length} new delivery assignment(s)'),
-              action: SnackBarAction(
-                label: 'View',
-                onPressed: _showNotifications,
-              ),
-            ),
-          );
-        }
-        _receivedOrders = true;
-
-        setState(() {
-          _alertIds.addAll(incoming.map((row) => row.id));
-          _alertIds.removeWhere(
-            (id) => !rows.any(
-              (row) =>
-                  row.id == id &&
-                  row.status == canonical.OrderStatus.courierAssigned,
-            ),
-          );
-          final previous = {for (final o in _orders) o.id: o};
-
-          _orders.clear();
-
-          for (final row in rows) {
-            if (![
-              canonical.OrderStatus.courierAssigned,
-
-              canonical.OrderStatus.pickedUp,
-
-              canonical.OrderStatus.onTheWay,
-
-              canonical.OrderStatus.delivered,
-            ].contains(row.status)) {
-              continue;
-            }
-
-            final status = switch (row.status) {
-              canonical.OrderStatus.courierAssigned => DeliveryStatus.accepted,
-
-              canonical.OrderStatus.pickedUp => DeliveryStatus.pickedUp,
-
-              canonical.OrderStatus.onTheWay => DeliveryStatus.onTheWay,
-
-              _ => DeliveryStatus.delivered,
-            };
-
-            final order = previous[row.id] ?? DeliveryOrder.fromOrder(row);
-
-            order.syncStatus(status);
-
-            _orders.add(order);
-          }
-        });
+      final repository = MarketplaceRepository();
+      _subscription = repository.orders('courierId').listen((rows) {
+        _assignedOrders = rows;
+        _refreshOrders();
+      }, onError: _error);
+      _availableSubscription = repository.availableDeliveries().listen((rows) {
+        _availableOrders = rows;
+        _refreshOrders();
       }, onError: _error);
     } catch (e) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _error(e));
     }
+  }
+
+  void _refreshOrders() {
+    final rows = <String, canonical.Order>{
+      for (final row in _availableOrders) row.id: row,
+      for (final row in _assignedOrders) row.id: row,
+    }.values.toList();
+    if (!mounted) return;
+
+    final incoming = rows
+        .where(
+          (row) =>
+              (row.status == canonical.OrderStatus.courierAssigned ||
+                  row.status == canonical.OrderStatus.confirmed) &&
+              !_orders.any((old) => old.id == row.id),
+        )
+        .toList();
+    if (_receivedOrders && _notifications && incoming.isNotEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('${incoming.length} new delivery request(s)'),
+          action: SnackBarAction(label: 'View', onPressed: _showNotifications),
+        ),
+      );
+    }
+    _receivedOrders = true;
+
+    setState(() {
+      _alertIds.addAll(incoming.map((row) => row.id));
+      _alertIds.removeWhere(
+        (id) => !rows.any(
+          (row) =>
+              row.id == id &&
+              (row.status == canonical.OrderStatus.courierAssigned ||
+                  row.status == canonical.OrderStatus.confirmed),
+        ),
+      );
+      final previous = {for (final o in _orders) o.id: o};
+
+      _orders.clear();
+
+      for (final row in rows) {
+        if (![
+          canonical.OrderStatus.confirmed,
+          canonical.OrderStatus.courierAssigned,
+
+          canonical.OrderStatus.pickedUp,
+
+          canonical.OrderStatus.onTheWay,
+
+          canonical.OrderStatus.delivered,
+        ].contains(row.status)) {
+          continue;
+        }
+
+        final status = switch (row.status) {
+          canonical.OrderStatus.confirmed => DeliveryStatus.pending,
+          canonical.OrderStatus.courierAssigned => DeliveryStatus.accepted,
+
+          canonical.OrderStatus.pickedUp => DeliveryStatus.pickedUp,
+
+          canonical.OrderStatus.onTheWay => DeliveryStatus.onTheWay,
+
+          _ => DeliveryStatus.delivered,
+        };
+
+        final order = previous[row.id] ?? DeliveryOrder.fromOrder(row);
+
+        order.syncStatus(status);
+
+        _orders.add(order);
+      }
+    });
   }
 
   void _error(Object e) {
@@ -181,6 +198,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
   @override
   void dispose() {
     _subscription?.cancel();
+    _availableSubscription?.cancel();
     _profileSubscription?.cancel();
 
     _search.dispose();
@@ -193,15 +211,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
   @override
   Widget build(BuildContext context) => DeliveryFrame(
     appBar: AppBar(
-      leading: IconButton(
-        tooltip: 'Back to welcome',
-        icon: const Icon(Icons.arrow_back),
-        onPressed: () => Navigator.pushNamedAndRemoveUntil(
-          context,
-          RouteNames.welcome,
-          (_) => false,
-        ),
-      ),
+      leading: const RoleSelectionBackButton(),
       title: const Text('Craftisan Delivery'),
     ),
 
@@ -919,10 +929,15 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
                         if (MarketplaceBackend.enabled) {
                           final next =
                               DeliveryStatus.values[order.status.index + 1];
-                          await MarketplaceRepository().advanceOrder(
-                            order.id,
-                            confirmationCode: code,
-                          );
+                          final repository = MarketplaceRepository();
+                          if (order.status == DeliveryStatus.pending) {
+                            await repository.acceptDelivery(order.id);
+                          } else {
+                            await repository.advanceOrder(
+                              order.id,
+                              confirmationCode: code,
+                            );
+                          }
                           if (!mounted) return;
                           setState(() => order.syncStatus(next));
                           if (sheetContext.mounted) updateSheet(() {});

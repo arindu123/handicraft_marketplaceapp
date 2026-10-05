@@ -24,7 +24,7 @@ Future<void> tapText(WidgetTester tester, String text) async {
 }
 
 void main() {
-  testWidgets('Dashboard opened as the root can return to onboarding', (
+  testWidgets('Dashboard opened as the root can return to role selection', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -43,11 +43,10 @@ void main() {
       tester.state<NavigatorState>(find.byType(Navigator)).canPop(),
       isFalse,
     );
-    await tester.tap(find.byTooltip('Back to welcome'));
+    await tester.tap(find.byTooltip('Back to role selection'));
     await tester.pumpAndSettle();
-    expect(find.text('Get Started'), findsOneWidget);
-    await tapText(tester, 'Get Started');
-    expect(find.text('Skip'), findsOneWidget);
+    expect(find.text('Roles Selection'), findsOneWidget);
+    expect(tester.state<NavigatorState>(find.byType(Navigator)).canPop(), isFalse);
     expect(tester.takeException(), isNull);
   });
 

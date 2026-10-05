@@ -85,6 +85,36 @@ class MarketplaceRepository {
             .toList(),
       );
 
+  Stream<List<model.Order>> availableDeliveries() => db
+      .collection('orders')
+      .where('status', isEqualTo: 'confirmed')
+      .where('courierId', isNull: true)
+      .snapshots()
+      .map(
+        (s) => s.docs
+            .map((d) => model.Order.fromMap({...d.data(), 'id': d.id}))
+            .toList(),
+      );
+
+  Future<void> acceptDelivery(String id) async {
+    await requireRole(model.UserRole.courier);
+    final courier = uid;
+    final ref = db.collection('orders').doc(id);
+    await db.runTransaction((tx) async {
+      final snapshot = await tx.get(ref);
+      if (!snapshot.exists ||
+          snapshot.data()!['status'] != 'confirmed' ||
+          snapshot.data()!['courierId'] != null) {
+        throw const MarketplaceFailure('This delivery is no longer available.');
+      }
+      tx.update(ref, {
+        'courierId': courier,
+        'status': 'courierAssigned',
+        'updatedAt': DateTime.now().toUtc().toIso8601String(),
+      });
+    });
+  }
+
   Future<model.Product> saveProduct(
     model.Product draft,
     List<Uint8List> images,
@@ -194,9 +224,9 @@ class MarketplaceRepository {
     String address,
     String payment,
   ) {
-    if (products.isEmpty || products.length > 8) {
+    if (products.isEmpty || products.length > 4) {
       throw const MarketplaceFailure(
-        'Choose between 1 and 8 different products per order.',
+        'Choose between 1 and 4 different products per order.',
       );
     }
     if (products.map((p) => p.artisanId).toSet().length != 1) {
@@ -330,6 +360,12 @@ class MarketplaceRepository {
         data['pickupName'] = studioData!['studioName'];
       }
       tx.set(ref, data);
+      for (final product in products) {
+        tx.update(db.collection('products').doc(product.id), {
+          'stock': product.stock - quantities[product.id]!,
+          'lastOrderId': ref.id,
+        });
+      }
       for (final row in cart.docs) {
         tx.delete(row.reference);
       }

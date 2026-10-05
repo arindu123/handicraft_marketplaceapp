@@ -233,6 +233,12 @@ class BuyerDemo extends ChangeNotifier {
   Set<String> _favoriteIds = {};
   BuyerDemo() {
     if (!MarketplaceBackend.enabled) return;
+    name = '';
+    address = '';
+    city = '';
+    postalCode = '';
+    country = '';
+    phone = '';
     products.clear();
     favorites.clear();
     orders.clear();
@@ -326,6 +332,7 @@ class BuyerDemo extends ChangeNotifier {
       throw const MarketplaceFailure('Your order is being submitted.');
     }
     checkingOut = true;
+    notifyListeners();
     try {
       if (repository == null) {
         final result = createOrder(Map.of(cart), total);
@@ -349,6 +356,7 @@ class BuyerDemo extends ChangeNotifier {
       return receipt;
     } finally {
       checkingOut = false;
+      if (!_disposed) notifyListeners();
     }
   }
 

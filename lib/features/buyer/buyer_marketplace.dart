@@ -1,15 +1,14 @@
 import '../../shared/data/community_repository.dart';
 import '../../shared/data/marketplace_repository.dart';
 import '../../shared/widgets/delivery_confirmation_card.dart';
-import '../../shared/widgets/role_selection_back_button.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../routes/route_names.dart';
 import '../../shared/models/craftisan_demo_messages.dart';
 import '../../shared/widgets/custom_button.dart';
-import '../../shared/widgets/custom_text_field.dart';
 import '../../shared/widgets/craftisan_messaging.dart';
 import 'buyer_demo.dart';
 
@@ -17,13 +16,14 @@ void _open(BuildContext context, Widget screen) =>
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
 
 class BuyerMarketplace extends StatefulWidget {
-  const BuyerMarketplace({super.key});
+  const BuyerMarketplace({super.key, this.backend});
+  final MarketplaceRepository? backend;
   @override
   State<BuyerMarketplace> createState() => _BuyerMarketplaceState();
 }
 
 class _BuyerMarketplaceState extends State<BuyerMarketplace> {
-  final demo = BuyerDemo();
+  late final demo = BuyerDemo(backend: widget.backend);
   @override
   void initState() {
     super.initState();
@@ -41,54 +41,276 @@ class _BuyerMarketplaceState extends State<BuyerMarketplace> {
   }
 
   @override
-  Widget build(BuildContext context) => _BuyerPage(
-    demo: demo,
-    title: 'Craftisan',
-    tab: 0,
-    children: [
-      const _Eyebrow('HANDMADE & SMALL BATCH'),
-      const _Heading('Hello! what are you looking for?'),
-      const SizedBox(height: 20),
-      TextField(
-        readOnly: true,
-        onTap: () => _open(context, BuyerSearch(demo: demo)),
-        decoration: const InputDecoration(
-          hintText: 'Search products',
-          prefixIcon: Icon(Icons.search),
-          suffixIcon: Icon(Icons.tune),
-          filled: true,
-          fillColor: Colors.white,
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(16)),
+  Widget build(BuildContext context) {
+    final categories = demo.products
+        .map((p) => p.category)
+        .where((c) => c.isNotEmpty)
+        .toSet();
+    return _BuyerPage(
+      demo: demo,
+      title: 'Craftisan',
+      tab: 0,
+      children: [
+        InkWell(
+          onTap: () => _open(context, BuyerCheckout(demo: demo)),
+          child: Row(
+            children: [
+              const Icon(Icons.location_on_outlined, size: 20),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  demo.city.isEmpty
+                      ? 'Choose delivery address'
+                      : 'Deliver to ${demo.city}',
+                ),
+              ),
+              const Icon(Icons.keyboard_arrow_down),
+            ],
           ),
         ),
-      ),
-      const SizedBox(height: 24),
-      const _Heading('Browse categories'),
-      const _Eyebrow('CURATED BY MATERIAL & CLAY BODIES'),
-      for (final p in demo.products)
-        _Panel(
-          child: ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: SizedBox(width: 66, height: 66, child: _Photo(p)),
-            title: Text(p.category),
-            subtitle: Text(p.studio),
-            trailing: const Icon(Icons.arrow_forward),
-            onTap: () =>
-                _open(context, BuyerSearch(demo: demo, category: p.category)),
+        const SizedBox(height: 24),
+        const _Heading('Find your next\nhandmade favourite.'),
+        const SizedBox(height: 12),
+        TextField(
+          readOnly: true,
+          onTap: () => _open(context, BuyerSearch(demo: demo)),
+          decoration: const InputDecoration(
+            hintText: 'Search handmade pieces',
+            prefixIcon: Icon(Icons.search),
+            suffixIcon: Icon(Icons.tune),
           ),
         ),
-      const SizedBox(height: 16),
-      const _Eyebrow('MOST CHERISHED THIS WEEK'),
-      const _Heading('Popular Today'),
-      for (final p in demo.products) _ProductCard(demo: demo, product: p),
-      const _Panel(
-        child: Text(
-          '“Every ridge on this vessel is carved by hand while the clay rests leather-hard.”\n\n— From the artisan’s workbench',
+        const SizedBox(height: 20),
+        if (categories.isNotEmpty)
+          SizedBox(
+            height: 116,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: categories.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 16),
+              itemBuilder: (context, i) {
+                final category = categories.elementAt(i);
+                final product = demo.products.firstWhere(
+                  (p) => p.category == category,
+                );
+                return InkWell(
+                  onTap: () => _open(
+                    context,
+                    BuyerSearch(demo: demo, category: category),
+                  ),
+                  child: SizedBox(
+                    width: 84,
+                    child: Column(
+                      children: [
+                        ClipOval(
+                          child: SizedBox(
+                            width: 78,
+                            height: 78,
+                            child: _Photo(product),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          category,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        if (demo.products.any((p) => p.imageUrl != null))
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(14),
+              child: SizedBox(
+                height: 178,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    _Photo(demo.products.firstWhere((p) => p.imageUrl != null)),
+                    const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            Color(0xFFF0E8DE),
+                            Color(0xCCF0E8DE),
+                            Color(0x00F0E8DE),
+                          ],
+                          stops: [0, .4, 1],
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: SizedBox(
+                          width: 205,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Made slowly.\nLoved daily.',
+                                style: TextStyle(
+                                  fontSize: 28,
+                                  height: 1.05,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: -.8,
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              _Action(
+                                'Explore pieces',
+                                () => _open(context, BuyerSearch(demo: demo)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        Row(
+          children: [
+            const Expanded(child: _Heading('Explore handmade')),
+            TextButton(
+              onPressed: () => _open(context, BuyerSearch(demo: demo)),
+              child: const Text('See all \u2192'),
+            ),
+          ],
         ),
+        _Catalog(demo: demo, products: demo.products),
+      ],
+    );
+  }
+}
+
+const _clay = Color(0xFF9A4023);
+const _cream = Color(0xFFFBF9F7);
+const _charcoal = Color(0xFF1B1C1B);
+const _mint = Color(0xFFC6EBD9);
+
+ThemeData _buyerTheme(BuildContext context) {
+  final base = Theme.of(context);
+  return base.copyWith(
+    scaffoldBackgroundColor: _cream,
+    colorScheme: base.colorScheme.copyWith(
+      primary: _clay,
+      surface: _cream,
+      onSurface: _charcoal,
+    ),
+    textTheme: base.textTheme
+        .apply(
+          fontFamily: 'Roboto',
+          bodyColor: _charcoal,
+          displayColor: _charcoal,
+        )
+        .copyWith(
+          headlineLarge: const TextStyle(
+            fontSize: 28,
+            height: 1.12,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -.8,
+            color: _charcoal,
+          ),
+          bodyLarge: const TextStyle(
+            fontSize: 16,
+            height: 1.4,
+            color: _charcoal,
+          ),
+        ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: Color(0xFFE1DEDB)),
       ),
-    ],
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(18),
+        borderSide: const BorderSide(color: Color(0xFFE1DEDB)),
+      ),
+    ),
   );
+}
+
+class _Action extends StatelessWidget {
+  const _Action(this.label, this.onPressed);
+  final String label;
+  final VoidCallback? onPressed;
+  @override
+  Widget build(BuildContext context) => FilledButton(
+    style: FilledButton.styleFrom(
+      backgroundColor: _clay,
+      foregroundColor: Colors.white,
+      minimumSize: const Size(double.infinity, 54),
+      padding: const EdgeInsets.all(16),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ),
+    onPressed: onPressed,
+    child: Text(
+      label,
+      textAlign: TextAlign.center,
+      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+    ),
+  );
+}
+
+class _Catalog extends StatelessWidget {
+  const _Catalog({required this.demo, required this.products});
+  final BuyerDemo demo;
+  final List<DemoProduct> products;
+  @override
+  Widget build(BuildContext context) {
+    if (demo.loading) {
+      return const Padding(
+        padding: EdgeInsets.all(32),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (demo.catalogError != null) {
+      return _Panel(
+        child: Column(
+          children: [
+            Text(demo.catalogError!),
+            if (demo.repository != null)
+              TextButton(
+                onPressed: demo.refreshCatalog,
+                child: const Text('Retry'),
+              ),
+          ],
+        ),
+      );
+    }
+    if (products.isEmpty) {
+      return const _Panel(
+        child: Text('No pieces found. Try another search or come back soon.'),
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) => Wrap(
+        spacing: 10,
+        runSpacing: 14,
+        children: [
+          for (final p in products)
+            SizedBox(
+              width: (constraints.maxWidth - 10) / 2,
+              child: _ProductCard(demo: demo, product: p),
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 class _BuyerPage extends StatelessWidget {
@@ -105,100 +327,151 @@ class _BuyerPage extends StatelessWidget {
   final int? tab;
   final Widget? footer;
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      leading: tab != null ? const RoleSelectionBackButton() : null,
-      title: Text(
-        title,
-        style: Theme.of(context).textTheme.headlineLarge
-            ?.copyWith(fontSize: 26),
-      ),
-      backgroundColor: AppColors.background,
-      actions: [
-        ListenableBuilder(
-          listenable: demo,
-          builder: (context, _) => IconButton(
-            tooltip: 'Cart (${demo.count})',
-            icon: Badge(
-              label: Text('${demo.count}'),
-              isLabelVisible: demo.count > 0,
-              child: const Icon(Icons.shopping_bag_outlined),
+  Widget build(BuildContext context) => Theme(
+    data: _buyerTheme(context),
+    child: Builder(
+      builder: (context) => Scaffold(
+        backgroundColor: _cream,
+        appBar: AppBar(
+          backgroundColor: _cream,
+          surfaceTintColor: Colors.transparent,
+          automaticallyImplyLeading: tab != 0,
+          leading: tab == 0
+              ? null
+              : BackButton(onPressed: () => Navigator.maybePop(context)),
+          centerTitle: tab != 0,
+          title: Text(
+            title,
+            style: TextStyle(
+              fontSize: tab == 0 ? 30 : 20,
+              fontWeight: FontWeight.w700,
+              letterSpacing: -.6,
             ),
-            onPressed: () => _open(context, BuyerCart(demo: demo)),
+          ),
+          actions: [
+            IconButton(
+              tooltip: 'Cart',
+              icon: const Icon(Icons.shopping_bag_outlined),
+              onPressed: () => _open(context, BuyerCart(demo: demo)),
+            ),
+            if (tab == 0)
+              IconButton(
+                tooltip: 'Profile',
+                icon: const Icon(Icons.person_outline),
+                onPressed: () => _open(context, BuyerProfile(demo: demo)),
+              ),
+          ],
+        ),
+        body: SafeArea(
+          bottom: false,
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 640),
+              child: ListView(
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                children: [
+                  ListenableBuilder(
+                    listenable: demo,
+                    builder: (_, _) => demo.error == null
+                        ? const SizedBox.shrink()
+                        : _Panel(
+                            child: Text(
+                              demo.error!,
+                              style: const TextStyle(color: _clay),
+                            ),
+                          ),
+                  ),
+                  ...children,
+                ],
+              ),
+            ),
           ),
         ),
-      ],
-    ),
-    body: SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
-          child: ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              if (demo.error != null)
-                Text(
-                  demo.error!,
-                  style: const TextStyle(color: AppColors.terracotta),
+        bottomNavigationBar: footer != null
+            ? Container(
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  border: Border(top: BorderSide(color: Color(0xFFE5E2DF))),
                 ),
-              ...children,
-            ],
-          ),
-        ),
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.viewInsetsOf(context).bottom,
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Center(
+                    heightFactor: 1,
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 640),
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(18, 12, 18, 12),
+                        child: footer,
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            : tab == null
+            ? null
+            : NavigationBar(
+                selectedIndex: tab!,
+                backgroundColor: Colors.white,
+                indicatorColor: _clay.withValues(alpha: .08),
+                height: 72,
+                labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+                onDestinationSelected: (index) {
+                  if (index == tab) return;
+                  if (index == 0) {
+                    Navigator.popUntil(
+                      context,
+                      (r) =>
+                          r.settings.name == RouteNames.marketplace ||
+                          r.isFirst,
+                    );
+                    return;
+                  }
+                  final screen = switch (index) {
+                    1 => BuyerSearch(demo: demo),
+                    2 => BuyerFavorites(demo: demo),
+                    3 => BuyerCart(demo: demo),
+                    _ => BuyerProfile(demo: demo),
+                  };
+                  if (tab == 0 || index == 3) {
+                    _open(context, screen);
+                  } else {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute<void>(builder: (_) => screen),
+                    );
+                  }
+                },
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.home_outlined),
+                    selectedIcon: Icon(Icons.home, color: _clay),
+                    label: 'Home',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.search),
+                    label: 'Explore',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.favorite_outline),
+                    label: 'Saved',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.shopping_cart_outlined),
+                    label: 'Cart',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.person_outline),
+                    label: 'Profile',
+                  ),
+                ],
+              ),
       ),
     ),
-    bottomNavigationBar: footer != null
-        ? SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-              child: footer,
-            ),
-          )
-        : tab == null
-        ? null
-        : NavigationBar(
-            selectedIndex: tab!,
-            backgroundColor: AppColors.background,
-            indicatorColor: AppColors.terracotta.withValues(alpha: .12),
-            onDestinationSelected: (index) {
-              if (index == tab) return;
-              if (index == 0) {
-                Navigator.popUntil(
-                  context,
-                  (r) => r.settings.name == RouteNames.marketplace || r.isFirst,
-                );
-              } else {
-                final screen = switch (index) {
-                  1 => BuyerSearch(demo: demo),
-                  2 => BuyerFavorites(demo: demo),
-                  _ => BuyerProfile(demo: demo),
-                };
-                if (tab == 0) {
-                  _open(context, screen);
-                } else {
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute<void>(builder: (_) => screen),
-                  );
-                }
-              }
-            },
-            destinations: const [
-              NavigationDestination(
-                icon: Icon(Icons.storefront_outlined),
-                label: 'Explore',
-              ),
-              NavigationDestination(icon: Icon(Icons.search), label: 'Search'),
-              NavigationDestination(
-                icon: Icon(Icons.favorite_outline),
-                label: 'Favorites',
-              ),
-              NavigationDestination(
-                icon: Icon(Icons.person_outline),
-                label: 'Profile',
-              ),
-            ],
-          ),
   );
 }
 
@@ -235,7 +508,10 @@ class _Panel extends StatelessWidget {
     padding: const EdgeInsets.symmetric(vertical: 8),
     child: Material(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: const BorderSide(color: Color(0xFFE8E5E2)),
+      ),
       clipBehavior: Clip.antiAlias,
       child: Padding(padding: const EdgeInsets.all(16), child: child),
     ),
@@ -243,32 +519,67 @@ class _Panel extends StatelessWidget {
 }
 
 class _Photo extends StatelessWidget {
-  const _Photo(this.product, {this.height});
+  const _Photo(this.product, {this.height, this.url});
   final DemoProduct product;
   final double? height;
+  final String? url;
   @override
   Widget build(BuildContext context) => ClipRRect(
-    borderRadius: BorderRadius.circular(14),
-    child: product.imageUrl != null
-        ? Image.network(
-            product.imageUrl!,
-            height: height,
-            width: double.infinity,
-            fit: BoxFit.cover,
-            errorBuilder: (_, _, _) => SizedBox(
+    borderRadius: BorderRadius.circular(10),
+    child: ColoredBox(
+      color: const Color(0xFFEFECE8),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final source = url ?? product.imageUrl;
+          if (source == null || source.isEmpty) {
+            return SizedBox(
               height: height,
-              child: const Icon(Icons.image_not_supported_outlined),
-            ),
-          )
-        : MarketplaceBackend.enabled
-        ? SizedBox(height: height, child: const Icon(Icons.image_outlined))
-        : Image.memory(
-            product.image,
+              width: double.infinity,
+              child: const Center(
+                child: Icon(Icons.image_outlined, color: Colors.grey),
+              ),
+            );
+          }
+          final pixels =
+              (constraints.maxWidth.isFinite
+                      ? constraints.maxWidth *
+                            MediaQuery.devicePixelRatioOf(context)
+                      : 900)
+                  .round()
+                  .clamp(100, 1600);
+          final uri = Uri.tryParse(source);
+          final imageUrl =
+              uri?.host == 'res.cloudinary.com' &&
+                  source.contains('/image/upload/')
+              ? source.replaceFirst(
+                  '/image/upload/',
+                  '/image/upload/c_limit,w_$pixels,q_auto:good,f_auto/',
+                )
+              : source;
+          return Image.network(
+            imageUrl,
             height: height,
             width: double.infinity,
             fit: BoxFit.cover,
             semanticLabel: product.name,
-          ),
+            loadingBuilder: (_, child, progress) => progress == null
+                ? child
+                : SizedBox(
+                    height: height,
+                    child: const Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+            errorBuilder: (_, _, _) => SizedBox(
+              height: height,
+              child: const Center(
+                child: Icon(Icons.broken_image_outlined, color: Colors.grey),
+              ),
+            ),
+          );
+        },
+      ),
+    ),
   );
 }
 
@@ -277,50 +588,58 @@ class _ProductCard extends StatelessWidget {
   final BuyerDemo demo;
   final DemoProduct product;
   @override
-  Widget build(BuildContext context) => _Panel(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        InkWell(
-          onTap: () =>
-              _open(context, BuyerProductDetails(demo: demo, product: product)),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) => Material(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(12),
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: () =>
+          _open(context, BuyerProductDetails(demo: demo, product: product)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Stack(
             children: [
-              Stack(
-                children: [
-                  _Photo(product, height: 250),
-                  Positioned(
-                    right: 8,
-                    top: 8,
-                    child: _FavoriteButton(demo: demo, product: product),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _Eyebrow(product.studio.toUpperCase()),
-              _Heading(product.name),
-              Text(
-                money(product.price),
-                style: const TextStyle(
-                  color: AppColors.terracotta,
-                  fontSize: 22,
-                ),
-              ),
-              Text(
-                product.description,
-                style: Theme.of(context).textTheme.bodyLarge,
+              AspectRatio(aspectRatio: 1.06, child: _Photo(product)),
+              Positioned(
+                top: 6,
+                right: 6,
+                child: _FavoriteButton(demo: demo, product: product),
               ),
             ],
           ),
-        ),
-        const SizedBox(height: 14),
-        CustomButton(
-          label: 'View piece',
-          onPressed: () =>
-              _open(context, BuyerProductDetails(demo: demo, product: product)),
-        ),
-      ],
+          Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  product.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+                if (product.studio.isNotEmpty)
+                  Text(
+                    product.studio,
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                const SizedBox(height: 6),
+                Text(
+                  product.priceLabel(),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -335,6 +654,7 @@ class _FavoriteButton extends StatelessWidget {
     builder: (_, _) {
       final saved = demo.favorites.contains(product);
       return IconButton.filledTonal(
+        style: IconButton.styleFrom(backgroundColor: Colors.white),
         tooltip: saved ? 'Remove from favorites' : 'Save to favorites',
         onPressed: () => demo.favorite(product),
         icon: Icon(
@@ -356,6 +676,12 @@ class BuyerSearch extends StatefulWidget {
 
 class _BuyerSearchState extends State<BuyerSearch> {
   final query = TextEditingController();
+  final maxPrice = TextEditingController();
+  late String category = widget.category;
+  String sort = 'Name';
+  String location = 'All';
+  String studio = 'All';
+  bool filters = false;
   @override
   void initState() {
     super.initState();
@@ -366,170 +692,234 @@ class _BuyerSearchState extends State<BuyerSearch> {
     if (mounted) setState(() {});
   }
 
-  late String category = widget.category;
-  String location = 'All';
-  String artisan = 'All';
-  RangeValues prices = const RangeValues(0, 200);
   @override
   void dispose() {
     widget.demo.removeListener(_refresh);
     query.dispose();
+    maxPrice.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final limit = double.tryParse(maxPrice.text);
     final results = widget.demo.products
         .where(
           (p) =>
               (category == 'All' || p.category == category) &&
               (location == 'All' || p.location == location) &&
-              (artisan == 'All' || p.artisan == artisan) &&
-              p.price >= prices.start &&
-              p.price <= prices.end &&
-              '${p.name} ${p.category} ${p.artisan} ${p.studio} ${p.location}'
-                  .toLowerCase()
-                  .contains(query.text.trim().toLowerCase()),
+              (studio == 'All' || p.studio == studio) &&
+              (limit == null || p.price <= limit) &&
+              '${p.name} ${p.category} ${p.studio}'.toLowerCase().contains(
+                query.text.trim().toLowerCase(),
+              ),
         )
         .toList();
+    if (sort == 'Price: low to high') {
+      results.sort((a, b) => a.price.compareTo(b.price));
+    }
+    if (sort == 'Price: high to low') {
+      results.sort((a, b) => b.price.compareTo(a.price));
+    }
+    if (sort == 'Name') results.sort((a, b) => a.name.compareTo(b.name));
     final active =
         (category == 'All' ? 0 : 1) +
+        (limit == null ? 0 : 1) +
         (location == 'All' ? 0 : 1) +
-        (artisan == 'All' ? 0 : 1) +
-        (prices.start > 0 || prices.end < 200 ? 1 : 0);
+        (studio == 'All' ? 0 : 1);
     return _BuyerPage(
       demo: widget.demo,
-      title: 'Search results',
+      title: 'Search',
       tab: 1,
       children: [
         TextField(
           controller: query,
           onChanged: (_) => setState(() {}),
-          decoration: const InputDecoration(
-            hintText: 'Search products',
-            prefixIcon: Icon(Icons.search),
-          ),
-        ),
-        _Heading('${results.length} pieces found'),
-        _Panel(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      'Filter Artifacts · $active active',
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () => setState(() {
-                      category = 'All';
-                      location = 'All';
-                      artisan = 'All';
-                      prices = const RangeValues(0, 200);
-                    }),
-                    child: const Text('Clear'),
-                  ),
-                ],
-              ),
-              const _Eyebrow('CATEGORY'),
-              Wrap(
-                spacing: 8,
-                children:
-                    [
-                          'All',
-                          ...widget.demo.products
-                              .map((p) => p.category)
-                              .toSet(),
-                        ]
-                        .map(
-                          (c) => ChoiceChip(
-                            label: Text(c),
-                            selected: c == category,
-                            selectedColor: AppColors.terracotta.withValues(
-                              alpha: .18,
-                            ),
-                            onSelected: (_) => setState(() => category = c),
-                          ),
-                        )
-                        .toList(),
-              ),
-              const SizedBox(height: 16),
-              const _Eyebrow('LOCATION'),
-              Wrap(
-                spacing: 8,
-                children:
-                    (MarketplaceBackend.enabled
-                            ? [
-                                'All',
-                                ...widget.demo.products
-                                    .map((p) => p.location)
-                                    .where((v) => v.isNotEmpty)
-                                    .toSet(),
-                              ]
-                            : ['All', 'Colombo', 'Kandy', 'Galle', 'Matara'])
-                        .map(
-                          (value) => ChoiceChip(
-                            label: Text(value),
-                            selected: value == location,
-                            selectedColor: AppColors.terracotta.withValues(
-                              alpha: .18,
-                            ),
-                            onSelected: (_) => setState(() => location = value),
-                          ),
-                        )
-                        .toList(),
-              ),
-              const SizedBox(height: 16),
-              const _Eyebrow('ARTISAN'),
-              Wrap(
-                spacing: 8,
-                children:
-                    [
-                          'All',
-                          ...(MarketplaceBackend.enabled
-                              ? widget.demo.products
-                                    .map((p) => p.artisan)
-                                    .toSet()
-                              : buyerArtisans.map((a) => a.name)),
-                        ]
-                        .map(
-                          (value) => ChoiceChip(
-                            label: Text(value),
-                            selected: value == artisan,
-                            selectedColor: AppColors.terracotta.withValues(
-                              alpha: .18,
-                            ),
-                            onSelected: (_) => setState(() => artisan = value),
-                          ),
-                        )
-                        .toList(),
-              ),
-              const SizedBox(height: 16),
-              _Eyebrow(
-                'PRICE RANGE · ${money(prices.start)} – ${money(prices.end)}',
-              ),
-              RangeSlider(
-                values: prices,
-                min: 0,
-                max: 200,
-                divisions: 20,
-                labels: RangeLabels(money(prices.start), money(prices.end)),
-                onChanged: (v) => setState(() => prices = v),
-              ),
-              const Text('Filters update results immediately.'),
-            ],
-          ),
-        ),
-        if (results.isEmpty)
-          const _Panel(
-            child: Text(
-              'No pieces match. Try another search or clear your filters.',
+          decoration: InputDecoration(
+            hintText: 'Search handmade pieces',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: IconButton(
+              tooltip: 'Clear search',
+              onPressed: () => setState(query.clear),
+              icon: const Icon(Icons.cancel_outlined),
             ),
           ),
-        for (final p in results) _ProductCard(demo: widget.demo, product: p),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => setState(() => filters = !filters),
+                icon: const Icon(Icons.tune),
+                label: Text(active == 0 ? 'Filters' : 'Filters  $active'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: PopupMenuButton<String>(
+                initialValue: sort,
+                onSelected: (v) => setState(() => sort = v),
+                itemBuilder: (_) => [
+                  for (final v in [
+                    'Price: low to high',
+                    'Price: high to low',
+                    'Name',
+                  ])
+                    PopupMenuItem(value: v, child: Text(v)),
+                ],
+                child: const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.swap_vert),
+                      SizedBox(width: 8),
+                      Text('Sort'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (filters)
+          _Panel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Category',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final c in {
+                      'All',
+                      ...widget.demo.products
+                          .map((p) => p.category)
+                          .where((c) => c.isNotEmpty),
+                    })
+                      ChoiceChip(
+                        label: Text(c),
+                        selected: c == category,
+                        onSelected: (_) => setState(() => category = c),
+                      ),
+                  ],
+                ),
+                if (widget.demo.products.any((p) => p.location.isNotEmpty)) ...[
+                  const SizedBox(height: 12),
+                  const Text('Location'),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final value in {
+                        'All',
+                        ...widget.demo.products
+                            .map((p) => p.location)
+                            .where((v) => v.isNotEmpty),
+                      })
+                        ChoiceChip(
+                          label: Text(value),
+                          selected: location == value,
+                          onSelected: (_) => setState(() => location = value),
+                        ),
+                    ],
+                  ),
+                ],
+                if (widget.demo.products.any((p) => p.studio.isNotEmpty)) ...[
+                  const SizedBox(height: 12),
+                  const Text('Artisan'),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final value in {
+                        'All',
+                        ...widget.demo.products
+                            .map((p) => p.studio)
+                            .where((v) => v.isNotEmpty),
+                      })
+                        ChoiceChip(
+                          label: Text(value),
+                          selected: studio == value,
+                          onSelected: (_) => setState(() => studio = value),
+                        ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 12),
+                TextField(
+                  controller: maxPrice,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(labelText: 'Maximum price'),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ],
+            ),
+          ),
+        if (active > 0)
+          Wrap(
+            spacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              if (category != 'All')
+                InputChip(
+                  label: Text(category),
+                  onDeleted: () => setState(() => category = 'All'),
+                ),
+              if (location != 'All')
+                InputChip(
+                  label: Text(location),
+                  onDeleted: () => setState(() => location = 'All'),
+                ),
+              if (studio != 'All')
+                InputChip(
+                  label: Text(studio),
+                  onDeleted: () => setState(() => studio = 'All'),
+                ),
+              if (limit != null)
+                InputChip(
+                  label: Text('Under ${maxPrice.text}'),
+                  onDeleted: () => setState(maxPrice.clear),
+                ),
+              TextButton(
+                onPressed: () => setState(() {
+                  category = 'All';
+                  location = 'All';
+                  studio = 'All';
+                  maxPrice.clear();
+                }),
+                child: const Text('Clear all'),
+              ),
+            ],
+          ),
+        const SizedBox(height: 14),
+        if (!widget.demo.loading && widget.demo.catalogError == null)
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${results.length} pieces found',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 22,
+                  ),
+                ),
+              ),
+              Flexible(
+                child: Text(
+                  sort,
+                  textAlign: TextAlign.end,
+                  style: const TextStyle(color: Colors.grey),
+                ),
+              ),
+            ],
+          ),
+        const SizedBox(height: 14),
+        _Catalog(demo: widget.demo, products: results),
       ],
     );
   }
@@ -549,6 +939,8 @@ class BuyerProductDetails extends StatefulWidget {
 
 class _BuyerProductDetailsState extends State<BuyerProductDetails> {
   int quantity = 1;
+  int photo = 0;
+  bool adding = false;
   @override
   void initState() {
     super.initState();
@@ -567,100 +959,212 @@ class _BuyerProductDetailsState extends State<BuyerProductDetails> {
 
   @override
   Widget build(BuildContext context) {
-    final current = widget.demo.products
+    final p = widget.demo.products
         .where((p) => p == widget.product)
         .firstOrNull;
-    if (MarketplaceBackend.enabled && current == null) {
+    if (p == null) {
       return _BuyerPage(
         demo: widget.demo,
-        title: 'Product Detail',
+        title: 'Product details',
         children: const [Text('This product is no longer available.')],
       );
     }
-    final p = current ?? widget.product;
+    final images = p.imageUrls;
     return _BuyerPage(
       demo: widget.demo,
-      title: 'Product Detail',
-      footer: CustomButton(
-        label: 'Add to Cart · ${money(p.price * quantity)}',
-        onPressed: () {
-          widget.demo.add(p, quantity);
-          _open(context, BuyerCart(demo: widget.demo));
-        },
+      title: 'Product details',
+      footer: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Total', style: TextStyle(color: Colors.grey)),
+                Text(
+                  p.priceLabel(quantity),
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            flex: 2,
+            child: _Action(
+              adding ? 'Adding...' : 'Add to cart',
+              adding || p.stock == null || quantity > p.stock!
+                  ? null
+                  : () async {
+                      setState(() => adding = true);
+                      try {
+                        await widget.demo.add(p, quantity);
+                        if (context.mounted) {
+                          _open(context, BuyerCart(demo: widget.demo));
+                        }
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(marketplaceError(e))),
+                          );
+                        }
+                      } finally {
+                        if (mounted) setState(() => adding = false);
+                      }
+                    },
+            ),
+          ),
+        ],
       ),
       children: [
-        Stack(
-          children: [
-            _Photo(p, height: 360),
-            Positioned(
-              right: 10,
-              top: 10,
-              child: _FavoriteButton(demo: widget.demo, product: p),
-            ),
-          ],
+        AspectRatio(
+          aspectRatio: 1.2,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (images.isEmpty)
+                _Photo(p)
+              else
+                PageView.builder(
+                  itemCount: images.length,
+                  onPageChanged: (v) => setState(() => photo = v),
+                  itemBuilder: (_, i) => _Photo(p, url: images[i]),
+                ),
+              Positioned(
+                top: 10,
+                right: 10,
+                child: Row(
+                  children: [
+                    _FavoriteButton(demo: widget.demo, product: p),
+                    const SizedBox(width: 6),
+                    IconButton.filledTonal(
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.white,
+                      ),
+                      tooltip: 'Copy product details',
+                      onPressed: () async {
+                        await Clipboard.setData(
+                          ClipboardData(
+                            text:
+                                '${p.name} - ${p.priceLabel()}\n${p.description}',
+                          ),
+                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Product details copied.'),
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.ios_share),
+                    ),
+                  ],
+                ),
+              ),
+              if (images.length > 1)
+                Positioned(
+                  bottom: 10,
+                  right: 10,
+                  child: Chip(label: Text('${photo + 1} / ${images.length}')),
+                ),
+            ],
+          ),
         ),
-        const SizedBox(height: 18),
-        const _Eyebrow('NATURAL CLAY & EARTH · STUDIO BATCH'),
+        const SizedBox(height: 12),
+        if (p.category.isNotEmpty)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Chip(
+              backgroundColor: _mint,
+              side: BorderSide.none,
+              label: Text(p.category),
+            ),
+          ),
         _Heading(p.name),
-        Text(
-          '${money(p.price)} / unique edition',
-          style: const TextStyle(color: AppColors.terracotta, fontSize: 22),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                p.priceLabel(),
+                style: const TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            if (p.stock != null)
+              Text(
+                p.stock == 0 ? 'Out of stock' : '${p.stock} available',
+                style: const TextStyle(color: _clay),
+              ),
+          ],
         ),
         _Panel(
           child: ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const CircleAvatar(
-              backgroundColor: AppColors.surface,
-              child: Icon(Icons.palette_outlined, color: AppColors.sage),
+              backgroundColor: _mint,
+              child: Icon(Icons.storefront_outlined),
             ),
-            title: Text(p.artisan),
-            subtitle: Text('${p.studio}\nGuild Member · ★ 4.9 (38)'),
-            trailing: TextButton(
-              onPressed: () => _open(
-                context,
-                BuyerArtisanProfile(
-                  demo: widget.demo,
-                  artisan: artisanFor(p.artisan),
-                  avatarProduct: p,
-                ),
-              ),
-              child: const Text('View Artisan'),
+            title: Text(
+              p.studio.isEmpty ? 'Meet the maker' : p.studio,
+              style: TextStyle(fontWeight: FontWeight.w600),
             ),
-          ),
-        ),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            onPressed: () => _open(
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _open(
               context,
-              CraftisanConversationScreen(
-                artisanId: p.artisan,
-                viewer: DemoMessageAuthor.buyer,
+              BuyerArtisanProfile(
+                demo: widget.demo,
+                artisan: BuyerArtisan(
+                  name: p.artisan,
+                  studio: '',
+                  location: '',
+                  bio: '',
+                  rating: 0,
+                  reviewCount: 0,
+                  reviews: const [],
+                ),
+                avatarProduct: p,
               ),
             ),
-            icon: const Icon(Icons.chat_bubble_outline),
-            label: const Text('Message Artisan'),
           ),
         ),
-        const _Heading('Material & Lineage'),
-        Text(p.description, style: Theme.of(context).textTheme.bodyLarge),
-        const _Panel(
-          child: Text(
-            'Small-batch craft\nHand-finished natural clay · Each piece is unique\nMaker provenance card included',
+        if (p.description.isNotEmpty)
+          _Panel(
+            child: ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              leading: const Icon(Icons.description_outlined),
+              title: const Text('Details & care'),
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(p.description),
+                ),
+              ],
+            ),
           ),
-        ),
-        _Panel(
-          child: Row(
-            children: [
-              const Expanded(child: Text('Quantity')),
-              _Quantity(
-                value: quantity,
-                onChanged: (v) {
-                  if (v > 0) setState(() => quantity = v);
-                },
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Quantity',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
               ),
-            ],
-          ),
+            ),
+            _Quantity(
+              value: quantity,
+              onChanged: (v) {
+                if (v > 0 && p.stock != null && v <= p.stock!) {
+                  setState(() => quantity = v);
+                }
+              },
+            ),
+          ],
         ),
       ],
     );
@@ -745,7 +1249,12 @@ class BuyerArtisanProfile extends StatelessWidget {
           Center(
             child: CircleAvatar(
               radius: 44,
-              backgroundImage: MemoryImage(avatarProduct.image),
+              backgroundImage: avatarProduct.imageUrl == null
+                  ? null
+                  : NetworkImage(avatarProduct.imageUrl!),
+              child: avatarProduct.imageUrl == null
+                  ? const Icon(Icons.storefront_outlined)
+                  : null,
             ),
           ),
           const SizedBox(height: 16),
@@ -929,6 +1438,17 @@ class BuyerCart extends StatelessWidget {
             ),
           ),
         ],
+        for (final id in demo.unavailableCartIds)
+          _Panel(
+            child: ListTile(
+              title: const Text('This product is no longer available.'),
+              trailing: IconButton(
+                tooltip: 'Remove unavailable product',
+                icon: const Icon(Icons.delete_outline),
+                onPressed: () => demo.removeUnavailable(id),
+              ),
+            ),
+          ),
         for (final entry in demo.cart.entries)
           _Panel(
             child: Column(
@@ -985,7 +1505,7 @@ class BuyerCart extends StatelessWidget {
         if (demo.cart.isNotEmpty) ...[
           const _Panel(
             child: Text(
-              'Studio Packaging\nHand-packed with recyclable wrap and a maker provenance card. Complimentary delivery on orders of \$250 or more.',
+              'Checkout supports up to four different products from one artisan per order.',
             ),
           ),
           _Totals(demo),
@@ -1003,9 +1523,7 @@ class _Totals extends StatelessWidget {
     child: Column(
       children: [
         _Amount('Items subtotal (${demo.count})', money(demo.subtotal)),
-        const _Amount('Studio packaging', 'Included'),
         _Amount('Delivery', demo.delivery == 0 ? 'Free' : money(demo.delivery)),
-        const _Amount('Tax', 'Included in prices'),
         const Divider(),
         _Amount('Total', money(demo.total)),
       ],
@@ -1060,7 +1578,7 @@ class BuyerProfile extends StatelessWidget {
   Widget build(BuildContext context) => _BuyerPage(
     demo: demo,
     title: 'Collector Profile',
-    tab: 3,
+    tab: 4,
     children: [
       const Center(
         child: CircleAvatar(
@@ -1074,11 +1592,7 @@ class BuyerProfile extends StatelessWidget {
         ),
       ),
       const SizedBox(height: 20),
-      const _Eyebrow('GUILD PATRON · DEMO COLLECTOR'),
-      const _Heading('Clara Lindqvist'),
-      const Text(
-        'Curating organic stoneware, tea bowls, and wood-fired ceramics from independent studios.',
-      ),
+      const _Heading('Your account'),
       const SizedBox(height: 20),
       const _Heading('Collector Hub'),
       _Panel(
@@ -1129,281 +1643,582 @@ class BuyerCheckout extends StatefulWidget {
 }
 
 class _BuyerCheckoutState extends State<BuyerCheckout> {
-  final form = GlobalKey<FormState>();
-  late final fields = [
-    widget.demo.name,
-    widget.demo.address,
-    widget.demo.city,
-    widget.demo.postalCode,
-    widget.demo.country,
-    widget.demo.phone,
-    widget.demo.instructions,
-  ].map((v) => TextEditingController(text: v)).toList();
-  late String payment = widget.demo.payment;
-  @override
-  void dispose() {
-    for (final c in fields) {
-      c.dispose();
+  bool busy = false;
+  Future<void> editAddress([Map<String, dynamic>? existing]) async {
+    const keys = ['name', 'address', 'city', 'postalCode', 'country', 'phone'];
+    const labels = [
+      'Full name',
+      'Street address',
+      'City',
+      'Postal code',
+      'Country',
+      'Phone number',
+    ];
+    final controllers = [
+      for (final key in keys)
+        TextEditingController(text: existing?[key] as String? ?? ''),
+    ];
+    final form = GlobalKey<FormState>();
+    bool saving = false;
+    String? failure;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, update) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            MediaQuery.viewInsetsOf(context).bottom + 20,
+          ),
+          child: SingleChildScrollView(
+            child: Form(
+              key: form,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    existing == null ? 'Add a new address' : 'Edit address',
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  for (var i = 0; i < keys.length; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: TextFormField(
+                        controller: controllers[i],
+                        enabled: !saving,
+                        maxLength: i == 1
+                            ? 300
+                            : i == 5
+                            ? 40
+                            : 100,
+                        textInputAction: i == 5
+                            ? TextInputAction.done
+                            : TextInputAction.next,
+                        keyboardType: i == 5
+                            ? TextInputType.phone
+                            : TextInputType.streetAddress,
+                        decoration: InputDecoration(
+                          labelText: labels[i],
+                          counterText: '',
+                        ),
+                        validator: (v) => v == null || v.trim().isEmpty
+                            ? 'Please complete this field.'
+                            : null,
+                      ),
+                    ),
+                  if (failure != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Text(
+                        failure!,
+                        style: const TextStyle(color: _clay),
+                      ),
+                    ),
+                  _Action(
+                    saving ? 'Saving...' : 'Save address',
+                    saving
+                        ? null
+                        : () async {
+                            if (!form.currentState!.validate()) return;
+                            update(() {
+                              saving = true;
+                              failure = null;
+                            });
+                            try {
+                              await widget.demo.saveAddress({
+                                for (var i = 0; i < keys.length; i++)
+                                  keys[i]: controllers[i].text.trim(),
+                              }, id: existing?['id'] as String?);
+                              if (context.mounted) Navigator.pop(context);
+                            } catch (e) {
+                              if (context.mounted) {
+                                update(() {
+                                  saving = false;
+                                  failure = marketplaceError(e);
+                                });
+                              }
+                            }
+                          },
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    // Wait until the closing sheet has released its text fields.
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    for (final controller in controllers) {
+      controller.dispose();
     }
-    super.dispose();
   }
 
   Future<void> next() async {
     final d = widget.demo;
-    if (d.checkingOut) return;
-    if (d.cart.isEmpty) return;
-    if (widget.step == 0) {
-      if (!form.currentState!.validate()) return;
-      d.name = fields[0].text.trim();
-      d.address = fields[1].text.trim();
-      d.city = fields[2].text.trim();
-      d.postalCode = fields[3].text.trim();
-      d.country = fields[4].text.trim();
-      d.phone = fields[5].text.trim();
-      d.instructions = fields[6].text.trim();
+    if (busy ||
+        d.checkingOut ||
+        d.cart.isEmpty ||
+        d.selectedAddressId == null) {
+      return;
     }
-    if (widget.step == 1) d.payment = payment;
-    if (widget.step < 2) {
-      _open(context, BuyerCheckout(demo: d, step: widget.step + 1));
-    } else {
-      BuyerDemoOrder order;
-      try {
-        order = await d.checkout();
-      } catch (e) {
+    setState(() => busy = true);
+    try {
+      if (widget.step < 2) {
+        await d.validateCheckout();
         if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text(marketplaceError(e))));
+          _open(context, BuyerCheckout(demo: d, step: widget.step + 1));
         }
-        return;
+      } else {
+        final order = await d.checkout();
+        if (!mounted) return;
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute<void>(
+            builder: (_) => BuyerOrderSuccess(demo: d, order: order),
+          ),
+          (r) => r.settings.name == RouteNames.marketplace || r.isFirst,
+        );
       }
-      if (!mounted) return;
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute<void>(
-          builder: (_) => BuyerOrderSuccess(demo: d, order: order),
-        ),
-        (r) => r.settings.name == RouteNames.marketplace || r.isFirst,
-      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(marketplaceError(e))));
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    final d = widget.demo;
-    final step = widget.step;
-    const labels = ['Address', 'Payment', 'Review'];
-    return ListenableBuilder(
-      listenable: d,
-      builder: (context, _) => _BuyerPage(
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: widget.demo,
+    builder: (context, _) {
+      final d = widget.demo;
+      final step = widget.step;
+      return _BuyerPage(
         demo: d,
-        title: 'Secure Checkout',
-        footer: d.cart.isEmpty
-            ? null
-            : CustomButton(
-                label: d.checkingOut
-                    ? 'Placing order...'
-                    : step == 2
-                    ? 'Place Order · ${money(d.total)}'
-                    : 'Continue to ${labels[step + 1]}',
-                onPressed: d.checkingOut ? null : next,
-              ),
-        children: [
-          Row(
-            children: List.generate(
-              3,
-              (i) => Expanded(
-                child: Column(
+        title: 'Checkout',
+        footer: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (d.cart.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Row(
                   children: [
-                    CircleAvatar(
-                      backgroundColor: i <= step
-                          ? AppColors.terracotta
-                          : AppColors.surface,
-                      foregroundColor: i <= step
-                          ? Colors.white
-                          : AppColors.muted,
-                      child: i < step
-                          ? const Icon(Icons.check)
-                          : Text('${i + 1}'),
+                    const Expanded(
+                      child: Text(
+                        'Order total',
+                        style: TextStyle(color: Colors.grey, fontSize: 16),
+                      ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(labels[i]),
+                    Text(
+                      money(d.total),
+                      style: const TextStyle(
+                        fontSize: 26,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ],
                 ),
               ),
+            _Action(
+              busy || d.checkingOut
+                  ? 'Please wait...'
+                  : [
+                      'Continue to payment  \u2192',
+                      'Continue to review  \u2192',
+                      'Place order',
+                    ][step],
+              busy ||
+                      d.checkingOut ||
+                      d.cart.isEmpty ||
+                      d.selectedAddressId == null ||
+                      d.repository == null
+                  ? null
+                  : next,
             ),
+          ],
+        ),
+        children: [
+          Row(
+            children: [
+              for (var i = 0; i < 3; i++) ...[
+                if (i > 0)
+                  Expanded(
+                    child: Divider(
+                      color: i <= step
+                          ? const Color(0xFF50745B)
+                          : const Color(0xFFDAD7D4),
+                    ),
+                  ),
+                SizedBox(
+                  width: 76,
+                  child: Column(
+                    children: [
+                      CircleAvatar(
+                        radius: 14,
+                        backgroundColor: i < step
+                            ? const Color(0xFF50745B)
+                            : i == step
+                            ? _clay
+                            : const Color(0xFFECE9E5),
+                        foregroundColor: i <= step ? Colors.white : Colors.grey,
+                        child: i < step
+                            ? const Icon(Icons.check, size: 18)
+                            : Text(
+                                '${i + 1}',
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                      ),
+                      const SizedBox(height: 5),
+                      Text(
+                        ['Address', 'Payment', 'Review'][i],
+                        style: TextStyle(
+                          color: i == step ? _clay : Colors.grey,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
           ),
-          const SizedBox(height: 24),
-          _Eyebrow('STEP ${step + 1} OF 3'),
+          const SizedBox(height: 22),
           _Heading(
-            [
-              'Address Details',
-              'Payment methods',
-              'Review & Place Order',
-            ][step],
+            ['Delivery address', 'Payment method', 'Review your order'][step],
           ),
+          Text(
+            [
+              'Choose where your order arrives.',
+              'Choose how you\u2019d like to pay.',
+              'Check your details before placing your order.',
+            ][step],
+            style: const TextStyle(color: Color(0xFF756861), fontSize: 17),
+          ),
+          const SizedBox(height: 14),
           if (d.cart.isEmpty)
             const _Panel(
               child: Text('Your bag is empty. Add a piece before continuing.'),
             ),
           if (step == 0) ...[
-            const Text(
-              'Enter your delivery details. Check out up to 4 different products from one artisan per order.',
-            ),
-            Form(
-              key: form,
-              child: _Panel(
+            if (d.addressesLoading)
+              const Center(child: CircularProgressIndicator()),
+            if (d.addressError != null) _Panel(child: Text(d.addressError!)),
+            if (!d.addressesLoading &&
+                d.addressError == null &&
+                d.addresses.isEmpty)
+              const _Panel(child: Text('No saved addresses yet.')),
+            for (final address in d.addresses)
+              _SelectionPanel(
+                selected: address['id'] == d.selectedAddressId,
+                onTap: () => d.selectAddress(address),
                 child: Column(
-                  children: List.generate(
-                    fields.length,
-                    (i) => Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
-                      child: CustomTextField(
-                        label: const [
-                          'Full name',
-                          'Street address',
-                          'City / Region',
-                          'Postal code',
-                          'Country',
-                          'Phone number',
-                          'Delivery instructions (optional)',
-                        ][i],
-                        controller: fields[i],
-                        icon: i == 5
-                            ? Icons.phone_outlined
-                            : Icons.location_on_outlined,
-                        keyboardType: i == 5
-                            ? TextInputType.phone
-                            : TextInputType.text,
-                        validator: i == 6
-                            ? null
-                            : (v) => v == null || v.trim().isEmpty
-                                  ? 'Please complete this field.'
-                                  : null,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const _Panel(
-              child: Text(
-                'Studio Packaging Guarantee\nEvery piece is secured in recyclable wrap with maker sign-off seals.',
-              ),
-            ),
-          ],
-          if (step == 1) ...[
-            const Text('Pay cash when your order is delivered.'),
-            for (final method in [
-              'Cash on delivery',
-              if (!MarketplaceBackend.enabled) 'Demo Visa ending in 4092',
-              if (!MarketplaceBackend.enabled) 'Studio Guild Credits',
-            ])
-              _Panel(
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    payment == method
-                        ? Icons.radio_button_checked
-                        : Icons.radio_button_off,
-                    color: AppColors.terracotta,
-                  ),
-                  title: Text(method),
-                  subtitle: Text(
-                    method == 'Cash on delivery'
-                        ? 'Pay upon receipt and unboxing'
-                        : method == 'Studio Guild Credits'
-                        ? 'Demo balance: \$140.00'
-                        : 'Sample card · No charge will be made',
-                  ),
-                  selected: payment == method,
-                  onTap: method == 'Studio Guild Credits' && d.total > 140
-                      ? null
-                      : () => setState(() => payment = method),
-                  trailing: method == 'Studio Guild Credits' && d.total > 140
-                      ? const Text('Insufficient\ncredits')
-                      : null,
-                ),
-              ),
-            const _Panel(
-              child: Text(
-                'UI preview only. No payment details are collected and no payment is processed.',
-              ),
-            ),
-          ],
-          if (step == 2) ...[
-            _Panel(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Expanded(
-                        child: Text(
-                          'Shipping Destination',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Back to payment'),
-                      ),
-                    ],
-                  ),
-                  Text(d.destination),
-                  if (d.instructions.isNotEmpty) Text('\n${d.instructions}'),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      Navigator.pop(context);
-                    },
-                    child: const Text('Change address'),
-                  ),
-                ],
-              ),
-            ),
-            _Panel(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const _Eyebrow('PAYMENT METHOD'),
-                  Text(d.payment),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Change payment'),
-                  ),
-                ],
-              ),
-            ),
-            const _Panel(
-              child: Text(
-                'Courier & Handling\nStandard delivery · Estimated 3–5 business days',
-              ),
-            ),
-            const _Heading('Consigned Pieces'),
-            for (final e in d.cart.entries)
-              _Panel(
-                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    SizedBox(width: 64, height: 76, child: _Photo(e.key)),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        '${e.key.name}\n${e.key.artisan}\nQty: ${e.value}',
+                    Row(
+                      children: [
+                        Icon(
+                          address['id'] == d.selectedAddressId
+                              ? Icons.radio_button_checked
+                              : Icons.radio_button_off,
+                          color: _clay,
+                        ),
+                        const Spacer(),
+                        TextButton.icon(
+                          onPressed: () => editAddress(address),
+                          icon: const Icon(Icons.edit_outlined, size: 18),
+                          label: const Text('Edit'),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      address['name'] as String,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    Text(money(e.key.price * e.value)),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${address['address']}\n${address['city']}, ${address['postalCode']}\n${address['country']}',
+                      style: const TextStyle(fontSize: 16, height: 1.4),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        const Icon(Icons.phone_outlined, size: 20),
+                        const SizedBox(width: 8),
+                        Expanded(child: Text(address['phone'] as String)),
+                      ],
+                    ),
                   ],
                 ),
               ),
-            _Totals(d),
-            const Text(
-              'Cash on delivery · Pay the courier on delivery.',
-              textAlign: TextAlign.center,
+            _Panel(
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.add),
+                title: const Text('Add a new address'),
+                onTap: d.repository == null ? null : () => editAddress(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const _Heading('Delivery method'),
+            _SelectionPanel(
+              selected: true,
+              child: Row(
+                children: [
+                  const Icon(Icons.radio_button_checked, color: _clay),
+                  const SizedBox(width: 14),
+                  const Expanded(
+                    child: Text(
+                      'Standard',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 17,
+                      ),
+                    ),
+                  ),
+                  if (d.cart.isNotEmpty)
+                    Text(
+                      money(d.delivery),
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 18,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            _Panel(
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                leading: const Icon(Icons.description_outlined),
+                title: const Text('Delivery instructions'),
+                subtitle: const Text('Optional'),
+                children: [
+                  TextFormField(
+                    initialValue: d.instructions,
+                    maxLength: 1000,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      hintText: 'Add instructions for your delivery',
+                    ),
+                    onChanged: (v) => d.instructions = v.trim(),
+                  ),
+                ],
+              ),
             ),
           ],
+          if (step >= 1) ...[
+            if (step == 1)
+              _Panel(
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.credit_card_outlined, color: _clay),
+                  title: const Text('Stripe card payment - Demo'),
+                  subtitle: const Text(
+                    'Preview only. No payment will be processed.',
+                  ),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => showModalBottomSheet<void>(
+                    context: context,
+                    useSafeArea: true,
+                    builder: (sheetContext) => Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            const Text(
+                              'Stripe demo preview',
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            const _SelectionPanel(
+                              selected: true,
+                              child: ListTile(
+                                leading: Icon(Icons.credit_card),
+                                title: Text('Sample card ending 4242'),
+                                subtitle: Text(
+                                  'Illustrative card - not a saved payment method',
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'This preview is not connected to Stripe. No card details are collected, no charge is made, and no paid order is created. Use cash on delivery to place an order.',
+                            ),
+                            const SizedBox(height: 20),
+                            _Action(
+                              'Back to payment methods',
+                              () => Navigator.pop(sheetContext),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            _SelectionPanel(
+              selected: true,
+              child: const Row(
+                children: [
+                  Icon(Icons.radio_button_checked, color: _clay),
+                  SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Cash on delivery',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Pay when your order arrives',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(Icons.payments_outlined),
+                ],
+              ),
+            ),
+            _Panel(
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.location_on_outlined),
+                title: Text(
+                  d.selectedAddressId == null
+                      ? 'Choose a delivery address'
+                      : 'Deliver to ${d.name} \u00b7 ${d.city}',
+                ),
+                subtitle: step == 2 ? Text(d.destination) : null,
+                trailing: TextButton(
+                  onPressed: () {
+                    for (var i = 0; i < step; i++) {
+                      Navigator.pop(context);
+                    }
+                  },
+                  child: const Text('Change'),
+                ),
+              ),
+            ),
+            if (step == 2 && d.instructions.isNotEmpty)
+              _Panel(child: Text(d.instructions)),
+          ],
+          if (d.cart.isNotEmpty)
+            _Panel(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (step >= 1) ...[
+                    const Text(
+                      'Order summary',
+                      style: TextStyle(
+                        fontSize: 21,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      '${d.count} items',
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  for (final e in d.cart.entries)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        children: [
+                          SizedBox(width: 60, height: 60, child: _Photo(e.key)),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  e.key.name,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                Text(
+                                  'Qty ${e.value}',
+                                  style: const TextStyle(color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            e.key.priceLabel(e.value),
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                    ),
+                  const Divider(),
+                  if (step >= 1) _Amount('Subtotal', money(d.subtotal)),
+                  _Amount('Standard delivery', money(d.delivery)),
+                ],
+              ),
+            ),
+          if (step == 1)
+            const Text(
+              'You\u2019ll review your order before placing it.',
+              style: TextStyle(color: Colors.grey),
+            ),
         ],
+      );
+    },
+  );
+}
+
+class _SelectionPanel extends StatelessWidget {
+  const _SelectionPanel({
+    required this.selected,
+    required this.child,
+    this.onTap,
+  });
+  final bool selected;
+  final Widget child;
+  final VoidCallback? onTap;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 5),
+    child: Material(
+      color: Colors.white,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: selected ? _clay : const Color(0xFFE5E2DF)),
       ),
-    );
-  }
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(padding: const EdgeInsets.all(14), child: child),
+      ),
+    ),
+  );
 }
 
 class BuyerOrders extends StatelessWidget {
@@ -1720,9 +2535,7 @@ class BuyerOrderSuccess extends StatelessWidget {
       const SizedBox(height: 20),
       const _Eyebrow('THANK YOU FOR CHAMPIONING SLOW CRAFT'),
       const _Heading('Your order successfully placed'),
-      const Text(
-        'Demo confirmation · No payment was taken.\nYour pieces would be hand-packaged with care.',
-      ),
+      const Text('Your order has been submitted. Pay cash on delivery.'),
       for (final e in order.items.entries)
         _Panel(
           child: Column(
@@ -1744,7 +2557,7 @@ class BuyerOrderSuccess extends StatelessWidget {
             const _Eyebrow('DELIVERY LOCATION'),
             Text(demo.destination),
             const SizedBox(height: 10),
-            const Text('Standard Courier · 3–5 business days'),
+            Text('Order status: ${order.status.label}'),
           ],
         ),
       ),

@@ -10,6 +10,7 @@ import '../../../shared/widgets/custom_text_field.dart';
 import 'craftisan_mark.dart';
 import '../models/marketplace_role.dart';
 import '../services/auth_session.dart';
+import '../../buyer/buyer_login_view.dart';
 
 class AuthForm extends StatefulWidget {
   const AuthForm({super.key, required this.isSignUp});
@@ -186,6 +187,18 @@ class _AuthFormState extends State<AuthForm> {
 
   @override
   Widget build(BuildContext context) {
+    if (_role == MarketplaceRole.buyer && !widget.isSignUp) {
+      return BuyerLoginView(
+        formKey: _formKey,
+        email: _email,
+        password: _password,
+        validateEmail: _validateEmail,
+        submitting: _submitting,
+        message: _message,
+        onSubmit: _submit,
+        onSocialSignIn: (provider) => _unavailable('$provider sign in'),
+      );
+    }
     final signUp = widget.isSignUp;
     final buttonLabel = signUp ? _role.signUpLabel : _role.signInLabel;
     return Scaffold(

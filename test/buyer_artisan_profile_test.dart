@@ -11,12 +11,18 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final demo = BuyerDemo();
+    final demo = BuyerDemo()
+      ..products = List.of(demoProducts)
+      ..catalogError = null;
     addTearDown(demo.dispose);
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light,
-        home: BuyerProductDetails(demo: demo, product: demoProducts.first),
+        home: BuyerArtisanProfile(
+          demo: demo,
+          artisan: buyerArtisans.first,
+          avatarProduct: demoProducts.first,
+        ),
       ),
     );
     await tester.pumpAndSettle();
@@ -30,7 +36,6 @@ void main() {
       expect(tester.takeException(), isNull);
     }
 
-    await tap('View Artisan');
     expect(find.text('Artisan Profile'), findsOneWidget);
     expect(find.text('Verified Guild Artisan'), findsOneWidget);
     await tap('Follow Artisan');
@@ -40,7 +45,7 @@ void main() {
     expect(find.text('Reviews'), findsOneWidget);
     expect(find.text('Maya L.'), findsOneWidget);
     await tap('Handcrafted Terracotta Ribbed Vase');
-    expect(find.text('Product Detail'), findsOneWidget);
+    expect(find.text('Product details'), findsOneWidget);
     await tester.pageBack();
     await tester.pumpAndSettle();
     expect(find.text('Artisan Profile'), findsOneWidget);

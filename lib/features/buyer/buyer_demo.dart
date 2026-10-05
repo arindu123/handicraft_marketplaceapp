@@ -21,20 +21,36 @@ class DemoProduct {
     this.imageIndex, {
     this.id = '',
     this.imageUrl,
+    this.imageUrls = const [],
+    this.currency = 'USD',
+    this.stock,
   });
   final String id;
   final String? imageUrl;
-  factory DemoProduct.fromProduct(canonical.Product p) => DemoProduct(
+  final List<String> imageUrls;
+  final String currency;
+  final int? stock;
+  String priceLabel([int quantity = 1]) => currency == 'USD'
+      ? money(price * quantity)
+      : '$currency ${(price * quantity).toStringAsFixed(2)}';
+  factory DemoProduct.fromProduct(
+    canonical.Product p, {
+    String studio = '',
+    String location = '',
+  }) => DemoProduct(
     p.name,
     p.category,
     p.price,
     p.artisanId,
-    '',
+    studio,
     p.description,
-    '',
+    location,
     0,
     id: p.id,
     imageUrl: p.imageUrls.firstOrNull,
+    imageUrls: p.imageUrls,
+    currency: p.currency,
+    stock: p.stock,
   );
   @override
   bool operator ==(Object other) =>
@@ -226,13 +242,28 @@ class BuyerDemoOrder {
 class BuyerDemo extends ChangeNotifier {
   final _subscriptions = <StreamSubscription<dynamic>>[];
   MarketplaceRepository? repository;
-  List<DemoProduct> products = List.of(demoProducts);
+  List<DemoProduct> products = [];
+  List<canonical.Product> _records = [];
+  Map<String, Map<String, dynamic>> _studios = {};
+  Iterable<String> get unavailableCartIds =>
+      _cartIds.keys.where((id) => !products.any((p) => p.id == id));
+  bool loading = true;
+  String? catalogError;
+  List<Map<String, dynamic>> addresses = [];
+  bool addressesLoading = true;
+  String? addressError;
+  String? selectedAddressId;
   String? error;
   bool _disposed = false;
   Map<String, int> _cartIds = {};
   Set<String> _favoriteIds = {};
-  BuyerDemo() {
-    if (!MarketplaceBackend.enabled) return;
+  BuyerDemo({MarketplaceRepository? backend}) {
+    if (!MarketplaceBackend.enabled && backend == null) {
+      loading = false;
+      addressesLoading = false;
+      catalogError = 'The marketplace connection is unavailable.';
+      return;
+    }
     name = '';
     address = '';
     city = '';
@@ -242,13 +273,63 @@ class BuyerDemo extends ChangeNotifier {
     products.clear();
     favorites.clear();
     orders.clear();
-    repository = MarketplaceRepository();
     try {
+      repository = backend ?? MarketplaceRepository();
       _subscriptions.add(
-        repository!.products().listen((rows) {
-          products = rows.map(DemoProduct.fromProduct).toList();
+        repository!.products().listen(
+          (rows) {
+            loading = false;
+            catalogError = null;
+            _records = rows;
+            _resolve();
+          },
+          onError: (Object e) {
+            loading = false;
+            catalogError = marketplaceError(e);
+            _failed(e);
+          },
+        ),
+      );
+      _subscriptions.add(
+        repository!.db.collection('artisanProfiles').snapshots().listen((
+          snapshot,
+        ) {
+          _studios = {for (final doc in snapshot.docs) doc.id: doc.data()};
           _resolve();
         }, onError: _failed),
+      );
+      _subscriptions.add(
+        repository!
+            .userCollection('addresses')
+            .snapshots()
+            .listen(
+              (snapshot) {
+                addressesLoading = false;
+                addressError = null;
+                addresses = snapshot.docs
+                    .map((d) => <String, dynamic>{...d.data(), 'id': d.id})
+                    .toList();
+                if (selectedAddressId != null) {
+                  final selected = addresses
+                      .where((a) => a['id'] == selectedAddressId)
+                      .firstOrNull;
+                  if (selected != null) {
+                    selectAddress(selected);
+                  } else {
+                    selectedAddressId = null;
+                    address = '';
+                  }
+                } else if (addresses.isNotEmpty) {
+                  selectAddress(addresses.first);
+                }
+                notifyListeners();
+              },
+              onError: (Object e) {
+                addressesLoading = false;
+                addressError = marketplaceError(e);
+                notifyListeners();
+              },
+            ),
       );
       _subscriptions.add(
         repository!.userCollection('cart').snapshots().listen((s) {
@@ -282,24 +363,64 @@ class BuyerDemo extends ChangeNotifier {
         }, onError: _failed),
       );
     } catch (e) {
+      catalogError = marketplaceError(e);
+      addressesLoading = false;
       _failed(e);
     }
   }
   void _failed(Object e) {
     if (_disposed) return;
+    loading = false;
     error = marketplaceError(e);
     notifyListeners();
   }
 
   void _resolve() {
-    DemoProduct resolve(String id) =>
-        products.where((p) => p.id == id).firstOrNull ??
-        DemoProduct('Unavailable product', '', 0, '', '', '', '', 0, id: id);
+    products = _records
+        .map(
+          (p) => DemoProduct.fromProduct(
+            p,
+            studio: _studios[p.artisanId]?['studioName'] as String? ?? '',
+            location: _studios[p.artisanId]?['location'] as String? ?? '',
+          ),
+        )
+        .toList();
+    final byId = {for (final p in products) p.id: p};
     cart.clear();
-    cart.addAll({for (final e in _cartIds.entries) resolve(e.key): e.value});
+    cart.addAll({
+      for (final e in _cartIds.entries)
+        if (byId.containsKey(e.key)) byId[e.key]!: e.value,
+    });
     favorites.clear();
-    favorites.addAll(_favoriteIds.map(resolve));
+    favorites.addAll(
+      _favoriteIds.where(byId.containsKey).map((id) => byId[id]!),
+    );
     notifyListeners();
+  }
+
+  Future<void> refreshCatalog() async {
+    if (repository == null) return;
+    loading = true;
+    catalogError = null;
+    error = null;
+    notifyListeners();
+    try {
+      _records = await repository!.fetchProducts();
+      loading = false;
+      _resolve();
+    } catch (e) {
+      loading = false;
+      catalogError = marketplaceError(e);
+      notifyListeners();
+    }
+  }
+
+  Future<void> removeUnavailable(String id) async {
+    try {
+      await repository!.cartQuantity(id, 0);
+    } catch (e) {
+      _failed(e);
+    }
   }
 
   static BuyerDemoOrder fromOrder(canonical.Order o) => BuyerDemoOrder(
@@ -327,6 +448,15 @@ class BuyerDemo extends ChangeNotifier {
   );
   String? _checkoutId;
   bool checkingOut = false;
+  Future<void> validateCheckout() async {
+    if (repository == null) {
+      throw const MarketplaceFailure(
+        'The marketplace connection is unavailable.',
+      );
+    }
+    await repository!.validateCheckout(destination, payment);
+  }
+
   Future<BuyerDemoOrder> checkout() async {
     if (checkingOut) {
       throw const MarketplaceFailure('Your order is being submitted.');
@@ -335,9 +465,9 @@ class BuyerDemo extends ChangeNotifier {
     notifyListeners();
     try {
       if (repository == null) {
-        final result = createOrder(Map.of(cart), total);
-        clearCart();
-        return result;
+        throw const MarketplaceFailure(
+          'Connect to the marketplace before placing an order.',
+        );
       }
       _checkoutId ??= repository!.db.collection('orders').doc().id;
       final result = await repository!.checkout(
@@ -370,78 +500,87 @@ class BuyerDemo extends ChangeNotifier {
   }
 
   final Map<DemoProduct, int> cart = {};
-  final Set<DemoProduct> favorites = {demoProducts.first};
+  final Set<DemoProduct> favorites = {};
   final Set<String> followedArtisans = {};
-  late final List<BuyerDemoOrder> orders = [
-    BuyerDemoOrder(
-      id: 'CS-2048',
-      items: {demoProducts[0]: 1},
-      date: 'May 28, 2026',
-      status: BuyerOrderStatus.onTheWay,
-      address: '742 Evergreen Pottery Lane, Apt 4B\nPortland, OR 97201',
-      payment: 'Demo Visa ending in 4092',
-      deliveryFee: 14,
-    ),
-    BuyerDemoOrder(
-      id: 'CS-2041',
-      items: {demoProducts[1]: 2},
-      date: 'May 14, 2026',
-      status: BuyerOrderStatus.delivered,
-      address: '742 Evergreen Pottery Lane, Apt 4B\nPortland, OR 97201',
-      payment: 'Cash on delivery',
-      deliveryFee: 0,
-    ),
-  ];
-  int _nextOrder = 2049;
-  String name = 'Clara Lindqvist';
-  String address = '742 Evergreen Pottery Lane, Apt 4B';
-  String city = 'Portland';
-  String postalCode = '97201';
-  String country = 'United States';
-  String phone = '+1 (503) 555-0192';
+  final List<BuyerDemoOrder> orders = [];
+  String name = '';
+  String address = '';
+  String city = '';
+  String postalCode = '';
+  String country = '';
+  String phone = '';
   String instructions = '';
   String payment = 'Cash on delivery';
   int get count => cart.values.fold(0, (a, b) => a + b);
   double get subtotal =>
       cart.entries.fold(0, (a, e) => a + e.key.price * e.value);
-  double get delivery => cart.isEmpty || subtotal >= 250 ? 0 : 14;
+  double get delivery =>
+      cart.isEmpty ? 0 : MarketplaceRepository.deliveryFeeFor(subtotal);
   double get total => subtotal + delivery;
   String get destination =>
       '$name\n$address\n$city, $postalCode\n$country\n$phone';
 
-  void add(DemoProduct product, [int quantity = 1]) {
-    if (repository != null) {
-      repository!
-          .cartQuantity(product.id, quantity, increment: true)
-          .catchError(_failed);
-      return;
+  Future<void> add(DemoProduct product, [int quantity = 1]) async {
+    if (repository == null) {
+      throw const MarketplaceFailure(
+        'The marketplace connection is unavailable.',
+      );
     }
-    cart[product] = (cart[product] ?? 0) + quantity;
+    await repository!.cartQuantity(product.id, quantity, increment: true);
+    error = null;
     notifyListeners();
   }
 
-  void quantity(DemoProduct product, int value) {
-    if (repository != null) {
-      repository!.cartQuantity(product.id, value).catchError(_failed);
-      return;
+  Future<void> quantity(DemoProduct product, int value) async {
+    try {
+      if (repository == null) {
+        throw const MarketplaceFailure(
+          'The marketplace connection is unavailable.',
+        );
+      }
+      await repository!.cartQuantity(product.id, value);
+      error = null;
+      notifyListeners();
+    } catch (e) {
+      _failed(e);
     }
-    if (value <= 0) {
-      cart.remove(product);
-    } else {
-      cart[product] = value;
+  }
+
+  Future<void> favorite(DemoProduct product) async {
+    try {
+      if (repository == null) {
+        throw const MarketplaceFailure(
+          'The marketplace connection is unavailable.',
+        );
+      }
+      await repository!.favorite(product.id, !favorites.contains(product));
+      error = null;
+      notifyListeners();
+    } catch (e) {
+      _failed(e);
     }
+  }
+
+  void selectAddress(Map<String, dynamic> value) {
+    selectedAddressId = value['id'] as String;
+    name = value['name'] as String;
+    address = value['address'] as String;
+    city = value['city'] as String;
+    postalCode = value['postalCode'] as String;
+    country = value['country'] as String;
+    phone = value['phone'] as String;
     notifyListeners();
   }
 
-  void favorite(DemoProduct product) {
-    if (repository != null) {
-      repository!
-          .favorite(product.id, !favorites.contains(product))
-          .catchError(_failed);
-      return;
+  Future<void> saveAddress(Map<String, String> value, {String? id}) async {
+    if (repository == null) {
+      throw const MarketplaceFailure(
+        'The marketplace connection is unavailable.',
+      );
     }
-    if (!favorites.remove(product)) favorites.add(product);
-    notifyListeners();
+    final ref = repository!.userCollection('addresses').doc(id);
+    await ref.set(value);
+    selectAddress({...value, 'id': ref.id});
   }
 
   void followArtisan(BuyerArtisan artisan) {
@@ -457,21 +596,6 @@ class BuyerDemo extends ChangeNotifier {
   }
 
   BuyerDemoOrder createOrder(Map<DemoProduct, int> items, double total) {
-    final subtotal = items.entries.fold<double>(
-      0,
-      (sum, item) => sum + item.key.price * item.value,
-    );
-    final order = BuyerDemoOrder(
-      id: 'CS-${_nextOrder++}',
-      items: Map.unmodifiable(items),
-      date: 'Today',
-      status: BuyerOrderStatus.confirmed,
-      address: '$address\n$city, $postalCode',
-      payment: payment,
-      deliveryFee: total - subtotal,
-    );
-    orders.insert(0, order);
-    notifyListeners();
-    return order;
+    throw const MarketplaceFailure('Orders must be validated by the backend.');
   }
 }

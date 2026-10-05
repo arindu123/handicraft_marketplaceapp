@@ -20,6 +20,10 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
       ModalRoute.of(context)?.settings.arguments == AuthEntry.signIn;
 
   void _openAuth({bool? signIn}) {
+    if (_selected == MarketplaceRole.buyer) {
+      Navigator.pushNamed(context, RouteNames.buyerLanding);
+      return;
+    }
     Navigator.pushNamed(
       context,
       _selected == MarketplaceRole.courier
@@ -133,7 +137,10 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                         description: role.description,
                         icon: role.icon,
                         selected: _selected == role.role,
-                        onTap: () => setState(() => _selected = role.role),
+                        onTap: () {
+                          setState(() => _selected = role.role);
+                          if (role.role == MarketplaceRole.buyer) _openAuth();
+                        },
                       ),
                       const SizedBox(height: 10),
                     ],

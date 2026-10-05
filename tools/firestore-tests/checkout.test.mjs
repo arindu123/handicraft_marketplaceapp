@@ -112,3 +112,17 @@ test('buyer to artisan to courier to delivery code is a persisted lifecycle', as
   await assertSucceeds(updateDoc(doc(courier, 'orders/flow'), {status: 'delivered', deliveryConfirmationCode: '123456', updatedAt: now}));
   assert.equal((await getDoc(doc(buyer, 'orders/flow'))).data().status, 'delivered');
 });
+
+
+test('saved addresses are owner-only, validated and editable', async () => {
+  const address = {name: 'Test buyer', address: 'Test street', city: 'Test city', postalCode: '12345', country: 'Test country', phone: '0123456789'};
+  const path = 'users/buyer/addresses/home';
+  await assertSucceeds(setDoc(doc(dbFor('buyer'), path), address));
+  await assertSucceeds(updateDoc(doc(dbFor('buyer'), path), {city: 'Updated city'}));
+  assert.equal((await getDoc(doc(dbFor('buyer'), path))).data().city, 'Updated city');
+  await assertFails(getDoc(doc(dbFor('other'), path)));
+  await assertFails(setDoc(doc(dbFor('other'), path), address));
+  await assertFails(setDoc(doc(dbFor('buyer'), path), {...address, phone: ''}));
+  await assertFails(setDoc(doc(dbFor('buyer'), path), {...address, cardNumber: 'not allowed'}));
+  await assertFails(setDoc(doc(dbFor('artisan'), 'users/artisan/addresses/home'), address));
+});

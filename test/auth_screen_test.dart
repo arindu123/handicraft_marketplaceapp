@@ -181,7 +181,10 @@ Future<void> openSignIn(
   await tester.pumpAndSettle();
   expect(find.text('Roles Selection'), findsOneWidget);
   await tapVisible(tester, role);
-  await tapVisible(tester, 'Continue');
+  await tapVisible(
+    tester,
+    role == 'Buyer / Patron' ? 'Continue to login' : 'Continue',
+  );
 }
 
 Future<void> tapVisible(WidgetTester tester, String text) async {
@@ -261,8 +264,19 @@ void main() {
           );
           await fillForm(tester, signUp);
           final label = signUp ? role.signUpLabel : role.signInLabel;
-          await tapVisible(tester, label);
-          await tapVisible(tester, label);
+          if (!signUp && role == MarketplaceRole.buyer) {
+            await tester.ensureVisible(find.text(label));
+            await tester.tap(find.text(label));
+            await tester.pump();
+            expect(find.text('Signing you in…'), findsOneWidget);
+            expect(
+              tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
+              isNull,
+            );
+          } else {
+            await tapVisible(tester, label);
+            await tapVisible(tester, label);
+          }
           tester.widget<TextField>(find.byType(TextField).last).onSubmitted!(
             '',
           );
@@ -454,7 +468,7 @@ void main() {
     'Sign in validates, toggles password visibility, and keeps role when switching pages',
     (tester) async {
       await openSignIn(tester, role: 'Buyer / Patron');
-      expect(find.text('Buyer / Patron'), findsOneWidget);
+      expect(find.text('Good to see\nyou again.'), findsOneWidget);
       expect(find.text('Email address'), findsOneWidget);
       await tapVisible(tester, 'Sign In to Collection');
       expect(find.text('Enter your email address.'), findsOneWidget);

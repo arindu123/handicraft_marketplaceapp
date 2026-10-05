@@ -36,6 +36,18 @@ service cloud.firestore {
           && get(/databases/$(database)/documents/products/$(productId)).data.status == 'active'
           && request.resource.data.addedAt is timestamp;
       }
+      match /addresses/{addressId} {
+        allow read, delete: if owner(uid);
+        allow create, update: if owner(uid) && role('buyer')
+          && request.resource.data.keys().hasAll(['name','address','city','postalCode','country','phone'])
+          && request.resource.data.keys().hasOnly(['name','address','city','postalCode','country','phone'])
+          && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 100
+          && request.resource.data.address is string && request.resource.data.address.size() > 0 && request.resource.data.address.size() <= 300
+          && request.resource.data.city is string && request.resource.data.city.size() > 0 && request.resource.data.city.size() <= 100
+          && request.resource.data.postalCode is string && request.resource.data.postalCode.size() > 0 && request.resource.data.postalCode.size() <= 100
+          && request.resource.data.country is string && request.resource.data.country.size() > 0 && request.resource.data.country.size() <= 100
+          && request.resource.data.phone is string && request.resource.data.phone.size() > 0 && request.resource.data.phone.size() <= 40;
+      }
       match /favorites/{productId} {
         allow read, delete: if owner(uid);
         allow create, update: if owner(uid) && role('buyer')

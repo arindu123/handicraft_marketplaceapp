@@ -75,6 +75,16 @@ class MarketplaceRepository {
     );
   }
 
+  Future<List<model.Product>> fetchProducts() async {
+    final snapshot = await db
+        .collection('products')
+        .where('status', isEqualTo: 'active')
+        .get(const GetOptions(source: Source.server));
+    return snapshot.docs
+        .map((d) => model.Product.fromMap({...d.data(), 'id': d.id}))
+        .toList();
+  }
+
   Stream<List<model.Order>> orders(String relationship) => db
       .collection('orders')
       .where(relationship, isEqualTo: uid)
@@ -216,6 +226,9 @@ class MarketplaceRepository {
     }
   }
 
+  // Existing USD/COD contract, also enforced by firestore.rules validOrder.
+  static double deliveryFeeFor(double subtotal) => subtotal >= 250 ? 0 : 14;
+
   static model.Order buildOrder(
     String id,
     String buyer,
@@ -269,7 +282,7 @@ class MarketplaceRepository {
       0,
       (total, i) => total + i.unitPrice * i.quantity,
     );
-    final fee = subtotal >= 250 ? 0.0 : 14.0;
+    final fee = deliveryFeeFor(subtotal);
     return model.Order(
       id: id,
       buyerId: buyer,
@@ -283,6 +296,31 @@ class MarketplaceRepository {
       total: subtotal + fee,
       createdAt: DateTime.now().toUtc(),
     );
+  }
+
+  /// Refresh the persisted cart and products before advancing checkout.
+  /// Final prices, stock, delivery fee and pending status are enforced by rules
+  /// in the atomic order transaction; this preflight never creates an order.
+  Future<model.Order> validateCheckout(String address, String payment) async {
+    await requireRole(model.UserRole.buyer);
+    final cart = await userCollection('cart')
+        .get(const GetOptions(source: Source.server));
+    final products = <model.Product>[];
+    final quantities = <String, int>{};
+    for (final row in cart.docs) {
+      final product = await db
+          .collection('products')
+          .doc(row.id)
+          .get(const GetOptions(source: Source.server));
+      if (!product.exists) {
+        throw const MarketplaceFailure(
+          'A product is no longer available. Update your cart.',
+        );
+      }
+      products.add(model.Product.fromMap(product.data()!));
+      quantities[row.id] = row.data()['quantity'] as int;
+    }
+    return buildOrder('', uid, products, quantities, address, payment);
   }
 
   Future<model.Order> checkout(

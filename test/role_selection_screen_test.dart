@@ -33,6 +33,11 @@ void main() {
         await tester.ensureVisible(find.text(title));
         await tester.tap(find.text(title));
         await tester.pumpAndSettle();
+        if (title == 'Buyer / Patron') {
+          expect(find.text('Continue to login'), findsOneWidget);
+          await tester.tap(find.byTooltip('Back to roles'));
+          await tester.pumpAndSettle();
+        }
         expect(find.text('ACTIVE'), findsOneWidget);
         final activeCard = find.byWidgetPredicate(
           (widget) =>
@@ -65,7 +70,11 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     await tester.pumpWidget(
-      MaterialApp(theme: AppTheme.light, home: const RoleSelectionScreen()),
+      MaterialApp(
+        theme: AppTheme.light,
+        routes: AppRoutes.routes,
+        initialRoute: RouteNames.roleSelection,
+      ),
     );
     for (final title in [
       'Artisan / Studio Maker',
@@ -76,6 +85,11 @@ void main() {
       await tester.ensureVisible(find.text(title));
       await tester.tap(find.text(title));
       await tester.pumpAndSettle();
+      if (title == 'Buyer / Patron') {
+        expect(tester.takeException(), isNull);
+        await tester.tap(find.byTooltip('Back to roles'));
+        await tester.pumpAndSettle();
+      }
       expect(tester.takeException(), isNull);
     }
     await tester.ensureVisible(find.text('Continue'));

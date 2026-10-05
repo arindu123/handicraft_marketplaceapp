@@ -335,8 +335,11 @@ class BuyerDemo extends ChangeNotifier {
       _checkoutId ??= repository!.db.collection('orders').doc().id;
       final result = await repository!.checkout(
         _checkoutId!,
-        destination,
+        '$address\n$city, $postalCode\n$country',
         payment,
+        recipientName: name,
+        recipientPhone: phone,
+        deliveryInstructions: instructions,
       );
       _checkoutId = null;
       final receipt =

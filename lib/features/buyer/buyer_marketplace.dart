@@ -1,5 +1,6 @@
 import '../../shared/data/community_repository.dart';
 import '../../shared/data/marketplace_repository.dart';
+import '../../shared/widgets/delivery_confirmation_card.dart';
 
 import 'package:flutter/material.dart';
 
@@ -1509,6 +1510,10 @@ class BuyerOrderDetails extends StatelessWidget {
         const _Eyebrow('ORDER REFERENCE'),
         _Heading(order.id),
         _BuyerOrderStatus(status: order.status),
+        if (MarketplaceBackend.enabled &&
+            order.status != BuyerOrderStatus.delivered &&
+            order.status != BuyerOrderStatus.cancelled)
+          DeliveryConfirmationCard(key: ValueKey(order.id), orderId: order.id),
         const SizedBox(height: 18),
         const _Heading('Consigned Pieces'),
         for (final entry in order.items.entries)

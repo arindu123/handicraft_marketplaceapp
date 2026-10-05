@@ -49,12 +49,14 @@ void main() {
     UserRole.courier,
     UserRole.admin,
   ]) {
-    testWidgets('Restores $role using the saved profile', (tester) async {
+    testWidgets('Saved $role session does not skip the welcome screen', (
+      tester,
+    ) async {
       store.profile = {'role': role.name};
       final restored = await AuthSession.restore();
       expect(restored, role);
       expect(store.reads, ['users/new-user-uid']);
-      await tester.pumpWidget(MyApp(initialRole: restored));
+      await tester.pumpWidget(const MyApp());
       await tester.pumpAndSettle();
       final navigator = tester.state<NavigatorState>(
         find.byType(Navigator).first,
@@ -64,7 +66,8 @@ void main() {
         name = route.settings.name;
         return true;
       });
-      expect(name, AuthSession.route(role));
+      expect(name, '/');
+      expect(find.text('Get Started'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
@@ -137,14 +140,14 @@ void main() {
     );
   });
 
-  testWidgets('Startup profile errors remain on welcome and are visible', (
+  testWidgets('Welcome remains accessible without loading a profile', (
     tester,
   ) async {
-    await tester.pumpWidget(
-      const MyApp(sessionError: 'Your account profile is missing.'),
-    );
+    store.reads.clear();
+    store.readError = 'unavailable';
+    await tester.pumpWidget(const MyApp());
     await tester.pumpAndSettle();
-    expect(find.text('Your account profile is missing.'), findsOneWidget);
+    expect(store.reads, isEmpty);
     expect(find.text('Sign In'), findsOneWidget);
   });
 }

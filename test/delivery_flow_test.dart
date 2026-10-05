@@ -24,6 +24,64 @@ Future<void> tapText(WidgetTester tester, String text) async {
 }
 
 void main() {
+  testWidgets('Dashboard opened as the root can return to onboarding', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        routes: AppRoutes.routes,
+        onGenerateInitialRoutes: (_) => [
+          MaterialPageRoute<void>(
+            settings: const RouteSettings(name: RouteNames.deliveryHome),
+            builder: AppRoutes.routes[RouteNames.deliveryHome]!,
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester.state<NavigatorState>(find.byType(Navigator)).canPop(),
+      isFalse,
+    );
+    await tester.tap(find.byTooltip('Back to welcome'));
+    await tester.pumpAndSettle();
+    expect(find.text('Get Started'), findsOneWidget);
+    await tapText(tester, 'Get Started');
+    expect(find.text('Skip'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Role selection works after signup clears navigation history', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        routes: AppRoutes.routes,
+        onGenerateInitialRoutes: (_) => [
+          MaterialPageRoute<void>(
+            settings: const RouteSettings(name: RouteNames.deliveryHome),
+            builder: AppRoutes.routes[RouteNames.deliveryHome]!,
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tapText(tester, 'Profile');
+    await tester.scrollUntilVisible(
+      find.text('Back to role selection'),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .last,
+    );
+    await tapText(tester, 'Back to role selection');
+    expect(find.text('Roles Selection'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('New courier sees sign up first and can switch to login', (
     tester,
   ) async {
@@ -41,11 +99,21 @@ void main() {
     await tapText(tester, 'Log In');
     expect(find.text('Welcome Back'), findsOneWidget);
     await tapText(tester, 'Log In');
-    expect(find.text('Enter your email or phone number.'), findsOneWidget);
+    expect(find.text('Enter your email address.'), findsOneWidget);
     await tapText(tester, 'Quick Track as Guest  →');
     expect(find.text('Kasun Perera'), findsOneWidget);
     expect(find.text("Today's orders"), findsOneWidget);
     await tapText(tester, 'Profile');
+    await tester.scrollUntilVisible(
+      find.text('Back to role selection'),
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .last,
+    );
     await tapText(tester, 'Back to role selection');
     expect(find.text('Roles Selection'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -64,6 +132,12 @@ void main() {
     await tapText(tester, 'Mark as Picked Up');
     await tapText(tester, 'Start Delivery');
     await tapText(tester, 'Mark as Delivered');
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Delivery code'),
+      '123456',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm delivery'));
+    await tester.pumpAndSettle();
     await tapText(tester, 'Back to My Orders');
     await tapText(tester, 'Completed');
     expect(find.text('Handcrafted ceramic vase'), findsOneWidget);

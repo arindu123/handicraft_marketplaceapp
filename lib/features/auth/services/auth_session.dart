@@ -98,6 +98,11 @@ class AuthSession {
         'permission-denied' =>
           'Your account profile could not be accessed. Please contact support.',
         'invalid-email' => 'Enter a valid email address.',
+        'email-already-in-use' =>
+          'An account already exists with this email. Please sign in.',
+        'weak-password' => 'Please choose a stronger password.',
+        'operation-not-allowed' =>
+          'Email/password sign-in is not enabled in Firebase Authentication.',
         'too-many-requests' =>
           'Too many attempts. Please wait a moment and try again.',
         _ => 'Unable to complete this request. Please try again later.',

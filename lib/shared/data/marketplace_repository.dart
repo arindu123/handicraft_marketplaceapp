@@ -258,9 +258,17 @@ class MarketplaceRepository {
   Future<model.Order> checkout(
     String requestId,
     String address,
-    String payment,
-  ) async {
+    String payment, {
+    String recipientName = '',
+    String recipientPhone = '',
+    String deliveryInstructions = '',
+  }) async {
     await requireRole(model.UserRole.buyer);
+    if (recipientName.length > 100 ||
+        recipientPhone.length > 40 ||
+        deliveryInstructions.length > 1000) {
+      throw const MarketplaceFailure('Delivery contact details are too long.');
+    }
     final buyer = uid;
     final ref = db.collection('orders').doc(requestId);
     final cart = await userCollection('cart').get();
@@ -299,15 +307,37 @@ class MarketplaceRepository {
         address,
         payment,
       );
-      tx.set(ref, order.toMap());
+      final studio = products.isEmpty
+          ? null
+          : await tx.get(
+              db.collection('artisanProfiles').doc(products.first.artisanId),
+            );
+      final data = order.toMap();
+      if (recipientName.trim().isNotEmpty) {
+        data['recipientName'] = recipientName.trim();
+      }
+      if (recipientPhone.trim().isNotEmpty) {
+        data['recipientPhone'] = recipientPhone.trim();
+      }
+      if (deliveryInstructions.trim().isNotEmpty) {
+        data['deliveryInstructions'] = deliveryInstructions.trim();
+      }
+      final studioData = studio?.data();
+      if (studioData?['location'] is String) {
+        data['pickupAddress'] = studioData!['location'];
+      }
+      if (studioData?['studioName'] is String) {
+        data['pickupName'] = studioData!['studioName'];
+      }
+      tx.set(ref, data);
       for (final row in cart.docs) {
         tx.delete(row.reference);
       }
-      return order;
+      return model.Order.fromMap(data);
     });
   }
 
-  Future<void> advanceOrder(String id) async {
+  Future<void> advanceOrder(String id, {String? confirmationCode}) async {
     final user = uid;
     final ref = db.collection('orders').doc(id);
     await db.runTransaction((tx) async {
@@ -316,6 +346,12 @@ class MarketplaceRepository {
         throw const MarketplaceFailure('This order is no longer available.');
       }
       final order = model.Order.fromMap(snap.data()!);
+      if (order.status == model.OrderStatus.onTheWay &&
+          !RegExp(r'^\d{6}$').hasMatch(confirmationCode ?? '')) {
+        throw const MarketplaceFailure(
+          'Enter the customer’s six-digit delivery code.',
+        );
+      }
       final next = switch (order.status) {
         model.OrderStatus.pending when order.artisanId == user =>
           model.OrderStatus.confirmed,
@@ -331,6 +367,8 @@ class MarketplaceRepository {
       };
       tx.update(ref, {
         'status': next.name,
+        if (next == model.OrderStatus.delivered)
+          'deliveryConfirmationCode': confirmationCode,
         'updatedAt': DateTime.now().toUtc().toIso8601String(),
       });
     });

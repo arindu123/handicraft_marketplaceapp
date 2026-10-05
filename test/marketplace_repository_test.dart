@@ -114,6 +114,33 @@ void main() {
     expect((await repo.userCollection('cart').get()).docs, hasLength(1));
     expect((await db.collection('orders').get()).docs, isEmpty);
   });
+  test(
+    'Checkout stores delivery contact and pickup details for the courier',
+    () async {
+      await db.doc('artisanProfiles/artisan').set({
+        'studioName': 'Clay Studio',
+        'location': 'Colombo 07',
+      });
+      await repo.cartQuantity('p1', 1);
+      final order = await repo.checkout(
+        'contact-order',
+        '42 Flower Road',
+        'Cash on delivery',
+        recipientName: 'Pasindu',
+        recipientPhone: '0771234567',
+        deliveryInstructions: 'Ring the bell',
+      );
+      final saved = Order.fromMap(
+        (await db.doc('orders/contact-order').get()).data()!,
+      );
+      expect(saved.recipientName, 'Pasindu');
+      expect(saved.recipientPhone, '0771234567');
+      expect(saved.pickupAddress, 'Colombo 07');
+      expect(saved.pickupName, 'Clay Studio');
+      expect(saved.deliveryInstructions, 'Ring the bell');
+      expect(order.toMap(), saved.toMap());
+    },
+  );
   test('Mixed artisans and insufficient stock are rejected', () async {
     await db
         .doc('products/p2')
@@ -192,7 +219,10 @@ void main() {
         OrderStatus.onTheWay,
         OrderStatus.delivered,
       ]) {
-        await courier.advanceOrder('shared');
+        await courier.advanceOrder(
+          'shared',
+          confirmationCode: status == OrderStatus.delivered ? '123456' : null,
+        );
         expect((await repo.orders('buyerId').first).single.status, status);
       }
       await expectLater(

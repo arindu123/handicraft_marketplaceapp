@@ -75,6 +75,23 @@ void main() {
       DeliveryStatus.onTheWay,
     );
     await tap('Mark as Delivered');
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Delivery code'),
+      '000000',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm delivery'));
+    await tester.pumpAndSettle();
+    expect(find.text('Incorrect code. Try 123456.'), findsOneWidget);
+    expect(
+      tester.widget<DeliveryStatusTracker>(tracker).status,
+      DeliveryStatus.onTheWay,
+    );
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Delivery code'),
+      '123456',
+    );
+    await tester.tap(find.widgetWithText(FilledButton, 'Confirm delivery'));
+    await tester.pumpAndSettle();
     expect(
       tester.widget<DeliveryStatusTracker>(tracker).status,
       DeliveryStatus.delivered,

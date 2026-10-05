@@ -265,10 +265,20 @@ class Order {
     required this.total,
     required this.createdAt,
     this.updatedAt,
+    this.recipientName = '',
+    this.recipientPhone = '',
+    this.pickupAddress = '',
+    this.pickupName = '',
+    this.deliveryInstructions = '',
   }) : items = List.unmodifiable(items);
 
   final String id, buyerId, artisanId, deliveryAddress, paymentMethod;
   final String? courierId;
+  final String recipientName,
+      recipientPhone,
+      pickupAddress,
+      pickupName,
+      deliveryInstructions;
   final List<OrderItem> items;
   final OrderStatus status;
   final double subtotal, deliveryFee, total;
@@ -284,6 +294,12 @@ class Order {
     'status': status.name,
     'deliveryAddress': deliveryAddress,
     'paymentMethod': paymentMethod,
+    if (recipientName.isNotEmpty) 'recipientName': recipientName,
+    if (recipientPhone.isNotEmpty) 'recipientPhone': recipientPhone,
+    if (pickupAddress.isNotEmpty) 'pickupAddress': pickupAddress,
+    if (pickupName.isNotEmpty) 'pickupName': pickupName,
+    if (deliveryInstructions.isNotEmpty)
+      'deliveryInstructions': deliveryInstructions,
     'subtotal': subtotal,
     'deliveryFee': deliveryFee,
     'total': total,
@@ -304,6 +320,11 @@ class Order {
     status: OrderStatus.values.byName(map['status'] as String),
     deliveryAddress: map['deliveryAddress'] as String,
     paymentMethod: map['paymentMethod'] as String,
+    recipientName: map['recipientName'] as String? ?? '',
+    recipientPhone: map['recipientPhone'] as String? ?? '',
+    pickupAddress: map['pickupAddress'] as String? ?? '',
+    pickupName: map['pickupName'] as String? ?? '',
+    deliveryInstructions: map['deliveryInstructions'] as String? ?? '',
     subtotal: _number(map, 'subtotal'),
     deliveryFee: _number(map, 'deliveryFee'),
     total: _number(map, 'total'),

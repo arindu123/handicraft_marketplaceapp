@@ -1,6 +1,9 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../../../routes/route_names.dart';
+import '../../../shared/models/domain_models.dart' show UserRole;
 import '../../auth/models/marketplace_role.dart';
 import '../../auth/services/auth_session.dart';
 import '../widgets/delivery_widgets.dart';
@@ -22,6 +25,7 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
   bool _remember = true;
   bool _register = false;
   bool _entryInitialized = false;
+  User? _incompleteSignup;
 
   @override
   void didChangeDependencies() {
@@ -45,35 +49,70 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
     if (_submitting) return;
     if (!_form.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
-    if (!_register) {
-      setState(() => _submitting = true);
-      try {
-        final role = await AuthSession.signIn(_email.text, _password.text);
-        if (!mounted) return;
-        Navigator.pushNamedAndRemoveUntil(
-          context,
-          AuthSession.route(role),
-          (_) => false,
-          arguments: AuthSession.selection(role),
-        );
-      } catch (error) {
-        if (mounted) {
-          showDeliveryNotice(
-            context,
-            'Unable to sign in',
-            AuthSession.message(error),
+    final registering = _register;
+    final email = _email.text.trim();
+    final password = _password.text;
+    final name = _name.text.trim();
+    setState(() => _submitting = true);
+    try {
+      final UserRole role;
+      if (registering) {
+        if (_incompleteSignup != null) await _cleanUpSignup();
+        final credential = await FirebaseAuth.instance
+            .createUserWithEmailAndPassword(email: email, password: password);
+        final user = credential.user!;
+        try {
+          await FirebaseFirestore.instance
+              .collection('users')
+              .doc(user.uid)
+              .set({
+                'uid': user.uid,
+                'email': user.email ?? email,
+                'displayName': name,
+                'role': UserRole.courier.name,
+                'createdAt': FieldValue.serverTimestamp(),
+                'updatedAt': FieldValue.serverTimestamp(),
+              });
+        } catch (_) {
+          _incompleteSignup = user;
+          await _cleanUpSignup();
+          throw const ProfileException(
+            'We could not save your profile. Your new account was removed. Please try signing up again.',
           );
         }
-      } finally {
-        if (mounted) setState(() => _submitting = false);
+        role = UserRole.courier;
+      } else {
+        role = await AuthSession.signIn(email, password);
       }
-      return;
+      if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AuthSession.route(role),
+        (_) => false,
+        arguments: AuthSession.selection(role),
+      );
+    } catch (error) {
+      if (mounted) {
+        showDeliveryNotice(
+          context,
+          registering ? 'Unable to sign up' : 'Unable to sign in',
+          AuthSession.message(error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
-    showDeliveryNotice(
-      context,
-      _register ? 'Registration unavailable' : 'Sign-in unavailable',
-      'Delivery accounts are not available yet. Use Quick Track as Guest to explore the demo.',
-    );
+  }
+
+  Future<void> _cleanUpSignup() async {
+    try {
+      await _incompleteSignup!.delete();
+      _incompleteSignup = null;
+    } catch (_) {
+      throw const ProfileException(
+        'We could not finish account setup or remove the incomplete account. Check your connection and submit again to retry cleanup. If this continues, contact support.',
+      );
+    }
   }
 
   @override
@@ -146,18 +185,17 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
                       textInputAction: TextInputAction.next,
                       autofillHints: const [AutofillHints.email],
                       decoration: const InputDecoration(
-                        hintText: 'Email or Phone',
+                        hintText: 'Email address',
                         prefixIcon: Icon(Icons.mail_outline, size: 19),
                       ),
                       validator: (value) {
                         final input = value?.trim() ?? '';
                         if (input.isEmpty) {
-                          return 'Enter your email or phone number.';
+                          return 'Enter your email address.';
                         }
                         if (!RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
-                                .hasMatch(input) &&
-                            !RegExp(r'^\+?[0-9 ()-]{9,16}$').hasMatch(input)) {
-                          return 'Enter a valid email or phone number.';
+                            .hasMatch(input)) {
+                          return 'Enter a valid email address.';
                         }
                         return null;
                       },
@@ -244,7 +282,11 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
                       ),
                     const SizedBox(height: 10),
                     DeliveryButton(
-                      label: _register ? 'Sign Up' : 'Log In',
+                      label: _submitting
+                          ? (_register
+                                ? 'Creating account...'
+                                : 'Signing in...')
+                          : (_register ? 'Sign Up' : 'Log In'),
                       onPressed: _submit,
                     ),
                     const SizedBox(height: 20),
@@ -292,6 +334,7 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
                         ),
                         TextButton(
                           onPressed: () {
+                            if (_submitting) return;
                             _form.currentState?.reset();
                             setState(() => _register = !_register);
                           },

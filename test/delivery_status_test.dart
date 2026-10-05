@@ -5,6 +5,50 @@ import 'package:artisan_marketplace/features/delivery/screens/delivery_home_scre
 import 'package:artisan_marketplace/features/delivery/widgets/delivery_status_widgets.dart';
 
 void main() {
+  test('Earnings use completion dates and exclude unconfirmed amounts', () {
+    DeliveryOrder completed(
+      DateTime date,
+      double amount, {
+      bool confirmed = true,
+    }) => DeliveryOrder(
+      id: 'test',
+      title: 'Parcel',
+      pickup: 'Studio',
+      destination: 'Customer',
+      service: 'Fragile parcel',
+      createdAt: DateTime(2026, 9, 30),
+      completedAt: date,
+      earnings: amount,
+      earningsConfirmed: confirmed,
+      status: DeliveryStatus.delivered,
+    );
+    final orders = [
+      completed(DateTime(2026, 10, 7), 20),
+      completed(DateTime(2026, 10, 6), 30),
+      completed(DateTime(2026, 10, 4), 40),
+      completed(DateTime(2026, 10, 7), 99, confirmed: false),
+      completed(DateTime(2026, 10, 8), 50),
+    ];
+    expect(
+      DeliveryOrder.earningsBetween(
+        orders,
+        DateTime(2026, 10, 7),
+        DateTime(2026, 10, 8),
+      ),
+      20,
+    );
+    expect(
+      DeliveryOrder.earningsBetween(
+        orders,
+        DateTime(2026, 10, 5),
+        DateTime(2026, 10, 8),
+      ),
+      50,
+    );
+    expect(orders.first.createdOn(DateTime(2026, 10, 7)), isFalse);
+    expect(orders.first.createdOn(DateTime(2026, 9, 30, 23)), isTrue);
+  });
+
   test('Delivery advances one stage at a time and completion is terminal', () {
     final order = DeliveryOrder.demoOrders().first;
     for (final expected in DeliveryStatus.values) {

@@ -270,6 +270,7 @@ class Order {
     this.pickupAddress = '',
     this.pickupName = '',
     this.deliveryInstructions = '',
+    this.courierEarnings,
   }) : items = List.unmodifiable(items);
 
   final String id, buyerId, artisanId, deliveryAddress, paymentMethod;
@@ -282,6 +283,8 @@ class Order {
   final List<OrderItem> items;
   final OrderStatus status;
   final double subtotal, deliveryFee, total;
+  // Set by the trusted payout backend; the customer delivery fee is separate.
+  final double? courierEarnings;
   final DateTime createdAt;
   final DateTime? updatedAt;
 
@@ -302,6 +305,7 @@ class Order {
       'deliveryInstructions': deliveryInstructions,
     'subtotal': subtotal,
     'deliveryFee': deliveryFee,
+    if (courierEarnings != null) 'courierEarnings': courierEarnings,
     'total': total,
     'createdAt': createdAt.toIso8601String(),
     'updatedAt': updatedAt?.toIso8601String(),
@@ -325,6 +329,7 @@ class Order {
     pickupAddress: map['pickupAddress'] as String? ?? '',
     pickupName: map['pickupName'] as String? ?? '',
     deliveryInstructions: map['deliveryInstructions'] as String? ?? '',
+    courierEarnings: (map['courierEarnings'] as num?)?.toDouble(),
     subtotal: _number(map, 'subtotal'),
     deliveryFee: _number(map, 'deliveryFee'),
     total: _number(map, 'total'),

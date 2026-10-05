@@ -74,7 +74,14 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
     if (FirebaseAuth.instance.currentUser == null) return;
     _profiles = ProfileRepository();
     _profileSubscription = _profiles!.watch().listen((profile) {
-      if (mounted) setState(() => _profile = profile);
+      if (mounted) {
+        setState(() {
+          _profile = profile;
+          if (!_savingAvailability) {
+            _online = profile['deliveryOnline'] as bool? ?? false;
+          }
+        });
+      }
     }, onError: _error);
 
     try {
@@ -112,7 +119,6 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
                   row.status == canonical.OrderStatus.courierAssigned,
             ),
           );
-          final previous = {for (final o in _orders) o.id: o};
 
           _orders.clear();
 
@@ -139,7 +145,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
               _ => DeliveryStatus.delivered,
             };
 
-            final order = previous[row.id] ?? DeliveryOrder.fromOrder(row);
+            final order = DeliveryOrder.fromOrder(row);
 
             order.syncStatus(status);
 
@@ -170,6 +176,29 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
   bool _notifications = true;
 
   bool _online = true;
+  bool _savingAvailability = false;
+
+  Future<void> _setAvailability(bool value) async {
+    if (!MarketplaceBackend.enabled) {
+      setState(() => _online = value);
+      return;
+    }
+    if (_profiles == null || _profile == null || _savingAvailability) return;
+    setState(() => _savingAvailability = true);
+    try {
+      await _profiles!.setDeliveryAvailability(value);
+      if (mounted) setState(() => _online = value);
+    } catch (e) {
+      _error(e);
+    } finally {
+      if (mounted) setState(() => _savingAvailability = false);
+    }
+  }
+
+  String get _currency => MarketplaceBackend.enabled ? 'USD' : 'Rs.';
+  String _earningsLabel(DeliveryOrder order) => order.earningsConfirmed
+      ? '$_currency ${order.earnings.toStringAsFixed(2)}'
+      : 'Earnings pending';
 
   String get _riderName => MarketplaceBackend.enabled
       ? (_profile?['displayName'] as String? ?? 'Your profile')
@@ -262,13 +291,22 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
 
   Widget _home() {
     final query = _search.text.trim().toLowerCase();
+    final today = DateTime.now();
 
     final orders = _orders
-        .where((order) => order.id.toLowerCase().contains(query))
+        .where(
+          (order) =>
+              order.createdOn(today) && order.id.toLowerCase().contains(query),
+        )
         .toList();
 
     final waiting = _orders
-        .where((order) => order.status == DeliveryStatus.pending)
+        .where(
+          (order) =>
+              order.createdOn(today) &&
+              (order.status == DeliveryStatus.pending ||
+                  order.status == DeliveryStatus.accepted),
+        )
         .length;
 
     return SingleChildScrollView(
@@ -529,12 +567,24 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
 
     activeThumbColor: DeliveryStyle.orange,
 
-    onChanged: (value) => setState(() => _online = value),
+    onChanged:
+        _savingAvailability || (MarketplaceBackend.enabled && _profile == null)
+        ? null
+        : _setAvailability,
   );
 
-  double get _earned => _orders
-      .where((order) => order.delivered)
-      .fold(0.0, (total, order) => total + order.earnings);
+  double _earned({bool week = false}) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final start = week
+        ? DateTime(now.year, now.month, now.day - (now.weekday - 1))
+        : today;
+    return DeliveryOrder.earningsBetween(
+      _orders,
+      start,
+      DateTime(now.year, now.month, now.day + 1),
+    );
+  }
 
   Widget _balanceCard() => Container(
     padding: const EdgeInsets.all(16),
@@ -566,7 +616,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
             _MoneyStat(
               label: 'Today',
 
-              amount: 'Rs. ${_earned.toStringAsFixed(2)}',
+              amount: '$_currency ${_earned().toStringAsFixed(2)}',
 
               icon: Icons.today,
 
@@ -576,7 +626,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
             _MoneyStat(
               label: 'This week',
 
-              amount: 'Rs. ${_earned.toStringAsFixed(2)}',
+              amount: '$_currency ${_earned(week: true).toStringAsFixed(2)}',
 
               icon: Icons.date_range,
 
@@ -586,6 +636,14 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
         ),
 
         const SizedBox(height: 14),
+
+        if (_orders.any((order) => order.delivered && !order.earningsConfirmed))
+          const Padding(
+            padding: EdgeInsets.only(bottom: 12),
+            child: Text(
+              'Some delivery earnings are pending confirmation and are excluded from these totals.',
+            ),
+          ),
 
         FilledButton.icon(
           onPressed: () => showDeliveryNotice(
@@ -663,7 +721,9 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
                   DeliveryStatusPill(status: order.status),
 
                   Text(
-                    'Earn Rs. ${order.earnings.toStringAsFixed(2)}',
+                    order.earningsConfirmed
+                        ? 'Earn ${_earningsLabel(order)}'
+                        : _earningsLabel(order),
 
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
@@ -693,7 +753,12 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
       padding: const EdgeInsets.all(20),
 
       children: [
-        _heading('My Orders', 'Sample deliveries for your courier workspace.'),
+        _heading(
+          'My Orders',
+          MarketplaceBackend.enabled
+              ? 'Your assigned deliveries.'
+              : 'Sample deliveries for your courier workspace.',
+        ),
 
         const SizedBox(height: 18),
 
@@ -1044,9 +1109,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
 
           title: Text(order.title, style: const TextStyle(fontSize: 14)),
 
-          subtitle: Text(
-            '${order.id} \u00b7 Rs. ${order.earnings.toStringAsFixed(2)}',
-          ),
+          subtitle: Text('${order.id} \u00b7 ${_earningsLabel(order)}'),
         ),
     ],
   );

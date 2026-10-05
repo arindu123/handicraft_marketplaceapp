@@ -41,6 +41,19 @@ void main() {
     expect(delivery.destination, '42 Flower Road\nColombo, 00300\nSri Lanka');
     expect(delivery.pickup, isEmpty);
     expect(delivery.deliveryFee, 14);
+    expect(delivery.earningsConfirmed, isFalse);
+    // Customer delivery fees must not silently become courier earnings.
+    final paidOrder = domain.Order.fromMap({
+      ...order.toMap(),
+      'status': 'delivered',
+      'updatedAt': '2026-10-07T10:00:00.000Z',
+      'courierEarnings': 9.5,
+    });
+    final paidDelivery = DeliveryOrder.fromOrder(paidOrder);
+    expect(paidDelivery.earningsConfirmed, isTrue);
+    expect(paidDelivery.earnings, 9.5);
+    expect(paidDelivery.completedAt, DateTime.utc(2026, 10, 7, 10));
+    expect(paidOrder.toMap()['courierEarnings'], 9.5);
   });
 
   testWidgets('Directions and call buttons launch the correct destinations', (

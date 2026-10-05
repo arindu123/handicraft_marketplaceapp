@@ -25,10 +25,14 @@ class DeliveryOrder {
     this.pickupName = '',
     this.instructions = '',
     this.deliveryFee,
+    DateTime? createdAt,
+    this.completedAt,
+    this.earningsConfirmed = true,
     DeliveryStatus status = DeliveryStatus.pending,
     // Keep status read-only to callers so demo actions cannot skip milestones.
     // ignore: prefer_initializing_formals
-  }) : _status = status;
+  }) : _status = status,
+       createdAt = createdAt ?? DateTime.now();
   final String id;
   final String title;
   final String pickup;
@@ -37,6 +41,29 @@ class DeliveryOrder {
   final double earnings;
   final String recipientName, recipientPhone, pickupName, instructions;
   final double? deliveryFee;
+  final DateTime createdAt;
+  DateTime? completedAt;
+  final bool earningsConfirmed;
+
+  bool createdOn(DateTime day) => _sameDay(createdAt.toLocal(), day.toLocal());
+
+  static bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  static double earningsBetween(
+    Iterable<DeliveryOrder> orders,
+    DateTime start,
+    DateTime end,
+  ) => orders
+      .where((order) {
+        final completed = order.completedAt;
+        return order.delivered &&
+            order.earningsConfirmed &&
+            completed != null &&
+            !completed.isBefore(start) &&
+            completed.isBefore(end);
+      })
+      .fold(0.0, (total, order) => total + order.earnings);
 
   factory DeliveryOrder.fromOrder(domain.Order order) {
     final lines = order.deliveryAddress.split('\n');
@@ -59,6 +86,12 @@ class DeliveryOrder {
       recipientPhone: legacy ? lines.last : order.recipientPhone,
       instructions: order.deliveryInstructions,
       deliveryFee: order.deliveryFee,
+      createdAt: order.createdAt,
+      completedAt: order.status == domain.OrderStatus.delivered
+          ? order.updatedAt
+          : null,
+      earnings: order.courierEarnings ?? 0,
+      earningsConfirmed: order.courierEarnings != null,
       service: 'Fragile parcel',
       status: switch (order.status) {
         domain.OrderStatus.courierAssigned => DeliveryStatus.accepted,
@@ -76,7 +109,10 @@ class DeliveryOrder {
 
   /// Advances one milestone only; completion is terminal for this demo session.
   void advance() {
-    if (!delivered) _status = DeliveryStatus.values[_status.index + 1];
+    if (!delivered) {
+      _status = DeliveryStatus.values[_status.index + 1];
+      if (delivered) completedAt = DateTime.now();
+    }
   }
 
   static List<DeliveryOrder> demoOrders() => [
@@ -104,6 +140,7 @@ class DeliveryOrder {
       service: 'Ride',
       earnings: 650,
       status: DeliveryStatus.delivered,
+      completedAt: DateTime.now(),
     ),
   ];
 }

@@ -33,6 +33,22 @@ class ProfileRepository {
         return data;
       });
 
+  Future<void> setDeliveryAvailability(bool online) async {
+    final ref = db.collection('users').doc(uid);
+    await db.runTransaction((tx) async {
+      final profile = await tx.get(ref);
+      if (profile.data()?['role'] != 'courier') {
+        throw const MarketplaceFailure(
+          'Only couriers can change availability.',
+        );
+      }
+      tx.update(ref, {
+        'deliveryOnline': online,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
   Future<void> save({
     required String displayName,
     required String area,

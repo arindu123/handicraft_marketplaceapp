@@ -25,6 +25,10 @@ service cloud.firestore {
         && (request.resource.data.get('photoUrl', '') == '' || request.resource.data.photoUrl.matches('https://.*'))
         && request.resource.data.updatedAt == request.time;
       allow update: if isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active']) && request.resource.data.active is bool;
+      allow update: if owner(uid) && role('courier')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveryOnline', 'updatedAt'])
+        && request.resource.data.deliveryOnline is bool
+        && request.resource.data.updatedAt == request.time;
       allow delete: if false;
       match /cart/{productId} {
         allow read, delete: if owner(uid);

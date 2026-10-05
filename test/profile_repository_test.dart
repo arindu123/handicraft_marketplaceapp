@@ -77,6 +77,25 @@ void main() {
     expect((await repo.watch().first).containsKey('photoUrl'), isFalse);
   });
 
+  test('Courier availability persists and rejects other roles', () async {
+    await repo.setDeliveryAvailability(true);
+    final online = await repo.watch().firstWhere(
+      (profile) => profile['deliveryOnline'] == true,
+    );
+    expect(online['deliveryOnline'], isTrue);
+    await repo.setDeliveryAvailability(false);
+    final offline = await repo.watch().firstWhere(
+      (profile) => profile['deliveryOnline'] == false,
+    );
+    expect(offline['deliveryOnline'], isFalse);
+    await db.collection('users').doc('pasindu').update({'role': 'buyer'});
+    await expectLater(
+      repo.setDeliveryAvailability(true),
+      throwsA(isA<MarketplaceFailure>()),
+    );
+    expect((await repo.watch().first)['deliveryOnline'], isFalse);
+  });
+
   test('Rejects invalid fields and oversized photos', () async {
     await expectLater(
       repo.save(displayName: ' ', area: ''),

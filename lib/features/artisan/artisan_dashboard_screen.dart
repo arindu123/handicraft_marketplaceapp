@@ -12,6 +12,7 @@ import '../../shared/models/craftisan_demo_messages.dart';
 import '../../shared/widgets/custom_button.dart';
 import '../../shared/widgets/custom_text_field.dart';
 import '../../shared/widgets/craftisan_messaging.dart';
+import '../auth/models/marketplace_role.dart';
 import 'artisan_demo.dart';
 
 void _open(BuildContext context, Widget page) =>
@@ -59,6 +60,12 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: demo,
     builder: (context, _) => _Page(
+      back: () => Navigator.pushNamedAndRemoveUntil(
+        context,
+        RouteNames.roleSelection,
+        (_) => false,
+        arguments: AuthEntry.signIn,
+      ),
       title: const [
         'Artisan Dashboard',
         'My Products',

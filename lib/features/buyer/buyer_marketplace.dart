@@ -11,6 +11,9 @@ import '../../shared/models/craftisan_demo_messages.dart';
 import '../../shared/widgets/custom_button.dart';
 import '../../shared/widgets/craftisan_messaging.dart';
 import 'buyer_demo.dart';
+import 'collector_profile_header.dart';
+import '../../shared/data/profile_repository.dart';
+import 'rotating_product_banner.dart';
 
 void _open(BuildContext context, Widget screen) =>
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
@@ -42,6 +45,9 @@ class _BuyerMarketplaceState extends State<BuyerMarketplace> {
 
   @override
   Widget build(BuildContext context) {
+    final bannerProducts = demo.products
+        .where((p) => p.imageUrl?.trim().isNotEmpty == true)
+        .toList();
     final categories = demo.products
         .map((p) => p.category)
         .where((c) => c.isNotEmpty)
@@ -122,7 +128,7 @@ class _BuyerMarketplaceState extends State<BuyerMarketplace> {
               },
             ),
           ),
-        if (demo.products.any((p) => p.imageUrl != null))
+        if (bannerProducts.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
             child: ClipRRect(
@@ -132,7 +138,12 @@ class _BuyerMarketplaceState extends State<BuyerMarketplace> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    _Photo(demo.products.firstWhere((p) => p.imageUrl != null)),
+                    RotatingProductBanner(
+                      imageKeys: bannerProducts
+                          .map((p) => '${p.id}:${p.imageUrl}')
+                          .toList(),
+                      imageBuilder: (_, index) => _Photo(bannerProducts[index]),
+                    ),
                     const DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
@@ -357,7 +368,14 @@ class _BuyerPage extends StatelessWidget {
             if (tab == 0)
               IconButton(
                 tooltip: 'Profile',
-                icon: const Icon(Icons.person_outline),
+                icon: CollectorProfileIcon(
+                  repository: demo.repository == null
+                      ? null
+                      : ProfileRepository(
+                          firestore: demo.repository!.db,
+                          auth: demo.repository!.auth,
+                        ),
+                ),
                 onPressed: () => _open(context, BuyerProfile(demo: demo)),
               ),
           ],
@@ -583,6 +601,46 @@ class _Photo extends StatelessWidget {
   );
 }
 
+class _ProductCardPhotos extends StatelessWidget {
+  const _ProductCardPhotos(this.product);
+  final DemoProduct product;
+
+  @override
+  Widget build(BuildContext context) {
+    final images = [
+      ?product.imageUrl,
+      ...product.imageUrls,
+    ].where((url) => url.trim().isNotEmpty).toSet().toList();
+    if (images.length < 2) return _Photo(product, url: images.firstOrNull);
+    return RotatingProductBanner(
+      key: ValueKey(product.id),
+      slide: true,
+      imageKeys: images,
+      imageBuilder: (_, index) => Stack(
+        fit: StackFit.expand,
+        children: [
+          _Photo(product, url: images[index]),
+          Positioned(
+            bottom: 8,
+            left: 8,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '${index + 1}/${images.length}',
+                style: const TextStyle(color: Colors.white, fontSize: 10),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _ProductCard extends StatelessWidget {
   const _ProductCard({required this.demo, required this.product});
   final BuyerDemo demo;
@@ -600,7 +658,10 @@ class _ProductCard extends StatelessWidget {
         children: [
           Stack(
             children: [
-              AspectRatio(aspectRatio: 1.06, child: _Photo(product)),
+              AspectRatio(
+                aspectRatio: 1.06,
+                child: _ProductCardPhotos(product),
+              ),
               Positioned(
                 top: 6,
                 right: 6,
@@ -1580,19 +1641,14 @@ class BuyerProfile extends StatelessWidget {
     title: 'Collector Profile',
     tab: 4,
     children: [
-      const Center(
-        child: CircleAvatar(
-          radius: 40,
-          backgroundColor: AppColors.surface,
-          child: Icon(
-            Icons.person_outline,
-            size: 40,
-            color: AppColors.terracotta,
-          ),
-        ),
+      CollectorProfileHeader(
+        repository: demo.repository == null
+            ? null
+            : ProfileRepository(
+                firestore: demo.repository!.db,
+                auth: demo.repository!.auth,
+              ),
       ),
-      const SizedBox(height: 20),
-      const _Heading('Your account'),
       const SizedBox(height: 20),
       const _Heading('Collector Hub'),
       _Panel(

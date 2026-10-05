@@ -75,6 +75,16 @@ class MarketplaceRepository {
     );
   }
 
+  Future<List<model.Product>> fetchProducts() async {
+    final snapshot = await db
+        .collection('products')
+        .where('status', isEqualTo: 'active')
+        .get(const GetOptions(source: Source.server));
+    return snapshot.docs
+        .map((d) => model.Product.fromMap({...d.data(), 'id': d.id}))
+        .toList();
+  }
+
   Stream<List<model.Order>> orders(String relationship) => db
       .collection('orders')
       .where(relationship, isEqualTo: uid)
@@ -84,6 +94,36 @@ class MarketplaceRepository {
             .map((d) => model.Order.fromMap({...d.data(), 'id': d.id}))
             .toList(),
       );
+
+  Stream<List<model.Order>> availableDeliveries() => db
+      .collection('orders')
+      .where('status', isEqualTo: 'confirmed')
+      .where('courierId', isNull: true)
+      .snapshots()
+      .map(
+        (s) => s.docs
+            .map((d) => model.Order.fromMap({...d.data(), 'id': d.id}))
+            .toList(),
+      );
+
+  Future<void> acceptDelivery(String id) async {
+    await requireRole(model.UserRole.courier);
+    final courier = uid;
+    final ref = db.collection('orders').doc(id);
+    await db.runTransaction((tx) async {
+      final snapshot = await tx.get(ref);
+      if (!snapshot.exists ||
+          snapshot.data()!['status'] != 'confirmed' ||
+          snapshot.data()!['courierId'] != null) {
+        throw const MarketplaceFailure('This delivery is no longer available.');
+      }
+      tx.update(ref, {
+        'courierId': courier,
+        'status': 'courierAssigned',
+        'updatedAt': DateTime.now().toUtc().toIso8601String(),
+      });
+    });
+  }
 
   Future<model.Product> saveProduct(
     model.Product draft,
@@ -186,6 +226,9 @@ class MarketplaceRepository {
     }
   }
 
+  // Existing USD/COD contract, also enforced by firestore.rules validOrder.
+  static double deliveryFeeFor(double subtotal) => subtotal >= 250 ? 0 : 14;
+
   static model.Order buildOrder(
     String id,
     String buyer,
@@ -194,9 +237,9 @@ class MarketplaceRepository {
     String address,
     String payment,
   ) {
-    if (products.isEmpty || products.length > 8) {
+    if (products.isEmpty || products.length > 4) {
       throw const MarketplaceFailure(
-        'Choose between 1 and 8 different products per order.',
+        'Choose between 1 and 4 different products per order.',
       );
     }
     if (products.map((p) => p.artisanId).toSet().length != 1) {
@@ -239,7 +282,7 @@ class MarketplaceRepository {
       0,
       (total, i) => total + i.unitPrice * i.quantity,
     );
-    final fee = subtotal >= 250 ? 0.0 : 14.0;
+    final fee = deliveryFeeFor(subtotal);
     return model.Order(
       id: id,
       buyerId: buyer,
@@ -253,6 +296,31 @@ class MarketplaceRepository {
       total: subtotal + fee,
       createdAt: DateTime.now().toUtc(),
     );
+  }
+
+  /// Refresh the persisted cart and products before advancing checkout.
+  /// Final prices, stock, delivery fee and pending status are enforced by rules
+  /// in the atomic order transaction; this preflight never creates an order.
+  Future<model.Order> validateCheckout(String address, String payment) async {
+    await requireRole(model.UserRole.buyer);
+    final cart = await userCollection('cart')
+        .get(const GetOptions(source: Source.server));
+    final products = <model.Product>[];
+    final quantities = <String, int>{};
+    for (final row in cart.docs) {
+      final product = await db
+          .collection('products')
+          .doc(row.id)
+          .get(const GetOptions(source: Source.server));
+      if (!product.exists) {
+        throw const MarketplaceFailure(
+          'A product is no longer available. Update your cart.',
+        );
+      }
+      products.add(model.Product.fromMap(product.data()!));
+      quantities[row.id] = row.data()['quantity'] as int;
+    }
+    return buildOrder('', uid, products, quantities, address, payment);
   }
 
   Future<model.Order> checkout(
@@ -330,6 +398,12 @@ class MarketplaceRepository {
         data['pickupName'] = studioData!['studioName'];
       }
       tx.set(ref, data);
+      for (final product in products) {
+        tx.update(db.collection('products').doc(product.id), {
+          'stock': product.stock - quantities[product.id]!,
+          'lastOrderId': ref.id,
+        });
+      }
       for (final row in cart.docs) {
         tx.delete(row.reference);
       }

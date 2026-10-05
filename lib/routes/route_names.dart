@@ -8,6 +8,7 @@ class RouteNames {
   static const passwordResetNew = '/password-reset/new-password';
   static const passwordResetSuccess = '/password-reset/success';
   static const roleSelection = '/roles';
+  static const buyerLanding = '/buyer/welcome';
   static const deliverySplash = '/delivery';
   static const deliveryLogin = '/delivery/login';
   static const deliveryHome = '/delivery/home';

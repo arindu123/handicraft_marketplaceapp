@@ -93,6 +93,7 @@ void main() {
     expect(order.total, 134);
     expect(order.buyerId, 'buyer');
     expect(order.artisanId, 'artisan');
+    expect((await db.doc('products/p1').get()).data()!['stock'], 3);
     expect((await repo.userCollection('cart').get()).docs, isEmpty);
     expect(
       (await repo.checkout(
@@ -205,15 +206,13 @@ void main() {
         OrderStatus.confirmed,
       );
       final courier = repository('courier', UserRole.courier);
+      expect((await courier.availableDeliveries().first).single.id, 'shared');
+      await courier.acceptDelivery('shared');
+      expect(await courier.availableDeliveries().first, isEmpty);
       await expectLater(
-        courier.advanceOrder('shared'),
+        repository('other-courier', UserRole.courier).acceptDelivery('shared'),
         throwsA(isA<MarketplaceFailure>()),
       );
-      // Assignment is a trusted backend operation, never a client self-assignment.
-      await db.doc('orders/shared').update({
-        'courierId': 'courier',
-        'status': 'courierAssigned',
-      });
       for (final status in [
         OrderStatus.pickedUp,
         OrderStatus.onTheWay,

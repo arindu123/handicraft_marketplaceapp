@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:artisan_marketplace/shared/data/marketplace_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:artisan_marketplace/core/theme/app_theme.dart';
@@ -12,6 +13,17 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final demo = BuyerDemo();
+    demo.orders.add(
+      BuyerDemoOrder(
+        id: 'test-order',
+        items: {demoProducts.first: 1},
+        date: '2026-01-01',
+        status: BuyerOrderStatus.onTheWay,
+        address: 'Test address',
+        payment: 'Cash on delivery',
+        deliveryFee: 14,
+      ),
+    );
     addTearDown(demo.dispose);
     await tester.pumpWidget(
       MaterialApp(
@@ -35,7 +47,7 @@ void main() {
     expect(find.text('On The Way'), findsOneWidget);
     await tap('Handcrafted Terracotta Ribbed Vase');
     expect(find.text('Order Details'), findsOneWidget);
-    expect(find.text('Demo Visa ending in 4092'), findsOneWidget);
+    expect(find.text('Cash on delivery'), findsOneWidget);
     await tap('Track Order');
     expect(find.text('Order Tracking'), findsOneWidget);
     for (final stage in BuyerOrderStatus.values.where(
@@ -50,12 +62,13 @@ void main() {
     expect(find.text('Order Details'), findsOneWidget);
   });
 
-  test('New checkout order is session-only and starts confirmed', () {
+  test('Disconnected checkout cannot fabricate a confirmed order', () {
     final demo = BuyerDemo();
-    final order = demo.createOrder({demoProducts.first: 1}, 134);
-    expect(order.status, BuyerOrderStatus.confirmed);
-    expect(order.total, 134);
-    expect(demo.orders.first, order);
+    expect(
+      () => demo.createOrder({demoProducts.first: 1}, 134),
+      throwsA(isA<MarketplaceFailure>()),
+    );
+    expect(demo.orders, isEmpty);
     demo.dispose();
   });
 }

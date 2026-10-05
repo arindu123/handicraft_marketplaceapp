@@ -13,7 +13,9 @@ void main() {
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    final demo = BuyerDemo();
+    final demo = BuyerDemo()
+      ..products = List.of(demoProducts)
+      ..catalogError = null;
     addTearDown(demo.dispose);
     await tester.pumpWidget(
       MaterialApp(
@@ -23,19 +25,35 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    Future<void> toggleFilters() async {
+      tester
+          .state<ScrollableState>(find.byType(Scrollable).first)
+          .position
+          .jumpTo(0);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithIcon(OutlinedButton, Icons.tune));
+      await tester.pumpAndSettle();
+    }
+
+    await toggleFilters();
     await tester.tap(find.text('Colombo'));
     await tester.pumpAndSettle();
-    expect(find.text('Filter Artifacts · 1 active'), findsOneWidget);
+    await toggleFilters();
+    expect(find.text('Filters  1'), findsOneWidget);
     expect(find.text('1 pieces found'), findsOneWidget);
 
-    await tester.tap(find.text('Elena Rostova'));
+    await toggleFilters();
+    await tester.ensureVisible(find.text('Oaxaca Traditional Atelier').first);
     await tester.pumpAndSettle();
-    expect(find.text('Filter Artifacts · 2 active'), findsOneWidget);
+    await tester.tap(find.text('Oaxaca Traditional Atelier').first);
+    await tester.pumpAndSettle();
+    await toggleFilters();
+    expect(find.text('Filters  2'), findsOneWidget);
     expect(find.text('1 pieces found'), findsOneWidget);
 
-    await tester.tap(find.text('Clear'));
+    await tester.tap(find.text('Clear all'));
     await tester.pumpAndSettle();
-    expect(find.text('Filter Artifacts · 0 active'), findsOneWidget);
+    expect(find.text('Filters'), findsOneWidget);
     expect(find.text('3 pieces found'), findsOneWidget);
   });
 

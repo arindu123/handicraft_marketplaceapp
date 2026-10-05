@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../features/buyer/buyer_marketplace.dart';
+import '../features/buyer/buyer_landing_screen.dart';
 import '../features/artisan/artisan_dashboard_screen.dart';
 
 import '../features/auth/screens/onboarding_screen.dart';
@@ -26,6 +27,7 @@ class AppRoutes {
     RouteNames.passwordResetNew: (_) => const PasswordResetNewPasswordScreen(),
     RouteNames.passwordResetSuccess: (_) => const PasswordResetSuccessScreen(),
     RouteNames.roleSelection: (_) => const RoleSelectionScreen(),
+    RouteNames.buyerLanding: (_) => const BuyerLandingScreen(),
     RouteNames.deliverySplash: (_) => const DeliverySplashScreen(),
     RouteNames.deliveryLogin: (_) => const DeliveryLoginScreen(),
     RouteNames.deliveryHome: (_) => const DeliveryHomeScreen(),

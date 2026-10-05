@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../shared/widgets/role_selection_back_button.dart';
 
 import '../models/admin_demo_store.dart';
 import '../widgets/admin_widgets.dart';
@@ -55,6 +56,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     builder: (context, _) => Scaffold(
       backgroundColor: AdminStyle.cream,
       appBar: AppBar(
+        leading: const RoleSelectionBackButton(),
         backgroundColor: AdminStyle.cream,
         surfaceTintColor: Colors.transparent,
         foregroundColor: AdminStyle.navy,

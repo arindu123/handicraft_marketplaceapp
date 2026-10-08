@@ -78,7 +78,7 @@ class DeliveryButton extends StatelessWidget {
     this.icon,
   });
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
   final IconData? icon;
 
   @override

@@ -67,6 +67,8 @@
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Select photos for your Craftisan products and profile.</string>
+	<string>Select photos for your Craftisan products, profile and delivery proof.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Take pickup and delivery proof photos.</string>
 </dict>
 </plist>

@@ -420,6 +420,16 @@ class MarketplaceRepository {
         throw const MarketplaceFailure('This order is no longer available.');
       }
       final order = model.Order.fromMap(snap.data()!);
+      if (order.courierId == user) {
+        final plan = await tx.get(
+          ref.collection('deliveryPlan').doc('current'),
+        );
+        if (plan.exists && plan.data()!['outcome'] != 'active') {
+          throw const MarketplaceFailure(
+            'Resume this delivery before updating its status.',
+          );
+        }
+      }
       if (order.status == model.OrderStatus.onTheWay &&
           !RegExp(r'^\d{6}$').hasMatch(confirmationCode ?? '')) {
         throw const MarketplaceFailure(

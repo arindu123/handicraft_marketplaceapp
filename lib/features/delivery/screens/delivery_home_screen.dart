@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 
 import '../../../shared/data/profile_repository.dart';
 import '../../../shared/widgets/role_selection_back_button.dart';
@@ -14,6 +15,7 @@ import 'package:flutter/material.dart';
 
 import '../../../routes/route_names.dart';
 import '../../auth/services/auth_session.dart';
+import '../../auth/models/marketplace_role.dart';
 
 import '../models/delivery_order.dart';
 import '../widgets/delivery_contact_details.dart';
@@ -23,6 +25,8 @@ import '../widgets/delivery_widgets.dart';
 import '../widgets/delivery_status_widgets.dart';
 import '../widgets/delivery_workflow_dialogs.dart';
 import '../../../shared/data/delivery_workflow_repository.dart';
+import '../services/delivery_notifications.dart';
+import '../widgets/delivery_extras.dart';
 
 class DeliveryHomeScreen extends StatefulWidget {
   const DeliveryHomeScreen({super.key});
@@ -48,6 +52,51 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
   ProfileRepository? _profiles;
   StreamSubscription<Map<String, dynamic>>? _profileSubscription;
   Map<String, dynamic>? _profile;
+  bool _pushStarted = false;
+  bool _savingNotifications = false;
+  StreamSubscription<RemoteMessage>? _pushOpens;
+  final _demoExtras = <String, DeliveryExtrasData>{};
+
+  Future<void> _startPush() async {
+    if (!DeliveryNotifications.supported) return;
+    _pushOpens = FirebaseMessaging.onMessageOpenedApp.listen((_) {
+      if (mounted) {
+        setState(() {
+          _tab = 1;
+          _filter = 'Active';
+        });
+      }
+    });
+    try {
+      final initial = await FirebaseMessaging.instance.getInitialMessage();
+      if (initial != null && mounted) {
+        setState(() {
+          _tab = 1;
+          _filter = 'Active';
+        });
+      }
+      if (_notifications) await DeliveryNotifications.instance.enable();
+    } catch (e) {
+      _error(e);
+    }
+  }
+
+  Future<void> _setNotifications(bool value) async {
+    if (_savingNotifications) return;
+    if (!MarketplaceBackend.enabled) {
+      setState(() => _notifications = value);
+      return;
+    }
+    setState(() => _savingNotifications = true);
+    try {
+      await DeliveryNotifications.instance.setEnabled(value);
+      if (mounted) setState(() => _notifications = value);
+    } catch (e) {
+      _error(e);
+    } finally {
+      if (mounted) setState(() => _savingNotifications = false);
+    }
+  }
 
   Future<void> _editProfile() async {
     if (_profiles == null || _profile == null) return;
@@ -81,10 +130,17 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
       if (mounted) {
         setState(() {
           _profile = profile;
+          if (!_savingNotifications) {
+            _notifications = profile['deliveryNotifications'] as bool? ?? true;
+          }
           if (!_savingAvailability) {
             _online = profile['deliveryOnline'] as bool? ?? false;
           }
         });
+        if (!_pushStarted) {
+          _pushStarted = true;
+          unawaited(_startPush());
+        }
       }
     }, onError: _error);
 
@@ -229,6 +285,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
     _subscription?.cancel();
     _availableSubscription?.cancel();
     _profileSubscription?.cancel();
+    _pushOpens?.cancel();
 
     _search.dispose();
 
@@ -238,64 +295,76 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => DeliveryFrame(
-    appBar: AppBar(
-      leading: const RoleSelectionBackButton(),
-      title: const Text('Craftisan Delivery'),
-    ),
+  Widget build(BuildContext context) => PopScope<void>(
+    canPop: false,
+    onPopInvokedWithResult: (didPop, result) {
+      if (didPop) return;
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        RouteNames.roleSelection,
+        (_) => false,
+        arguments: AuthEntry.signIn,
+      );
+    },
+    child: DeliveryFrame(
+      appBar: AppBar(
+        leading: const RoleSelectionBackButton(),
+        title: const Text('Craftisan Delivery'),
+      ),
 
-    bottomBar: NavigationBar(
-      selectedIndex: _tab,
+      bottomBar: NavigationBar(
+        selectedIndex: _tab,
 
-      onDestinationSelected: (value) => setState(() => _tab = value),
+        onDestinationSelected: (value) => setState(() => _tab = value),
 
-      backgroundColor: Colors.white,
+        backgroundColor: Colors.white,
 
-      indicatorColor: const Color(0xFFFFEEE3),
+        indicatorColor: const Color(0xFFFFEEE3),
 
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.home_outlined),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
 
-          selectedIcon: Icon(Icons.home, color: DeliveryStyle.orange),
+            selectedIcon: Icon(Icons.home, color: DeliveryStyle.orange),
 
-          label: 'Home',
-        ),
-
-        NavigationDestination(
-          icon: Icon(Icons.receipt_long_outlined),
-
-          selectedIcon: Icon(Icons.receipt_long, color: DeliveryStyle.orange),
-
-          label: 'Orders',
-        ),
-
-        NavigationDestination(
-          icon: Icon(Icons.account_balance_wallet_outlined),
-
-          selectedIcon: Icon(
-            Icons.account_balance_wallet,
-
-            color: DeliveryStyle.orange,
+            label: 'Home',
           ),
 
-          label: 'Earnings',
-        ),
+          NavigationDestination(
+            icon: Icon(Icons.receipt_long_outlined),
 
-        NavigationDestination(
-          icon: Icon(Icons.person_outline),
+            selectedIcon: Icon(Icons.receipt_long, color: DeliveryStyle.orange),
 
-          selectedIcon: Icon(Icons.person, color: DeliveryStyle.orange),
+            label: 'Orders',
+          ),
 
-          label: 'Profile',
-        ),
-      ],
-    ),
+          NavigationDestination(
+            icon: Icon(Icons.account_balance_wallet_outlined),
 
-    child: IndexedStack(
-      index: _tab,
+            selectedIcon: Icon(
+              Icons.account_balance_wallet,
 
-      children: [_home(), _orderList(), _wallet(), _account()],
+              color: DeliveryStyle.orange,
+            ),
+
+            label: 'Earnings',
+          ),
+
+          NavigationDestination(
+            icon: Icon(Icons.person_outline),
+
+            selectedIcon: Icon(Icons.person, color: DeliveryStyle.orange),
+
+            label: 'Profile',
+          ),
+        ],
+      ),
+
+      child: IndexedStack(
+        index: _tab,
+
+        children: [_home(), _orderList(), _wallet(), _account()],
+      ),
     ),
   );
 
@@ -878,6 +947,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
 
   void _showOrder(DeliveryOrder order) {
     setState(() => _alertIds.remove(order.id));
+    bool held = MarketplaceBackend.enabled;
     showModalBottomSheet<void>(
       context: context,
 
@@ -972,64 +1042,79 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
 
                 const SizedBox(height: 16),
 
+                DeliveryExtras(
+                  order: order,
+                  demoData: _demoExtras.putIfAbsent(
+                    order.id,
+                    DeliveryExtrasData.new,
+                  ),
+                  onHoldChanged: (value) {
+                    if (sheetContext.mounted && held != value) {
+                      updateSheet(() => held = value);
+                    }
+                  },
+                ),
+
                 if (!order.delivered)
                   DeliveryButton(
                     label: order.status.action!,
 
-                    onPressed: () async {
-                      if (!_advancing.add(order.id)) return;
-                      try {
-                        String? code;
-                        if (order.status == DeliveryStatus.onTheWay) {
-                          code = await requestDeliveryCode(
-                            sheetContext,
-                            demo: !MarketplaceBackend.enabled,
-                          );
-                          if (code == null ||
-                              !sheetContext.mounted ||
-                              !mounted) {
-                            return;
-                          }
-                        }
-                        if (MarketplaceBackend.enabled) {
-                          final next =
-                              DeliveryStatus.values[order.status.index + 1];
-                          final repository = MarketplaceRepository();
-                          if (order.status == DeliveryStatus.pending) {
-                            await repository.acceptDelivery(order.id);
-                          } else {
-                            await repository.advanceOrder(
-                              order.id,
-                              confirmationCode: code,
-                            );
-                          }
-                          if (!mounted) return;
-                          setState(() => order.syncStatus(next));
-                          if (sheetContext.mounted) updateSheet(() {});
+                    onPressed: held
+                        ? null
+                        : () async {
+                            if (!_advancing.add(order.id)) return;
+                            try {
+                              String? code;
+                              if (order.status == DeliveryStatus.onTheWay) {
+                                code = await requestDeliveryCode(
+                                  sheetContext,
+                                  demo: !MarketplaceBackend.enabled,
+                                );
+                                if (code == null ||
+                                    !sheetContext.mounted ||
+                                    !mounted) {
+                                  return;
+                                }
+                              }
+                              if (MarketplaceBackend.enabled) {
+                                final next = DeliveryStatus
+                                    .values[order.status.index + 1];
+                                final repository = MarketplaceRepository();
+                                if (order.status == DeliveryStatus.pending) {
+                                  await repository.acceptDelivery(order.id);
+                                } else {
+                                  await repository.advanceOrder(
+                                    order.id,
+                                    confirmationCode: code,
+                                  );
+                                }
+                                if (!mounted) return;
+                                setState(() => order.syncStatus(next));
+                                if (sheetContext.mounted) updateSheet(() {});
 
-                          return;
-                        }
+                                return;
+                              }
 
-                        if (!mounted || !sheetContext.mounted) return;
-                        setState(order.advance);
+                              if (!mounted || !sheetContext.mounted) return;
+                              setState(order.advance);
 
-                        updateSheet(() {});
-                      } catch (e) {
-                        if (e is FirebaseException &&
-                            e.code == 'permission-denied' &&
-                            order.status == DeliveryStatus.onTheWay) {
-                          _error(
-                            const MarketplaceFailure(
-                              'Delivery could not be confirmed. Check the customer’s code and your assignment, then try again.',
-                            ),
-                          );
-                        } else {
-                          _error(e);
-                        }
-                      } finally {
-                        _advancing.remove(order.id);
-                      }
-                    },
+                              updateSheet(() {});
+                            } catch (e) {
+                              if (e is FirebaseException &&
+                                  e.code == 'permission-denied' &&
+                                  order.status == DeliveryStatus.onTheWay) {
+                                _error(
+                                  const MarketplaceFailure(
+                                    'Delivery could not be confirmed. Check the customer’s code and your assignment, then try again.',
+                                  ),
+                                );
+                              } else {
+                                _error(e);
+                              }
+                            } finally {
+                              _advancing.remove(order.id);
+                            }
+                          },
                   )
                 else
                   Text(
@@ -1177,11 +1262,15 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
 
         title: const Text('Notifications'),
 
-        subtitle: const Text('New delivery alerts while this page is open'),
+        subtitle: Text(
+          MarketplaceBackend.enabled && DeliveryNotifications.supported
+              ? 'Delivery alerts even when the app is closed'
+              : 'New delivery alerts while this page is open',
+        ),
 
         value: _notifications,
 
-        onChanged: (value) => setState(() => _notifications = value),
+        onChanged: _savingNotifications ? null : _setNotifications,
       ),
 
       ListTile(

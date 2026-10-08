@@ -22,6 +22,9 @@ void _dashboard(BuildContext context) => Navigator.popUntil(
   (r) => r.settings.name == RouteNames.marketplace || r.isFirst,
 );
 
+
+//artisanproduct converts a conical products and artisan products
+
 class ArtisanDashboardScreen extends StatefulWidget {
   const ArtisanDashboardScreen({super.key});
   @override

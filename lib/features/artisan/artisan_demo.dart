@@ -20,8 +20,12 @@ int registerArtisanPhoto({String? url, Uint8List? bytes}) {
   if (bytes != null) artisanLocalPhotos[id] = bytes;
   return id;
 }
+ 
 
-ArtisanProduct artisanProduct(canonical.Product p) => ArtisanProduct(
+ //artisanProduct converts a conical product 
+
+ 
+ ArtisanProduct artisanProduct(canonical.Product p) => ArtisanProduct(
   id: p.id,
   name: p.name,
   category: p.category,

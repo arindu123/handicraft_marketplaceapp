@@ -74,6 +74,8 @@ flutter:
         - asset: lib/core/theme/cormorant_garamond.ttf
 
   assets:
+    - assets/images/navigation/handicraft_atlas.png
+    - assets/images/navigation/handicraft_extra.png
     - lib/features/auth/widgets/google_logo.png
     - lib/features/auth/widgets/pottery_vase.png
     - lib/features/auth/widgets/pottery_mug.png

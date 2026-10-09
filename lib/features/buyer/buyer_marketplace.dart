@@ -1,3 +1,7 @@
+import 'craftisan_home_hero.dart';
+import 'home/craftisan_preview_home.dart';
+import 'handicraft_navigation_bar.dart';
+import '../auth/models/marketplace_role.dart';
 import '../../shared/data/community_repository.dart';
 import '../../shared/data/marketplace_repository.dart';
 import '../../shared/widgets/delivery_confirmation_card.dart';
@@ -15,12 +19,19 @@ import 'collector_profile_header.dart';
 import '../../shared/data/profile_repository.dart';
 import 'rotating_product_banner.dart';
 
+void _signIn(BuildContext context) => Navigator.pushNamed(
+  context,
+  RouteNames.signIn,
+  arguments: MarketplaceRole.buyer,
+);
+
 void _open(BuildContext context, Widget screen) =>
     Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => screen));
 
 class BuyerMarketplace extends StatefulWidget {
-  const BuyerMarketplace({super.key, this.backend});
+  const BuyerMarketplace({super.key, this.backend, this.preview = false});
   final MarketplaceRepository? backend;
+  final bool preview;
   @override
   State<BuyerMarketplace> createState() => _BuyerMarketplaceState();
 }
@@ -30,7 +41,7 @@ class _BuyerMarketplaceState extends State<BuyerMarketplace> {
   @override
   void initState() {
     super.initState();
-    demo.addListener(_refresh);
+    if (!widget.preview || widget.backend != null) demo.addListener(_refresh);
   }
 
   void _refresh() {
@@ -39,170 +50,695 @@ class _BuyerMarketplaceState extends State<BuyerMarketplace> {
 
   @override
   void dispose() {
-    demo.dispose();
+    if (!widget.preview || widget.backend != null) demo.dispose();
     super.dispose();
   }
 
+  void _browse(
+    BuildContext context, {
+    String category = 'All',
+    String query = '',
+  }) => _open(
+    context,
+    BuyerSearch(demo: demo, category: category, initialQuery: query),
+  );
+
   @override
   Widget build(BuildContext context) {
-    final bannerProducts = demo.products
-        .where((p) => p.imageUrl?.trim().isNotEmpty == true)
-        .toList();
+    if (widget.preview && widget.backend == null) {
+      return const CraftisanPreviewHome();
+    }
     final categories = demo.products
         .map((p) => p.category)
         .where((c) => c.isNotEmpty)
-        .toSet();
-    return _BuyerPage(
-      demo: demo,
-      title: 'Craftisan',
-      tab: 0,
-      children: [
-        InkWell(
-          onTap: () => _open(context, BuyerCheckout(demo: demo)),
-          child: Row(
-            children: [
-              const Icon(Icons.location_on_outlined, size: 20),
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  demo.city.isEmpty
-                      ? 'Choose delivery address'
-                      : 'Deliver to ${demo.city}',
-                ),
-              ),
-              const Icon(Icons.keyboard_arrow_down),
-            ],
-          ),
+        .toSet()
+        .toList();
+    final newest = [...demo.products]
+      ..sort(
+        (a, b) => (b.createdAt ?? DateTime(1970)).compareTo(
+          a.createdAt ?? DateTime(1970),
         ),
-        const SizedBox(height: 24),
-        const _Heading('Find your next\nhandmade favourite.'),
-        const SizedBox(height: 12),
-        TextField(
-          readOnly: true,
-          onTap: () => _open(context, BuyerSearch(demo: demo)),
-          decoration: const InputDecoration(
-            hintText: 'Search handmade pieces',
-            prefixIcon: Icon(Icons.search),
-            suffixIcon: Icon(Icons.tune),
-          ),
+      );
+    final preferred = demo.favorites.map((p) => p.category).toSet();
+    final recommended = [...newest]
+      ..sort(
+        (a, b) => (preferred.contains(b.category) ? 1 : 0).compareTo(
+          preferred.contains(a.category) ? 1 : 0,
         ),
-        const SizedBox(height: 20),
-        if (categories.isNotEmpty)
-          SizedBox(
-            height: 116,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: categories.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 16),
-              itemBuilder: (context, i) {
-                final category = categories.elementAt(i);
-                final product = demo.products.firstWhere(
-                  (p) => p.category == category,
-                );
-                return InkWell(
-                  onTap: () => _open(
-                    context,
-                    BuyerSearch(demo: demo, category: category),
-                  ),
-                  child: SizedBox(
-                    width: 84,
-                    child: Column(
-                      children: [
-                        ClipOval(
-                          child: SizedBox(
-                            width: 78,
-                            height: 78,
-                            child: _Photo(product),
+      );
+    return Theme(
+      data: _buyerTheme(context),
+      child: Builder(
+        builder: (context) => Scaffold(
+          backgroundColor: _cream,
+          body: ColoredBox(
+            color: const Color(0xFFF2E3D5),
+            child: SafeArea(
+              top: true,
+              bottom: false,
+              child: ColoredBox(
+                color: _cream,
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    final margin = constraints.maxWidth > 900
+                        ? (constraints.maxWidth - 900) / 2 + 16
+                        : 16.0;
+                    final cardWidth =
+                        ((constraints.maxWidth - margin * 2 - 12) / 2).clamp(
+                          120.0,
+                          220.0,
+                        );
+                    final textScale =
+                        MediaQuery.textScalerOf(context).scale(14) / 14;
+                    final cardHeight = cardWidth / 1.06 + 112 * textScale + 20;
+                    Widget section(String title, {String? subtitle}) =>
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                              margin,
+                              20,
+                              margin,
+                              12,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        title,
+                                        style: const TextStyle(
+                                          fontSize: 21,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: -.5,
+                                        ),
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => _browse(context),
+                                      child: const Text('See all'),
+                                    ),
+                                  ],
+                                ),
+                                if (subtitle != null)
+                                  Text(
+                                    subtitle,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF776C64),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          category,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        if (bannerProducts.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: SizedBox(
-                height: 178,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    RotatingProductBanner(
-                      imageKeys: bannerProducts
-                          .map((p) => '${p.id}:${p.imageUrl}')
-                          .toList(),
-                      imageBuilder: (_, index) => _Photo(bannerProducts[index]),
-                    ),
-                    const DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [
-                            Color(0xFFF0E8DE),
-                            Color(0xCCF0E8DE),
-                            Color(0x00F0E8DE),
-                          ],
-                          stops: [0, .4, 1],
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: SizedBox(
-                          width: 205,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Made slowly.\nLoved daily.',
-                                style: TextStyle(
-                                  fontSize: 28,
-                                  height: 1.05,
-                                  fontWeight: FontWeight.w700,
-                                  letterSpacing: -.8,
+                        );
+                    return CustomScrollView(
+                      key: const PageStorageKey('buyer-home-scroll'),
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      slivers: [
+                        SliverToBoxAdapter(
+                          child: ColoredBox(
+                            color: const Color(0xFFF2E3D5),
+                            child: Center(
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 900,
+                                ),
+                                child: CraftisanHomeHero(
+                                  productImageBuilder: (context, index) {
+                                    final photographed = demo.products
+                                        .where(
+                                          (p) =>
+                                              p.imageUrl?.trim().isNotEmpty ==
+                                                  true ||
+                                              p.imageUrls.isNotEmpty,
+                                        )
+                                        .toList();
+                                    if (photographed.isEmpty) {
+                                      return const Center(
+                                        child: Icon(
+                                          Icons.handyman_outlined,
+                                          size: 56,
+                                          color: AppColors.warmBrown,
+                                        ),
+                                      );
+                                    }
+                                    final product =
+                                        photographed[index %
+                                            photographed.length];
+                                    return InkWell(
+                                      onTap: () => _open(
+                                        context,
+                                        BuyerProductDetails(
+                                          demo: demo,
+                                          product: product,
+                                        ),
+                                      ),
+                                      child: _Photo(
+                                        product,
+                                        url:
+                                            product.imageUrl
+                                                    ?.trim()
+                                                    .isNotEmpty ==
+                                                true
+                                            ? product.imageUrl
+                                            : product.imageUrls.first,
+                                      ),
+                                    );
+                                  },
+                                  onExplore: () => _browse(context),
+                                  onSearch: (query) =>
+                                      _browse(context, query: query),
+                                  header: SafeArea(
+                                    bottom: false,
+                                    child: Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        16,
+                                        8,
+                                        8,
+                                        0,
+                                      ),
+                                      child: Column(
+                                        children: [
+                                          Row(
+                                            children: [
+                                              const Expanded(
+                                                child: Text(
+                                                  'Craftisan',
+                                                  style: TextStyle(
+                                                    fontSize: 30,
+                                                    fontWeight: FontWeight.w700,
+                                                    letterSpacing: -1,
+                                                    color: _charcoal,
+                                                  ),
+                                                ),
+                                              ),
+                                              IconButton(
+                                                tooltip: 'Cart',
+                                                onPressed: () => _open(
+                                                  context,
+                                                  BuyerCart(demo: demo),
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.shopping_bag_outlined,
+                                                ),
+                                              ),
+                                              IconButton(
+                                                tooltip: 'Profile',
+                                                onPressed: () => _open(
+                                                  context,
+                                                  BuyerProfile(demo: demo),
+                                                ),
+                                                icon: CollectorProfileIcon(
+                                                  repository:
+                                                      demo.repository == null
+                                                      ? null
+                                                      : ProfileRepository(
+                                                          firestore: demo
+                                                              .repository!
+                                                              .db,
+                                                          auth: demo
+                                                              .repository!
+                                                              .auth,
+                                                        ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          InkWell(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            onTap: () => _open(
+                                              context,
+                                              BuyerCheckout(demo: demo),
+                                            ),
+                                            child: Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 12,
+                                                  ),
+                                              child: Row(
+                                                children: [
+                                                  const Icon(
+                                                    Icons.location_on_outlined,
+                                                    size: 17,
+                                                  ),
+                                                  const SizedBox(width: 6),
+                                                  Expanded(
+                                                    child: Text(
+                                                      demo.city.isEmpty
+                                                          ? 'Choose delivery address'
+                                                          : 'Deliver to ${demo.city}',
+                                                      style: const TextStyle(
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  const Icon(
+                                                    Icons.keyboard_arrow_down,
+                                                    size: 20,
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
                                 ),
                               ),
-                              const SizedBox(height: 14),
-                              _Action(
-                                'Explore pieces',
-                                () => _open(context, BuyerSearch(demo: demo)),
+                            ),
+                          ),
+                        ),
+                        DecoratedSliver(
+                          decoration: const BoxDecoration(color: _cream),
+                          sliver: SliverMainAxisGroup(
+                            slivers: [
+                              if (demo.error != null &&
+                                  demo.catalogError == null)
+                                SliverToBoxAdapter(
+                                  child: Padding(
+                                    padding: EdgeInsets.all(margin),
+                                    child: _Panel(child: Text(demo.error!)),
+                                  ),
+                                ),
+                              section('Shop by Category'),
+                              if (demo.loading ||
+                                  demo.catalogError != null ||
+                                  demo.products.isEmpty) ...[
+                                SliverToBoxAdapter(
+                                  child: Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: margin,
+                                    ),
+                                    child: _Catalog(
+                                      demo: demo,
+                                      products: demo.products,
+                                    ),
+                                  ),
+                                ),
+                                for (final title in [
+                                  'Featured Collections',
+                                  'Trending Handmade',
+                                  'Special Handmade Finds',
+                                  'New Arrivals',
+                                  'Recommended for You',
+                                ]) ...[
+                                  section(title),
+                                  SliverToBoxAdapter(
+                                    child: Padding(
+                                      padding: EdgeInsets.fromLTRB(
+                                        margin,
+                                        0,
+                                        margin,
+                                        8,
+                                      ),
+                                      child: _HomeSectionState(
+                                        loading: demo.loading,
+                                        error: demo.catalogError != null,
+                                        onRetry: demo.repository == null
+                                            ? null
+                                            : demo.refreshCatalog,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ] else ...[
+                                SliverToBoxAdapter(
+                                  child: SizedBox(
+                                    height: 82 + 38 * textScale,
+                                    child: ListView.separated(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: margin,
+                                      ),
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: categories.length,
+                                      separatorBuilder: (_, _) =>
+                                          const SizedBox(width: 16),
+                                      itemBuilder: (context, index) {
+                                        final category = categories[index];
+                                        final product = demo.products
+                                            .firstWhere(
+                                              (p) => p.category == category,
+                                            );
+                                        return SizedBox(
+                                          width: 82,
+                                          child: InkWell(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                            onTap: () => _browse(
+                                              context,
+                                              category: category,
+                                            ),
+                                            child: Column(
+                                              children: [
+                                                ClipOval(
+                                                  child: SizedBox(
+                                                    width: 72,
+                                                    height: 72,
+                                                    child: _Photo(product),
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 8),
+                                                Text(
+                                                  category,
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  textAlign: TextAlign.center,
+                                                  style: const TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                                section(
+                                  'Featured Collections',
+                                  subtitle: 'Find your favourite material. Make it your own.',
+                                ),
+                                SliverToBoxAdapter(
+                                  child: SizedBox(
+                                    height: 180 + (textScale - 1) * 100,
+                                    child: ListView.separated(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: margin,
+                                      ),
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: categories.take(6).length,
+                                      separatorBuilder: (_, _) =>
+                                          const SizedBox(width: 12),
+                                      itemBuilder: (context, index) {
+                                        final category = categories[index];
+                                        final products = demo.products
+                                            .where(
+                                              (p) => p.category == category,
+                                            )
+                                            .toList();
+                                        return SizedBox(
+                                          width: (constraints.maxWidth * .72)
+                                              .clamp(230.0, 340.0),
+                                          child: Material(
+                                            color: index.isEven
+                                                ? const Color(0xFFEDE2D5)
+                                                : const Color(0xFFE4EADF),
+                                            borderRadius: BorderRadius.circular(
+                                              20,
+                                            ),
+                                            clipBehavior: Clip.antiAlias,
+                                            child: InkWell(
+                                              onTap: () => _browse(
+                                                context,
+                                                category: category,
+                                              ),
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(
+                                                  16,
+                                                ),
+                                                child: Row(
+                                                  children: [
+                                                    Expanded(
+                                                      child: Column(
+                                                        crossAxisAlignment:
+                                                            CrossAxisAlignment
+                                                                .start,
+                                                        mainAxisAlignment:
+                                                            MainAxisAlignment
+                                                                .center,
+                                                        children: [
+                                                          Text(
+                                                            category,
+                                                            maxLines: 2,
+                                                            overflow:
+                                                                TextOverflow
+                                                                    .ellipsis,
+                                                            style:
+                                                                const TextStyle(
+                                                                  fontSize: 20,
+                                                                  fontWeight:
+                                                                      FontWeight
+                                                                          .w700,
+                                                                ),
+                                                          ),
+                                                          const SizedBox(
+                                                            height: 8,
+                                                          ),
+                                                          Text(
+                                                            '${products.length} handmade finds',
+                                                            style:
+                                                                const TextStyle(
+                                                                  fontSize: 11,
+                                                                ),
+                                                          ),
+                                                          const SizedBox(
+                                                            height: 12,
+                                                          ),
+                                                          const Icon(
+                                                            Icons
+                                                                .arrow_forward_rounded,
+                                                            size: 20,
+                                                            color: _clay,
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 10),
+                                                    SizedBox(
+                                                      width: 80,
+                                                      height: 112,
+                                                      child: _Photo(
+                                                        products.first,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ),
+                                ),
+                                section(
+                                  'Trending Handmade',
+                                  subtitle: 'Discover pieces from the current handmade edit.',
+                                ),
+                                SliverToBoxAdapter(
+                                  child: SizedBox(
+                                    height: cardHeight,
+                                    child: ListView.separated(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: margin,
+                                      ),
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: demo.products.take(10).length,
+                                      separatorBuilder: (_, _) =>
+                                          const SizedBox(width: 12),
+                                      itemBuilder: (_, index) => SizedBox(
+                                        width: cardWidth,
+                                        child: _ProductCard(
+                                          demo: demo,
+                                          product: demo.products[index],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                section(
+                                  'Special Handmade Finds',
+                                  subtitle: 'A closer look at distinctive pieces from our makers.',
+                                ),
+                                SliverToBoxAdapter(
+                                  child: SizedBox(
+                                    height: cardHeight,
+                                    child: ListView.separated(
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: margin,
+                                      ),
+                                      scrollDirection: Axis.horizontal,
+                                      itemCount: newest.take(6).length,
+                                      separatorBuilder: (_, _) =>
+                                          const SizedBox(width: 12),
+                                      itemBuilder: (_, index) => SizedBox(
+                                        width: cardWidth,
+                                        child: _ProductCard(
+                                          demo: demo,
+                                          product: newest[index],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                section(
+                                  'New Arrivals',
+                                  subtitle: 'Fresh additions from independent makers.',
+                                ),
+                                SliverPadding(
+                                  padding: EdgeInsets.symmetric(
+                                    horizontal: margin,
+                                  ),
+                                  sliver: SliverLayoutBuilder(
+                                    builder: (context, constraints) {
+                                      final width =
+                                          (constraints.crossAxisExtent - 12) /
+                                          2;
+                                      return SliverGrid(
+                                        gridDelegate:
+                                            SliverGridDelegateWithFixedCrossAxisCount(
+                                              crossAxisCount: 2,
+                                              crossAxisSpacing: 12,
+                                              mainAxisSpacing: 14,
+                                              mainAxisExtent:
+                                                  width / 1.06 +
+                                                  112 * textScale +
+                                                  20,
+                                            ),
+                                        delegate: SliverChildBuilderDelegate(
+                                          (_, index) => _ProductCard(
+                                            demo: demo,
+                                            product: newest[index],
+                                          ),
+                                          childCount: newest.take(12).length,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                                section(
+                                  'Recommended for You',
+                                  subtitle: preferred.isEmpty
+                                      ? 'Save pieces you love to shape your recommendations.'
+                                      : 'More from the craft categories you have saved.',
+                                ),
+                                SliverPadding(
+                                  padding: EdgeInsets.fromLTRB(
+                                    margin,
+                                    0,
+                                    margin,
+                                    24,
+                                  ),
+                                  sliver: SliverLayoutBuilder(
+                                    builder: (context, constraints) {
+                                      final width =
+                                          (constraints.crossAxisExtent - 12) /
+                                          2;
+                                      return SliverGrid(
+                                        gridDelegate:
+                                            SliverGridDelegateWithFixedCrossAxisCount(
+                                              crossAxisCount: 2,
+                                              crossAxisSpacing: 12,
+                                              mainAxisSpacing: 14,
+                                              mainAxisExtent:
+                                                  width / 1.06 +
+                                                  112 * textScale +
+                                                  20,
+                                            ),
+                                        delegate: SliverChildBuilderDelegate(
+                                          (_, index) => _ProductCard(
+                                            demo: demo,
+                                            product: recommended[index],
+                                          ),
+                                          childCount: recommended
+                                              .take(12)
+                                              .length,
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
+                              const SliverToBoxAdapter(
+                                child: SizedBox(height: 12),
                               ),
                             ],
                           ),
                         ),
-                      ),
-                    ),
-                  ],
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
           ),
-        Row(
-          children: [
-            const Expanded(child: _Heading('Explore handmade')),
-            TextButton(
-              onPressed: () => _open(context, BuyerSearch(demo: demo)),
-              child: const Text('See all \u2192'),
-            ),
-          ],
+          bottomNavigationBar: HandicraftNavigationBar(
+            selectedIndex: 0,
+            onDestinationSelected: (index) {
+              if (index == 0) return;
+              _open(context, switch (index) {
+                1 => BuyerSearch(demo: demo),
+                2 => BuyerFavorites(demo: demo),
+                3 => BuyerCart(demo: demo),
+                _ => BuyerProfile(demo: demo),
+              });
+            },
+          ),
         ),
-        _Catalog(demo: demo, products: demo.products),
-      ],
+      ),
     );
   }
+}
+
+class _HomeSectionState extends StatelessWidget {
+  const _HomeSectionState({
+    required this.loading,
+    required this.error,
+    this.onRetry,
+  });
+  final bool loading, error;
+  final VoidCallback? onRetry;
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: const Color(0xFFF0E8DD),
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: const Color(0xFFE5D8CA)),
+    ),
+    child: Row(
+      children: [
+        if (loading)
+          const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
+        else
+          Icon(
+            error ? Icons.cloud_off_outlined : Icons.handyman_outlined,
+            color: _clay,
+          ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Text(
+            loading
+                ? 'Finding handmade pieces?'
+                : error
+                ? 'Unable to load this collection. Check your connection and try again.'
+                : 'New handmade pieces will appear here when makers publish them.',
+            style: const TextStyle(fontSize: 13, height: 1.5),
+          ),
+        ),
+        if (error && onRetry != null)
+          IconButton(
+            tooltip: 'Retry collection',
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+          ),
+      ],
+    ),
+  );
 }
 
 const _clay = Color(0xFF9A4023);
@@ -331,12 +867,15 @@ class _BuyerPage extends StatelessWidget {
     required this.children,
     this.tab,
     this.footer,
+    this.requiresLogin = false,
   });
   final BuyerDemo demo;
   final String title;
   final List<Widget> children;
   final int? tab;
   final Widget? footer;
+  final bool requiresLogin;
+  bool get locked => requiresLogin && !demo.isSignedIn;
   @override
   Widget build(BuildContext context) => Theme(
     data: _buyerTheme(context),
@@ -401,13 +940,25 @@ class _BuyerPage extends StatelessWidget {
                             ),
                           ),
                   ),
-                  ...children,
+                  if (locked) ...[
+                    const SizedBox(height: 32),
+                    const Icon(Icons.lock_outline, size: 48, color: _clay),
+                    const SizedBox(height: 20),
+                    const _Heading('Sign in to continue'),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Sign in to view your profile, add pieces to your cart and place orders. You can browse products without an account.',
+                    ),
+                    const SizedBox(height: 24),
+                    _Action('Sign in', () => _signIn(context)),
+                  ] else
+                    ...children,
                 ],
               ),
             ),
           ),
         ),
-        bottomNavigationBar: footer != null
+        bottomNavigationBar: !locked && footer != null
             ? Container(
                 decoration: const BoxDecoration(
                   color: Colors.white,
@@ -432,12 +983,8 @@ class _BuyerPage extends StatelessWidget {
               )
             : tab == null
             ? null
-            : NavigationBar(
+            : HandicraftNavigationBar(
                 selectedIndex: tab!,
-                backgroundColor: Colors.white,
-                indicatorColor: _clay.withValues(alpha: .08),
-                height: 72,
-                labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
                 onDestinationSelected: (index) {
                   if (index == tab) return;
                   if (index == 0) {
@@ -464,29 +1011,6 @@ class _BuyerPage extends StatelessWidget {
                     );
                   }
                 },
-                destinations: const [
-                  NavigationDestination(
-                    icon: Icon(Icons.home_outlined),
-                    selectedIcon: Icon(Icons.home, color: _clay),
-                    label: 'Home',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.search),
-                    label: 'Explore',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.favorite_outline),
-                    label: 'Saved',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.shopping_cart_outlined),
-                    label: 'Cart',
-                  ),
-                  NavigationDestination(
-                    icon: Icon(Icons.person_outline),
-                    label: 'Profile',
-                  ),
-                ],
               ),
       ),
     ),
@@ -576,6 +1100,7 @@ class _Photo extends StatelessWidget {
               : source;
           return Image.network(
             imageUrl,
+            cacheWidth: pixels,
             height: height,
             width: double.infinity,
             fit: BoxFit.cover,
@@ -648,7 +1173,9 @@ class _ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: Colors.white,
-    borderRadius: BorderRadius.circular(12),
+    borderRadius: BorderRadius.circular(18),
+    elevation: 1.5,
+    shadowColor: const Color(0x1870452F),
     clipBehavior: Clip.antiAlias,
     child: InkWell(
       onTap: () =>
@@ -661,6 +1188,28 @@ class _ProductCard extends StatelessWidget {
               AspectRatio(
                 aspectRatio: 1.06,
                 child: _ProductCardPhotos(product),
+              ),
+              Positioned(
+                bottom: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF9F1E7),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'Handmade',
+                    style: TextStyle(
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                      color: Color(0xFF70452F),
+                    ),
+                  ),
+                ),
               ),
               Positioned(
                 top: 6,
@@ -686,6 +1235,8 @@ class _ProductCard extends StatelessWidget {
                 if (product.studio.isNotEmpty)
                   Text(
                     product.studio,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: Colors.grey),
                   ),
                 const SizedBox(height: 6),
@@ -728,15 +1279,21 @@ class _FavoriteButton extends StatelessWidget {
 }
 
 class BuyerSearch extends StatefulWidget {
-  const BuyerSearch({super.key, required this.demo, this.category = 'All'});
+  const BuyerSearch({
+    super.key,
+    required this.demo,
+    this.category = 'All',
+    this.initialQuery = '',
+  });
   final BuyerDemo demo;
   final String category;
+  final String initialQuery;
   @override
   State<BuyerSearch> createState() => _BuyerSearchState();
 }
 
 class _BuyerSearchState extends State<BuyerSearch> {
-  final query = TextEditingController();
+  late final query = TextEditingController(text: widget.initialQuery);
   final maxPrice = TextEditingController();
   late String category = widget.category;
   String sort = 'Name';
@@ -1060,6 +1617,10 @@ class _BuyerProductDetailsState extends State<BuyerProductDetails> {
               adding || p.stock == null || quantity > p.stock!
                   ? null
                   : () async {
+                      if (!widget.demo.isSignedIn) {
+                        _signIn(context);
+                        return;
+                      }
                       setState(() => adding = true);
                       try {
                         await widget.demo.add(p, quantity);
@@ -1479,6 +2040,7 @@ class BuyerCart extends StatelessWidget {
     builder: (context, _) => _BuyerPage(
       demo: demo,
       title: 'Atelier Bag (${demo.count} pieces)',
+      requiresLogin: true,
       footer: demo.cart.isEmpty
           ? null
           : CustomButton(
@@ -1608,27 +2170,187 @@ class _Amount extends StatelessWidget {
   );
 }
 
-class BuyerFavorites extends StatelessWidget {
+class BuyerFavorites extends StatefulWidget {
   const BuyerFavorites({super.key, required this.demo});
   final BuyerDemo demo;
   @override
+  State<BuyerFavorites> createState() => _BuyerFavoritesState();
+}
+
+class _BuyerFavoritesState extends State<BuyerFavorites> {
+  String? _category;
+  int _sort = 0;
+  BuyerDemo get demo => widget.demo;
+  @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: demo,
-    builder: (_, _) => _BuyerPage(
-      demo: demo,
-      title: 'Favorites',
-      tab: 2,
-      children: [
-        const _Eyebrow('BUYER COLLECTION'),
-        const _Heading('Curated Atelier Pieces'),
-        Text('${demo.favorites.length} saved pieces from independent makers.'),
-        if (demo.favorites.isEmpty)
-          const _Panel(
-            child: Text('Tap the heart on a piece to save it here.'),
+    builder: (_, _) {
+      final categories = demo.favorites
+          .map((p) => p.category)
+          .where((c) => c.isNotEmpty)
+          .toSet();
+      final selected = categories.contains(_category) ? _category : null;
+      final pieces = demo.favorites
+          .where((p) => selected == null || p.category == selected)
+          .toList();
+      if (_sort != 0) {
+        pieces.sort(
+          (a, b) => _sort == 1
+              ? a.price.compareTo(b.price)
+              : b.price.compareTo(a.price),
+        );
+      }
+      return _BuyerPage(
+        demo: demo,
+        title: 'Saved',
+        tab: 2,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(22),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8EFEB),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'COLLECT LITTLE JOYS',
+                        style: TextStyle(
+                          fontSize: 9,
+                          letterSpacing: 2,
+                          color: Color(0xFF10494D),
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.all(9),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.favorite, color: _clay, size: 19),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Love it.\nKeep it close.',
+                  style: TextStyle(
+                    fontFamily: 'CormorantGaramond',
+                    fontSize: 39,
+                    height: 1.02,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF10494D),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'A little space for the pieces that feel like you.',
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.5,
+                    color: Color(0xFF526B62),
+                  ),
+                ),
+              ],
+            ),
           ),
-        for (final p in demo.favorites) _ProductCard(demo: demo, product: p),
-      ],
-    ),
+          const SizedBox(height: 22),
+          if (demo.loading || demo.catalogError != null)
+            _Catalog(demo: demo, products: pieces)
+          else if (demo.favorites.isEmpty) ...[
+            const SizedBox(height: 18),
+            const Center(
+              child: CircleAvatar(
+                radius: 42,
+                backgroundColor: Color(0xFFF3E7DD),
+                child: Icon(Icons.bookmarks_outlined, size: 34, color: _clay),
+              ),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Your favourites start here',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 21, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 10),
+            const Text(
+              'Tap the heart on a piece to save it here.\nCome back whenever it feels right.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.7,
+                color: AppColors.muted,
+              ),
+            ),
+            const SizedBox(height: 24),
+            _Action(
+              'Find your first favourite',
+              () => _open(context, BuyerSearch(demo: demo)),
+            ),
+          ] else ...[
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${pieces.length} saved ${pieces.length == 1 ? 'piece' : 'pieces'}',
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                PopupMenuButton<int>(
+                  tooltip: 'Sort saved pieces',
+                  initialValue: _sort,
+                  onSelected: (value) => setState(() => _sort = value),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 0, child: Text('Default order')),
+                    PopupMenuItem(value: 1, child: Text('Price: low to high')),
+                    PopupMenuItem(value: 2, child: Text('Price: high to low')),
+                  ],
+                  icon: const Icon(Icons.sort_rounded, color: _clay),
+                ),
+              ],
+            ),
+            if (categories.length > 1) ...[
+              SizedBox(
+                height: 48,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    for (final category in <String?>[null, ...categories])
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(category ?? 'All pieces'),
+                          selected: selected == category,
+                          selectedColor: const Color(0xFFE8EFEB),
+                          showCheckmark: false,
+                          onSelected: (_) =>
+                              setState(() => _category = category),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            _Catalog(demo: demo, products: pieces),
+            const SizedBox(height: 22),
+            TextButton.icon(
+              onPressed: () => _open(context, BuyerSearch(demo: demo)),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Discover more to love'),
+            ),
+          ],
+        ],
+      );
+    },
   );
 }
 
@@ -1639,6 +2361,7 @@ class BuyerProfile extends StatelessWidget {
   Widget build(BuildContext context) => _BuyerPage(
     demo: demo,
     title: 'Collector Profile',
+    requiresLogin: true,
     tab: 4,
     children: [
       CollectorProfileHeader(
@@ -1862,6 +2585,7 @@ class _BuyerCheckoutState extends State<BuyerCheckout> {
       return _BuyerPage(
         demo: d,
         title: 'Checkout',
+        requiresLogin: true,
         footer: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -2287,6 +3011,7 @@ class BuyerOrders extends StatelessWidget {
     builder: (context, _) => _BuyerPage(
       demo: demo,
       title: 'My Orders',
+      requiresLogin: true,
       children: [
         const _Eyebrow('COLLECTOR ORDERS'),
         const _Heading('Pieces on their way'),

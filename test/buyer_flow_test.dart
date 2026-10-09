@@ -64,6 +64,11 @@ void main() {
     'Home starts empty and updates from backend without rebuilding the app',
     (tester) async {
       await phone(tester, BuyerMarketplace(backend: repository), width: 320);
+      await tester.scrollUntilVisible(
+        find.textContaining('No pieces found'),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(find.textContaining('No pieces found'), findsOneWidget);
       expect(find.textContaining('Terracotta Ribbed Vase'), findsNothing);
       await db

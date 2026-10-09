@@ -1,0 +1,27 @@
+  static const _stories = [
+    (
+      tag: 'THE HANDMADE EDIT',
+      title: 'Made slowly.\nLoved daily.',
+      description: 'Find beauty in the little things, made by hand.',
+      background: Color(0xFFF2E3D5),
+      accent: Color(0xFF914329),
+      asset: 'lib/features/auth/widgets/pottery_vase.png',
+    ),
+    (
+      tag: 'EVERYDAY RITUALS',
+      title: 'A little craft.\nA lot of comfort.',
+      description: 'Thoughtful pieces for your everyday moments.',
+      background: Color(0xFFE3EBE3),
+      accent: Color(0xFF355C4B),
+      asset: 'lib/features/auth/widgets/pottery_mug.png',
+    ),
+    (
+      tag: 'MEANINGFUL FINDS',
+      title: 'One of a kind.\nJust like you.',
+      description: 'Discover a piece that feels like you.',
+      background: Color(0xFFF1E9D7),
+      accent: Color(0xFF755528),
+      asset: 'lib/features/auth/widgets/pottery_vase.png',
+    ),
+  ];
+

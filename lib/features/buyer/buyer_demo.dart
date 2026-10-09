@@ -24,8 +24,10 @@ class DemoProduct {
     this.imageUrls = const [],
     this.currency = 'USD',
     this.stock,
+    this.createdAt,
   });
   final String id;
+  final DateTime? createdAt;
   final String? imageUrl;
   final List<String> imageUrls;
   final String currency;
@@ -51,6 +53,7 @@ class DemoProduct {
     imageUrls: p.imageUrls,
     currency: p.currency,
     stock: p.stock,
+    createdAt: p.createdAt,
   );
   @override
   bool operator ==(Object other) =>
@@ -240,6 +243,10 @@ class BuyerDemoOrder {
 
 /// Ephemeral UI state, owned and disposed by the Buyer marketplace.
 class BuyerDemo extends ChangeNotifier {
+  bool get isSignedIn =>
+      repository?.auth.currentUser != null &&
+      repository?.auth.currentUser?.isAnonymous == false;
+
   final _subscriptions = <StreamSubscription<dynamic>>[];
   MarketplaceRepository? repository;
   List<DemoProduct> products = [];
@@ -298,6 +305,10 @@ class BuyerDemo extends ChangeNotifier {
           _resolve();
         }, onError: _failed),
       );
+      if (!isSignedIn) {
+        addressesLoading = false;
+        return;
+      }
       _subscriptions.add(
         repository!
             .userCollection('addresses')

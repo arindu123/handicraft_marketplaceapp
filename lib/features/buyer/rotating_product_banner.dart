@@ -9,9 +9,11 @@ class RotatingProductBanner extends StatefulWidget {
     required this.imageKeys,
     required this.imageBuilder,
     this.slide = false,
+    this.expand = true,
   });
   final List<String> imageKeys;
   final bool slide;
+  final bool expand;
   final Widget Function(BuildContext, int) imageBuilder;
 
   @override
@@ -85,8 +87,10 @@ class _RotatingProductBannerState extends State<RotatingProductBanner>
         ),
         switchInCurve: Curves.easeInOutCubic,
         switchOutCurve: Curves.easeInOutCubic,
-        layoutBuilder: (current, previous) =>
-            Stack(fit: StackFit.expand, children: [...previous, ?current]),
+        layoutBuilder: (current, previous) => Stack(
+          fit: widget.expand ? StackFit.expand : StackFit.loose,
+          children: [...previous, ?current],
+        ),
         transitionBuilder: (child, animation) => widget.slide
             ? _PhotoSlide(animation: animation, child: child)
             : FadeTransition(
@@ -96,7 +100,9 @@ class _RotatingProductBannerState extends State<RotatingProductBanner>
                   child: child,
                 ),
               ),
-        child: SizedBox.expand(
+        child: SizedBox(
+          width: double.infinity,
+          height: widget.expand ? double.infinity : null,
           key: ValueKey(widget.imageKeys[_index]),
           child: widget.imageBuilder(context, _index),
         ),

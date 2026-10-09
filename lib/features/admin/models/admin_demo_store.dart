@@ -46,12 +46,17 @@ class AdminDemoStore extends ChangeNotifier {
   final _subscriptions = <StreamSubscription<dynamic>>[];
   String? error;
   AdminDemoStore() {
-    if (!MarketplaceBackend.enabled) return;
+    // Never expose the legacy preview fixtures. When Firebase is unavailable
+    // the dashboard must show an empty/error state instead of fake activity.
     orders.clear();
     products.clear();
     users.clear();
     couriers.clear();
     approvals.clear();
+    if (!MarketplaceBackend.enabled) {
+      error = 'Live marketplace data is unavailable. Sign in to Firebase to load the admin workspace.';
+      return;
+    }
     // Read the canonical collections. Deployed rules deny these global reads
     // until a trusted administrative authorization mechanism is supplied.
     final repo = MarketplaceRepository();
@@ -108,7 +113,7 @@ class AdminDemoStore extends ChangeNotifier {
         orders.clear();
         orders.addAll(
           snapshot.docs.map((d) {
-            final o = canonical.Order.fromMap(d.data());
+            final o = canonical.Order.fromMap({...d.data(), 'id': d.id});
             return AdminOrder(
               o.id,
               o.buyerId,
@@ -127,7 +132,7 @@ class AdminDemoStore extends ChangeNotifier {
         products.clear();
         products.addAll(
           snapshot.docs.map((d) {
-            final p = canonical.Product.fromMap(d.data());
+            final p = canonical.Product.fromMap({...d.data(), 'id': d.id});
             return AdminDirectoryItem(
               p.name,
               '${p.artisanId} - ${p.price}',

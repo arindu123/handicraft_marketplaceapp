@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../../../shared/widgets/role_selection_back_button.dart';
 
 import '../models/admin_demo_store.dart';
@@ -6,13 +7,14 @@ import '../widgets/admin_widgets.dart';
 import 'admin_management_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
-  const AdminDashboardScreen({super.key});
+  const AdminDashboardScreen({super.key, this.store});
+  final AdminDemoStore? store;
   @override
   State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
 }
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
-  final _store = AdminDemoStore();
+  late final _store = widget.store ?? AdminDemoStore();
   @override
   void initState() {
     super.initState();
@@ -33,13 +35,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   final _search = TextEditingController();
   int _tab = 0;
-  String _approvalFilter = 'Pending', _orderFilter = 'All', _period = 'Week';
+  String _approvalFilter = 'Pending', _orderFilter = 'All';
   static const _statuses = ['Pending', 'Processing', 'Shipped', 'Delivered'];
 
   @override
   void dispose() {
     _search.dispose();
-    _store.dispose();
+    _store.removeListener(_showError);
+    if (widget.store == null) _store.dispose();
     super.dispose();
   }
 
@@ -198,7 +201,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'GUILD ADMINISTRATION  /  DEMO',
+            'GUILD ADMINISTRATION  /  LIVE',
             style: TextStyle(
               fontSize: 10,
               letterSpacing: 1.4,
@@ -266,7 +269,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
           _metric(
             (constraints.maxWidth - 12) / 2,
-            'Sample order value',
+            'Order value',
             adminMoney(_store.revenue),
             Icons.account_balance_wallet_outlined,
             () => setState(() => _tab = 2),
@@ -291,7 +294,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         spacing: 12,
         runSpacing: 12,
         children: [
-          for (final order in [_store.orders[0], _store.orders[2]])
+          if (_store.orders.isEmpty)
+            const AdminPanel(child: Text('No orders to showcase yet.')),
+          for (final order in _store.orders.take(2))
             SizedBox(
               width: constraints.maxWidth < 340
                   ? constraints.maxWidth
@@ -325,7 +330,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             _action(
               Icons.local_shipping_outlined,
               'Delivery delay flagged',
-              'Review the sample issue',
+              'Review the reports section',
               () => _manage(AdminSection.reports),
             ),
           if (_store.attentionCount == 0)
@@ -346,7 +351,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     _space(8),
     for (final order in _store.orders.take(3)) _orderCard(order),
     const Text(
-      'Frontend preview · Sample data · Session-only changes',
+      'Live marketplace administration · Firestore-backed data',
       textAlign: TextAlign.center,
       style: TextStyle(fontSize: 11, color: AdminStyle.muted),
     ),
@@ -367,12 +372,26 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Ink.image(
-            image: AssetImage(_productPhoto(order)!),
-            height: 170,
-            width: double.infinity,
-            fit: BoxFit.cover,
-          ),
+          if (_productPhoto(order) case final photo?)
+            Ink.image(
+              image: AssetImage(photo),
+              height: 170,
+              width: double.infinity,
+              fit: BoxFit.cover,
+            )
+          else
+            const SizedBox(
+              height: 170,
+              width: double.infinity,
+              child: ColoredBox(
+                color: AdminStyle.cream,
+                child: Icon(
+                  Icons.image_outlined,
+                  size: 40,
+                  color: AdminStyle.muted,
+                ),
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -408,7 +427,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
                 _space(8),
                 const Text(
-                  'View sample order →',
+                  'View order →',
                   style: TextStyle(fontSize: 12, color: AdminStyle.clay),
                 ),
               ],
@@ -504,21 +523,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   );
 
   Widget _sales() {
-    final values = switch (_period) {
-      'Today' => [0, 0, 2500, 3200, 4300, 4000],
-      'Month' => [24000, 32500, 41200, 53400],
-      _ => [3500, 4200, 6800, 4900, 7400, 12600, 14000],
-    };
-    final labels = switch (_period) {
-      'Today' => ['08', '10', '12', '14', '16', '18'],
-      'Month' => ['W1', 'W2', 'W3', 'W4'],
-      _ => ['M', 'T', 'W', 'T', 'F', 'S', 'S'],
-    };
+    final values = [
+      _store.orders
+          .where((order) => order.status == 'Delivered')
+          .fold<int>(0, (sum, order) => sum + order.amount),
+    ];
+    const labels = ['Delivered'];
     return AdminPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _filters(['Today', 'Week', 'Month'], _period, (v) => _period = v),
+          const Text('Recorded completed-order value', style: TextStyle(color: AdminStyle.muted)),
           Text(
             adminMoney(values.fold<int>(0, (a, b) => a + b)),
             style: const TextStyle(
@@ -528,7 +543,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
           ),
           const Text(
-            'Illustrative sales activity',
+            'Sales activity from delivered orders',
             style: TextStyle(fontSize: 11, color: AdminStyle.muted),
           ),
           _space(22),
@@ -545,7 +560,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return [
       _title(
         'Make room for great craft.',
-        'Review sample studio and courier applications.',
+        'Review studio and courier applications.',
       ),
       _filters(
         ['Pending', 'Approved', 'Rejected', 'All'],
@@ -604,7 +619,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             Text(item.description, style: const TextStyle(height: 1.6)),
             _space(),
             const Text(
-              'Demo application. Decisions affect only this preview.',
+        'Review the submitted application before making a decision.',
               style: TextStyle(fontSize: 12, color: AdminStyle.muted),
             ),
             _space(),
@@ -624,9 +639,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         final confirmed = await confirmAdminAction(
                           sheetContext,
                           approved
-                              ? 'Approve sample application?'
-                              : 'Reject sample application?',
-                          'This updates the demo workspace only.',
+                              ? 'Approve application?'
+                              : 'Reject application?',
+                          'This updates the selected Firestore record.',
                         );
                         if (!mounted || !sheetContext.mounted || !confirmed) {
                           return;
@@ -654,7 +669,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     return [
       _title(
         'Every piece has a journey.',
-        'Browse and update sample marketplace orders.',
+        'Browse and update marketplace orders.',
       ),
       TextField(
         controller: _search,
@@ -773,7 +788,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _title(order.id, 'Sample order details'),
+                _title(order.id, 'Order details'),
                 Text(
                   order.product,
                   style: const TextStyle(
@@ -809,7 +824,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
                 _space(),
                 const Text(
-                  'Preview only. No real dispatch or payment is changed.',
+                  'Status changes are saved to the marketplace order record.',
                   style: TextStyle(fontSize: 12, color: AdminStyle.muted),
                 ),
                 _space(),
@@ -819,7 +834,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       : () async {
                           final confirmed = await confirmAdminAction(
                             sheetContext,
-                            'Update sample order?',
+                            'Update order?',
                             'Change ${order.id} to $status in this preview?',
                           );
                           if (!mounted || !sheetContext.mounted || !confirmed) {
@@ -831,7 +846,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   style: FilledButton.styleFrom(
                     backgroundColor: AdminStyle.navy,
                   ),
-                  child: const Text('Update demo status'),
+                  child: const Text('Update status'),
                 ),
               ],
             ),
@@ -852,19 +867,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           _action(
             Icons.people_outline,
             'Users & artisans',
-            '${_store.users.length} sample profiles',
+            '${_store.users.length} profiles',
             () => _manage(AdminSection.users),
           ),
           _action(
             Icons.category_outlined,
             'Product catalogue',
-            '${_store.products.length} sample listings',
+            '${_store.products.length} listings',
             () => _manage(AdminSection.products),
           ),
           _action(
             Icons.local_shipping_outlined,
             'Courier directory',
-            '${_store.couriers.length} sample partners',
+            '${_store.couriers.length} courier partners',
             () => _manage(AdminSection.couriers),
           ),
           _action(
@@ -875,8 +890,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
           _action(
             Icons.tune,
-            'Preview settings',
-            'Demo notification preferences',
+            'Settings',
+            'Notification preferences',
             () => _manage(AdminSection.settings),
           ),
         ],
@@ -884,7 +899,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     ),
     _space(24),
     const Text(
-      'You are exploring a frontend demo. Changes reset when you leave this dashboard. Authentication and backend services can be connected later.',
+      'Admin actions use the authenticated Firestore account and follow the marketplace security rules.',
       style: TextStyle(fontSize: 12, height: 1.6, color: AdminStyle.muted),
     ),
   ];

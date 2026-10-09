@@ -31,7 +31,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
     AdminSection.products => 'Product catalogue',
     AdminSection.couriers => 'Courier directory',
     AdminSection.reports => 'Reports & issues',
-    AdminSection.settings => 'Preview settings',
+    AdminSection.settings => 'Settings',
   };
 
   @override
@@ -56,7 +56,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
               padding: const EdgeInsets.all(20),
               children: [
                 const Text(
-                  'DEMO WORKSPACE',
+                  'ADMIN WORKSPACE',
                   style: TextStyle(
                     fontSize: 10,
                     letterSpacing: 1.5,
@@ -66,7 +66,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Sample data only. Changes last for this preview session.',
+                  'Manage live marketplace records and approvals.',
                   style: TextStyle(
                     fontSize: 12,
                     height: 1.5,
@@ -189,13 +189,13 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                           item.active
                               ? 'Pause ${item.name}?'
                               : 'Reactivate ${item.name}?',
-                          'This changes only this sample record. No real user, product or courier is affected.',
+                          'This updates the selected marketplace record in Firestore.',
                         );
                         if (!mounted || !approved) return;
                         widget.store.toggleItem(item);
                       },
                       child: Text(
-                        item.active ? 'Pause in demo' : 'Reactivate in demo',
+                        item.active ? 'Pause' : 'Reactivate',
                         style: const TextStyle(color: AdminStyle.clay),
                       ),
                     ),
@@ -252,83 +252,30 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
       ),
     ),
     const SizedBox(height: 22),
-    const AdminSectionHeading('Needs review'),
+    const AdminSectionHeading('Reports'),
     const SizedBox(height: 14),
-    _issue(
-      true,
-      'Product listing reported',
-      'Sample report: the description of a glazed serving bowl may not match its listed dimensions.',
-      widget.store.productReportResolved,
-    ),
-    const SizedBox(height: 12),
-    _issue(
-      false,
-      'Delivery delay flagged',
-      'Sample issue: order CR-2047 is awaiting an updated arrival estimate from the courier.',
-      widget.store.deliveryIssueResolved,
+    const AdminEmptyState(
+      'No persisted reports are available yet. New product and delivery reports will appear here when submitted.',
     ),
   ];
-
-  Widget _issue(bool product, String title, String detail, bool resolved) =>
-      AdminPanel(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: AdminStyle.navy,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              detail,
-              style: const TextStyle(
-                color: AdminStyle.muted,
-                fontSize: 13,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 12),
-            AdminStatus(resolved ? 'Resolved' : 'Pending'),
-            if (!resolved)
-              TextButton(
-                onPressed: () async {
-                  final confirmed = await confirmAdminAction(
-                    context,
-                    'Resolve sample issue?',
-                    'This marks the issue as resolved in this preview only.',
-                  );
-                  if (mounted && confirmed) widget.store.resolveIssue(product);
-                },
-                child: const Text(
-                  'Mark resolved (demo)',
-                  style: TextStyle(color: AdminStyle.clay),
-                ),
-              ),
-          ],
-        ),
-      );
 
   List<Widget> _settings() => [
     SwitchListTile(
       contentPadding: EdgeInsets.zero,
       title: const Text('Application notifications'),
-      subtitle: const Text('Preview preference for new studio applications.'),
+      subtitle: const Text('Notification delivery is not configured yet.'),
       activeThumbColor: AdminStyle.sage,
       value: widget.store.applicationNotifications,
-      onChanged: (value) => widget.store.setNotifications(applications: value),
+      onChanged: null,
     ),
     const Divider(color: AdminStyle.border),
     SwitchListTile(
       contentPadding: EdgeInsets.zero,
       title: const Text('Order notifications'),
-      subtitle: const Text('Preview preference for order updates.'),
+      subtitle: const Text('Notification delivery is not configured yet.'),
       activeThumbColor: AdminStyle.sage,
       value: widget.store.orderNotifications,
-      onChanged: (value) => widget.store.setNotifications(orders: value),
+      onChanged: null,
     ),
     const SizedBox(height: 24),
     const AdminPanel(
@@ -338,7 +285,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
           Icon(Icons.info_outline, color: AdminStyle.clay),
           SizedBox(height: 10),
           Text(
-            'A safe space to explore',
+            'Administration settings',
             style: TextStyle(
               fontWeight: FontWeight.w700,
               color: AdminStyle.navy,
@@ -346,7 +293,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
           ),
           SizedBox(height: 8),
           Text(
-            'This is a frontend preview. No notifications are sent, no payments are processed, and no admin privileges are granted.',
+            'Order, approval and catalogue changes are saved through the connected Firestore admin rules.',
             style: TextStyle(color: AdminStyle.muted, height: 1.5),
           ),
         ],

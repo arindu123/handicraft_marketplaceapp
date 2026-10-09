@@ -1,4 +1,3 @@
-import '../../../shared/data/marketplace_repository.dart';
 import 'package:flutter/material.dart';
 
 import '../models/admin_demo_store.dart';
@@ -21,7 +20,7 @@ class AdminArtisanReviewScreen extends StatelessWidget {
           : artisan.active
           ? 'Pause ${artisan.name}?'
           : 'Reactivate ${artisan.name}?',
-      MarketplaceBackend.enabled ? 'This updates the selected Firestore record.' : 'This updates only the selected sample profile in this preview session.',
+      'This updates the selected Firestore record.',
     );
     if (!context.mounted || !confirmed) return;
     if (verify) {
@@ -75,7 +74,7 @@ class AdminArtisanReviewScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(20),
                 children: [
                   Text(
-                    MarketplaceBackend.enabled ? 'ADMIN WORKSPACE' : 'DEMO WORKSPACE',
+                    'ADMIN WORKSPACE',
                     style: TextStyle(
                       fontSize: 10,
                       letterSpacing: 1.5,
@@ -85,7 +84,7 @@ class AdminArtisanReviewScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    MarketplaceBackend.enabled ? 'Changes are saved to the shared marketplace.' : 'Sample data only. Changes last for this preview session.',
+                    'Changes are saved to the shared marketplace.',
                     style: TextStyle(
                       fontSize: 12,
                       height: 1.5,
@@ -151,7 +150,7 @@ class AdminArtisanReviewScreen extends StatelessWidget {
                         const AdminSectionHeading('Studio summary'),
                         const SizedBox(height: 14),
                         Text(
-                          application?.description ?? 'Artisan studio listed in the Craftisan demo directory.',
+                          application?.description ?? 'No profile description was provided.',
                           style: const TextStyle(
                             color: AdminStyle.muted,
                             height: 1.5,
@@ -166,7 +165,7 @@ class AdminArtisanReviewScreen extends StatelessWidget {
                         ],
                         const SizedBox(height: 14),
                         Text(
-                          '${products.length} products in demo catalogue',
+                          '${products.length} products in catalogue',
                           style: const TextStyle(
                             color: AdminStyle.navy,
                             fontWeight: FontWeight.w600,
@@ -200,8 +199,8 @@ class AdminArtisanReviewScreen extends StatelessWidget {
                         onPressed: () => _action(context, verify: false),
                         child: Text(
                           artisan.active
-                              ? 'Pause in demo'
-                              : 'Reactivate in demo',
+                              ? 'Pause'
+                              : 'Reactivate',
                           style: const TextStyle(color: AdminStyle.clay),
                         ),
                       ),

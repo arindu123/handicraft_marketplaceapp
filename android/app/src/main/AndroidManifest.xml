@@ -5,6 +5,11 @@
         android:label="artisan_marketplace"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- Some Android emulator GPU drivers render a blank surface when the
+             keyboard appears with Impeller enabled. Use Skia for stability. -->
+        <meta-data
+            android:name="io.flutter.embedding.android.EnableImpeller"
+            android:value="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"

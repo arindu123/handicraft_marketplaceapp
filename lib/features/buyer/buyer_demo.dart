@@ -25,6 +25,7 @@ class DemoProduct {
     this.currency = 'USD',
     this.stock,
     this.createdAt,
+    this.isVerified = false,
   });
   final String id;
   final DateTime? createdAt;
@@ -32,6 +33,7 @@ class DemoProduct {
   final List<String> imageUrls;
   final String currency;
   final int? stock;
+  final bool isVerified;
   String priceLabel([int quantity = 1]) => currency == 'USD'
       ? money(price * quantity)
       : '$currency ${(price * quantity).toStringAsFixed(2)}';
@@ -39,6 +41,7 @@ class DemoProduct {
     canonical.Product p, {
     String studio = '',
     String location = '',
+    bool isVerified = false,
   }) => DemoProduct(
     p.name,
     p.category,
@@ -54,6 +57,7 @@ class DemoProduct {
     currency: p.currency,
     stock: p.stock,
     createdAt: p.createdAt,
+    isVerified: isVerified,
   );
   @override
   bool operator ==(Object other) =>
@@ -393,6 +397,8 @@ class BuyerDemo extends ChangeNotifier {
             p,
             studio: _studios[p.artisanId]?['studioName'] as String? ?? '',
             location: _studios[p.artisanId]?['location'] as String? ?? '',
+            isVerified:
+                _studios[p.artisanId]?['verificationStatus'] == 'verified',
           ),
         )
         .toList();

@@ -501,24 +501,21 @@ class _AuthFormState extends State<AuthForm> {
                                     onPressed: _submit,
                                   ),
                                   const SizedBox(height: 8),
-                                  TextButton(
-                                    onPressed: () {
-                                      FocusScope.of(context).unfocus();
-                                      Navigator.pushNamed(
-                                        context,
-                                        _admin
-                                            ? RouteNames.adminDashboard
-                                            : RouteNames.marketplace,
-                                        arguments: _role,
-                                      );
-                                    },
-                                    child: Text(
-                                      _admin
-                                          ? 'Preview Admin Dashboard'
-                                          : 'Continue without an account',
-                                      textAlign: TextAlign.center,
+                                  if (!_admin)
+                                    TextButton(
+                                      onPressed: () {
+                                        FocusScope.of(context).unfocus();
+                                        Navigator.pushNamed(
+                                          context,
+                                          RouteNames.marketplace,
+                                          arguments: _role,
+                                        );
+                                      },
+                                      child: const Text(
+                                        'Continue without an account',
+                                        textAlign: TextAlign.center,
+                                      ),
                                     ),
-                                  ),
                                 ],
                               ),
                             ),

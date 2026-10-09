@@ -1201,14 +1201,30 @@ class _ProductCard extends StatelessWidget {
                     color: const Color(0xFFF9F1E7),
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text(
-                    'Handmade',
-                    style: TextStyle(
-                      fontSize: 9,
-                      fontWeight: FontWeight.w600,
-                      color: Color(0xFF70452F),
-                    ),
-                  ),
+                  child: product.isVerified
+                      ? const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.verified, size: 12, color: Color(0xFF47745C)),
+                            SizedBox(width: 4),
+                            Text(
+                              'Verified maker',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w700,
+                                color: Color(0xFF47745C),
+                              ),
+                            ),
+                          ],
+                        )
+                      : const Text(
+                          'Handmade',
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF70452F),
+                          ),
+                        ),
                 ),
               ),
               Positioned(
@@ -1732,9 +1748,20 @@ class _BuyerProductDetailsState extends State<BuyerProductDetails> {
               backgroundColor: _mint,
               child: Icon(Icons.storefront_outlined),
             ),
-            title: Text(
-              p.studio.isEmpty ? 'Meet the maker' : p.studio,
-              style: TextStyle(fontWeight: FontWeight.w600),
+            title: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    p.studio.isEmpty ? 'Meet the maker' : p.studio,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (p.isVerified) ...[
+                  const SizedBox(width: 6),
+                  const Icon(Icons.verified, size: 16, color: Color(0xFF47745C)),
+                ],
+              ],
             ),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _open(
@@ -1883,12 +1910,32 @@ class BuyerArtisanProfile extends StatelessWidget {
           Center(child: _Heading(artisan.name)),
           Center(child: Text(artisan.studio)),
           const SizedBox(height: 8),
-          const Center(
-            child: Chip(
-              avatar: Icon(Icons.verified, color: AppColors.sage, size: 18),
-              label: Text('Verified Guild Artisan'),
+          if (avatarProduct.isVerified)
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEAF4ED),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFB9D8C2)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.verified, color: Color(0xFF47745C), size: 16),
+                    SizedBox(width: 6),
+                    Text(
+                      'Verified maker',
+                      style: TextStyle(
+                        color: Color(0xFF47745C),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ),
           Center(
             child: Text(
               artisan.location,

@@ -24,6 +24,21 @@ Future<void> tapText(WidgetTester tester, String text) async {
 }
 
 void main() {
+  testWidgets('System back from delivery opens roles instead of welcome', (
+    tester,
+  ) async {
+    await openRoute(tester, RouteNames.deliveryHome);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('Roles Selection'), findsOneWidget);
+    expect(find.text('Get Started'), findsNothing);
+    expect(
+      tester.state<NavigatorState>(find.byType(Navigator)).canPop(),
+      isFalse,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Dashboard opened as the root can return to role selection', (
     tester,
   ) async {
@@ -46,7 +61,10 @@ void main() {
     await tester.tap(find.byTooltip('Back to role selection'));
     await tester.pumpAndSettle();
     expect(find.text('Roles Selection'), findsOneWidget);
-    expect(tester.state<NavigatorState>(find.byType(Navigator)).canPop(), isFalse);
+    expect(
+      tester.state<NavigatorState>(find.byType(Navigator)).canPop(),
+      isFalse,
+    );
     expect(tester.takeException(), isNull);
   });
 

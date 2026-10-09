@@ -29,6 +29,10 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveryOnline', 'updatedAt'])
         && request.resource.data.deliveryOnline is bool
         && request.resource.data.updatedAt == request.time;
+      allow update: if owner(uid) && role('courier')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveryNotifications', 'updatedAt'])
+        && request.resource.data.deliveryNotifications is bool
+        && request.resource.data.updatedAt == request.time;
       allow delete: if false;
       match /cart/{productId} {
         allow read, delete: if owner(uid);
@@ -127,6 +131,10 @@ service cloud.firestore {
         && o.paymentMethod == 'Cash on delivery' && o.createdAt is string && o.updatedAt == null;
     }
     match /orders/{id} {
+      function deliveryActive() {
+        return !existsAfter(/databases/$(database)/documents/orders/$(id)/deliveryPlan/current)
+          || getAfter(/databases/$(database)/documents/orders/$(id)/deliveryPlan/current).data.outcome == 'active';
+      }
       function courierTransition() {
         let keys = request.resource.data.diff(resource.data).affectedKeys();
         return (keys.hasOnly(['status','updatedAt'])
@@ -166,8 +174,58 @@ service cloud.firestore {
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt'])
             && resource.data.status == 'pending' && request.resource.data.status == 'confirmed')
           || (role('courier') && resource.data.courierId == request.auth.uid
-            && courierTransition()));
+            && deliveryActive() && courierTransition()));
       allow delete: if false;
+      function deliveryOrder() { return get(/databases/$(database)/documents/orders/$(id)).data; }
+      function deliveryReader() {
+        return isAdmin() || signedIn() && (deliveryOrder().buyerId == request.auth.uid
+          || deliveryOrder().artisanId == request.auth.uid || deliveryOrder().courierId == request.auth.uid);
+      }
+      function assignedActive() {
+        return role('courier') && deliveryOrder().courierId == request.auth.uid
+          && deliveryOrder().status in ['courierAssigned','pickedUp','onTheWay'];
+      }
+      function validAttempt() {
+        let d = request.resource.data;
+        return d.keys().hasAll(['courierId','outcome','reason','notes','retryAt','createdAt'])
+          && d.keys().hasOnly(['courierId','outcome','reason','notes','retryAt','createdAt'])
+          && d.courierId == request.auth.uid
+          && d.outcome in ['failed','rescheduled','returnRequested']
+          && d.reason in ['Customer unavailable','Wrong address','Damaged parcel','Unable to accept delivery','Other']
+          && d.notes is string && d.notes.size() <= 1000
+          && (d.reason != 'Other' || d.notes.size() > 0)
+          && (d.outcome == 'rescheduled' ? (d.retryAt is timestamp && d.retryAt > request.time) : d.retryAt == null)
+          && d.createdAt == request.time;
+      }
+      match /deliveryPlan/{planId} {
+        allow read: if deliveryReader();
+        allow create: if planId == 'current' && assignedActive() && validAttempt();
+        allow update: if planId == 'current' && assignedActive()
+          && resource.data.outcome != 'returnRequested'
+          && (validAttempt() || (resource.data.outcome in ['failed','rescheduled']
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['outcome','createdAt'])
+            && request.resource.data.outcome == 'active'
+            && (resource.data.retryAt == null || resource.data.retryAt <= request.time)
+            && request.resource.data.createdAt == request.time));
+        allow delete: if isAdmin();
+      }
+      match /deliveryAttempts/{attemptId} {
+        allow read: if deliveryReader();
+        allow create: if assignedActive() && validAttempt()
+          && request.resource.data == getAfter(/databases/$(database)/documents/orders/$(id)/deliveryPlan/current).data;
+        allow update, delete: if false;
+      }
+      match /deliveryProofs/{stage} {
+        allow read: if deliveryReader();
+        allow create, update: if role('courier') && deliveryOrder().courierId == request.auth.uid
+          && ((stage == 'pickup' && deliveryOrder().status in ['courierAssigned','pickedUp','onTheWay'])
+            || (stage == 'dropoff' && deliveryOrder().status in ['onTheWay','delivered']))
+          && request.resource.data.keys().hasOnly(['courierId','stage','path','createdAt'])
+          && request.resource.data.courierId == request.auth.uid && request.resource.data.stage == stage
+          && request.resource.data.path == 'delivery_proofs/' + id + '/' + request.auth.uid + '/' + stage + '.jpg'
+          && request.resource.data.createdAt == request.time;
+        allow delete: if false;
+      }
       match /deliveryIssues/{reportId} {
         function order() { return get(/databases/$(database)/documents/orders/$(id)).data; }
         allow read: if isAdmin() || signedIn() && (order().buyerId == request.auth.uid
@@ -193,6 +251,16 @@ service cloud.firestore {
         && request.resource.data.code is string && request.resource.data.code.matches('[0-9]{6}')
         && request.resource.data.createdAt == request.time;
       allow list, update, delete: if false;
+    }
+
+    match /deliveryDevices/{token} {
+      allow read: if false;
+      allow create, update: if role('courier')
+        && request.resource.data.keys().hasOnly(['courierId','token','updatedAt'])
+        && request.resource.data.courierId == request.auth.uid
+        && request.resource.data.token == token && token.size() <= 2048
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if signedIn() && resource.data.courierId == request.auth.uid;
     }
 
     match /artisanProfiles/{id} {

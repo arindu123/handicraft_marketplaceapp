@@ -126,3 +126,81 @@ test('saved addresses are owner-only, validated and editable', async () => {
   await assertFails(setDoc(doc(dbFor('buyer'), path), {...address, cardNumber: 'not allowed'}));
   await assertFails(setDoc(doc(dbFor('artisan'), 'users/artisan/addresses/home'), address));
 });
+
+async function assignedOrder(id, status = 'onTheWay') {
+  await env.withSecurityRulesDisabled(async ctx => {
+    await setDoc(doc(ctx.firestore(), 'orders', id), { ...order(id), courierId: 'courier', status });
+  });
+}
+const attempt = (outcome = 'failed', retryAt = null) => ({
+  courierId: 'courier', outcome, reason: 'Customer unavailable', notes: 'No answer',
+  retryAt, createdAt: serverTimestamp(),
+});
+
+test('delivery holds block advancement and only assigned couriers can resume', async () => {
+  await assignedOrder('held', 'pickedUp');
+  const courier = dbFor('courier'), plan = doc(courier, 'orders/held/deliveryPlan/current');
+  await assertSucceeds(runTransaction(courier, async tx => {
+    const data = attempt();
+    tx.set(plan, data);
+    tx.set(doc(courier, 'orders/held/deliveryAttempts/a1'), data);
+  }));
+  await assertFails(updateDoc(doc(courier, 'orders/held'), { status: 'onTheWay', updatedAt: now }));
+  await assertFails(updateDoc(doc(dbFor('courier2'), 'orders/held/deliveryPlan/current'), { outcome: 'active', createdAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(dbFor('buyer'), 'orders/held/deliveryPlan/current'), { outcome: 'active', createdAt: serverTimestamp() }));
+  await assertSucceeds(getDoc(doc(dbFor('buyer'), 'orders/held/deliveryPlan/current')));
+  await assertFails(getDoc(doc(dbFor('other'), 'orders/held/deliveryPlan/current')));
+  await assertSucceeds(updateDoc(plan, { outcome: 'active', createdAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(courier, 'orders/held'), { status: 'onTheWay', updatedAt: now }));
+  await assertFails(updateDoc(doc(courier, 'orders/held/deliveryAttempts/a1'), { notes: 'Forged' }));
+});
+
+test('scheduled retries cannot resume early and returns remain on hold', async () => {
+  await assignedOrder('retry');
+  const plan = doc(dbFor('courier'), 'orders/retry/deliveryPlan/current');
+  await assertFails(setDoc(plan, attempt('rescheduled', new Date(Date.now() - 60000))));
+  await assertSucceeds(setDoc(plan, attempt('rescheduled', new Date(Date.now() + 3600000))));
+  await assertFails(updateDoc(plan, { outcome: 'active', createdAt: serverTimestamp() }));
+  await assertSucceeds(setDoc(plan, attempt('returnRequested')));
+  await assertFails(updateDoc(plan, { outcome: 'active', createdAt: serverTimestamp() }));
+  await assertFails(setDoc(plan, attempt()));
+});
+
+test('a hold cannot be bypassed by advancing the order in the same transaction', async () => {
+  await assignedOrder('atomic-hold', 'pickedUp');
+  const courier = dbFor('courier');
+  await assertFails(runTransaction(courier, async tx => {
+    tx.set(doc(courier, 'orders/atomic-hold/deliveryPlan/current'), attempt());
+    tx.update(doc(courier, 'orders/atomic-hold'), { status: 'onTheWay', updatedAt: now });
+  }));
+  assert.equal((await getDoc(doc(courier, 'orders/atomic-hold'))).data().status, 'pickedUp');
+});
+
+test('photo metadata enforces assignment, stage, private paths and participant access', async () => {
+  await assignedOrder('proof', 'courierAssigned');
+  const courier = dbFor('courier');
+  const data = stage => ({ courierId: 'courier', stage,
+    path: `delivery_proofs/proof/courier/${stage}.jpg`, createdAt: serverTimestamp() });
+  await assertSucceeds(setDoc(doc(courier, 'orders/proof/deliveryProofs/pickup'), data('pickup')));
+  await assertFails(setDoc(doc(courier, 'orders/proof/deliveryProofs/dropoff'), data('dropoff')));
+  await assertFails(setDoc(doc(dbFor('courier2'), 'orders/proof/deliveryProofs/pickup'), data('pickup')));
+  await assertFails(setDoc(doc(courier, 'orders/proof/deliveryProofs/pickup'), { ...data('pickup'), path: 'public/photo.jpg' }));
+  await assertSucceeds(getDoc(doc(dbFor('buyer'), 'orders/proof/deliveryProofs/pickup')));
+  await assertFails(getDoc(doc(dbFor('other'), 'orders/proof/deliveryProofs/pickup')));
+  await env.withSecurityRulesDisabled(async ctx => {
+    await updateDoc(doc(ctx.firestore(), 'orders/proof'), { status: 'delivered' });
+  });
+  await assertSucceeds(setDoc(doc(courier, 'orders/proof/deliveryProofs/dropoff'), data('dropoff')));
+  await assertFails(setDoc(doc(courier, 'orders/proof/deliveryProofs/pickup'), data('pickup')));
+});
+
+test('device registration and notification preferences are courier-only', async () => {
+  const courier = dbFor('courier'), device = doc(courier, 'deliveryDevices/device-token');
+  await assertSucceeds(setDoc(device, { courierId: 'courier', token: 'device-token', updatedAt: serverTimestamp() }));
+  await assertFails(getDoc(doc(dbFor('other'), 'deliveryDevices/device-token')));
+  await assertFails(setDoc(doc(dbFor('buyer'), 'deliveryDevices/buyer-token'), {
+    courierId: 'buyer', token: 'buyer-token', updatedAt: serverTimestamp() }));
+  await assertFails(setDoc(device, { courierId: 'courier', token: 'wrong-token', updatedAt: serverTimestamp() }));
+  await assertSucceeds(updateDoc(doc(courier, 'users/courier'), { deliveryNotifications: false, updatedAt: serverTimestamp() }));
+  await assertFails(updateDoc(doc(dbFor('other'), 'users/courier'), { deliveryNotifications: true, updatedAt: serverTimestamp() }));
+});

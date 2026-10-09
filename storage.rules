@@ -1,6 +1,20 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
+    match /delivery_proofs/{orderId}/{courierUid}/{filename} {
+      function order() { return firestore.get(/databases/(default)/documents/orders/$(orderId)).data; }
+      allow read: if request.auth != null && (order().buyerId == request.auth.uid
+        || order().artisanId == request.auth.uid || order().courierId == request.auth.uid
+        || firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      allow write: if request.auth != null && request.auth.uid == courierUid
+        && order().courierId == courierUid
+        && firestore.get(/databases/(default)/documents/users/$(courierUid)).data.role == 'courier'
+        && ((filename == 'pickup.jpg' && order().status in ['courierAssigned','pickedUp','onTheWay'])
+          || (filename == 'dropoff.jpg' && order().status in ['onTheWay','delivered']))
+        && request.resource != null && request.resource.size > 0
+        && request.resource.size <= 10 * 1024 * 1024
+        && request.resource.contentType == 'image/jpeg';
+    }
     match /product_images/{artisanUid}/{productId}/{filename} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == artisanUid

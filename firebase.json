@@ -21,6 +21,8 @@
   "firestore": {
     "rules": "firestore.rules"
   },
+  "storage": { "rules": "storage.rules" },
+  "functions": [{ "source": "functions", "codebase": "delivery" }],
   "emulators": {
     "firestore": {
       "port": 8187

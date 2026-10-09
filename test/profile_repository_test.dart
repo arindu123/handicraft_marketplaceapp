@@ -4,6 +4,7 @@ import 'package:artisan_marketplace/shared/data/cloudinary_upload.dart';
 import 'package:artisan_marketplace/shared/data/profile_repository.dart';
 import 'package:artisan_marketplace/shared/data/marketplace_repository.dart';
 import 'package:artisan_marketplace/features/delivery/widgets/delivery_profile_editor.dart';
+import 'package:artisan_marketplace/features/delivery/widgets/delivery_profile_widgets.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
 import 'package:flutter/material.dart';
@@ -122,6 +123,12 @@ void main() {
   testWidgets('Profile editor displays saved name and saves changes', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     final profile = (await tester.runAsync(() => repo.watch().first))!;
     await tester.pumpWidget(
       MaterialApp(
@@ -143,16 +150,30 @@ void main() {
     );
     await tester.tap(find.text('Open editor'));
     await tester.pumpAndSettle();
-    expect(find.text('Pasindu Kavishka'), findsOneWidget);
     expect(find.text('PK'), findsOneWidget);
-    expect(find.text('Choose profile photo'), findsOneWidget);
+    expect(find.byTooltip('Choose profile photo'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Full name'), 150,
+      scrollable: find.byType(Scrollable).first);
+    expect(find.text('Pasindu Kavishka'), findsOneWidget);
     await tester.enterText(find.byType(TextFormField).first, 'Pasindu Updated');
-    await tester.enterText(find.byType(TextFormField).last, 'Kandy');
-    await tester.ensureVisible(find.text('Save profile'));
-    await tester.tap(find.text('Save profile'));
+    await tester.scrollUntilVisible(
+      find.text('Delivery area'),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.enterText(
+      find.descendant(
+        of: find.widgetWithText(DeliveryProfileField, 'Delivery area'),
+        matching: find.byType(TextFormField),
+      ),
+      'Kandy',
+    );
+    await tester.ensureVisible(find.text('Save changes'));
+    await tester.tap(find.text('Save changes'));
     await tester.pumpAndSettle();
     expect(find.text('Open editor'), findsOneWidget);
     final saved = await tester.runAsync(() => repo.watch().first);
     expect(saved!['displayName'], 'Pasindu Updated');
+    expect(saved['area'], 'Kandy');
   });
 }

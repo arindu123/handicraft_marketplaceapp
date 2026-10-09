@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Native version of the app's existing CraftisanMark, padded for icon masks. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <group android:translateX="22" android:translateY="20">
+        <path android:fillColor="@android:color/transparent"
+            android:strokeColor="@color/craftisan_logo_color" android:strokeWidth="2.4"
+            android:strokeLineCap="round" android:strokeLineJoin="round"
+            android:pathData="M25,20 C25,29 16,34 17,46 C18,64 46,64 47,46 C48,34 39,29 39,20 M23,20 L41,20 M19,43 Q32,52 45,43 M32,18 L32,9" />
+        <path android:fillColor="@color/craftisan_logo_color"
+            android:pathData="M32,12 Q30,4 40,4 Q40,12 32,12 Z" />
+    </group>
+</vector>

@@ -5,6 +5,9 @@ import 'package:image_picker/image_picker.dart';
 
 import '../../../shared/data/marketplace_repository.dart';
 import '../../../shared/data/profile_repository.dart';
+import 'delivery_widgets.dart';
+import 'delivery_profile_widgets.dart';
+import '../../../core/theme/app_colors.dart';
 
 class ProfileAvatar extends StatelessWidget {
   const ProfileAvatar({
@@ -35,7 +38,7 @@ class ProfileAvatar extends StatelessWidget {
       child: SizedBox.square(
         dimension: radius * 2,
         child: ColoredBox(
-          color: const Color(0xFFFFE7D5),
+          color: DeliveryStyle.peach,
           child: bytes != null
               ? Image.memory(
                   bytes!,
@@ -60,9 +63,11 @@ class DeliveryProfileEditor extends StatefulWidget {
     super.key,
     required this.repository,
     required this.profile,
+    this.completedDeliveries,
   });
   final ProfileRepository repository;
   final Map<String, dynamic> profile;
+  final int? completedDeliveries;
 
   @override
   State<DeliveryProfileEditor> createState() => _DeliveryProfileEditorState();
@@ -136,57 +141,130 @@ class _DeliveryProfileEditorState extends State<DeliveryProfileEditor> {
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !_busy,
-    child: Scaffold(
-      appBar: AppBar(title: const Text('Edit profile')),
-      body: Form(
-        key: _form,
-        child: ListView(
-          padding: const EdgeInsets.all(24),
-          children: [
-            Center(
-              child: ProfileAvatar(
-                name: _name.text,
-                url: widget.profile['photoUrl'] as String? ?? '',
-                bytes: _photo,
-                radius: 48,
-              ),
-            ),
-            TextButton.icon(
-              onPressed: _busy ? null : _pickPhoto,
-              icon: const Icon(Icons.add_a_photo_outlined),
-              label: const Text('Choose profile photo'),
-            ),
-            const SizedBox(height: 20),
-            TextFormField(
-              controller: _name,
-              enabled: !_busy,
-              maxLength: 100,
-              decoration: const InputDecoration(labelText: 'Full name'),
-              validator: (value) => value == null || value.trim().isEmpty
-                  ? 'Enter your name.'
-                  : null,
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _area,
-              enabled: !_busy,
-              maxLength: 100,
-              decoration: const InputDecoration(labelText: 'Delivery area'),
-            ),
-            const SizedBox(height: 16),
-            if (_error != null)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Text(
-                  _error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+    child: Theme(
+      data: DeliveryStyle.theme,
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.background,
+          title: const Text('My Profile', style: TextStyle(fontSize: 16)),
+          leading: IconButton(
+            tooltip: 'Back to profile',
+            onPressed: _busy ? null : () => Navigator.pop(context),
+            icon: const Icon(Icons.arrow_back, size: 20),
+          ),
+        ),
+        body: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 500),
+              child: Form(
+                key: _form,
+                child: ListView(
+                  padding: const EdgeInsets.all(24),
+                  children: [
+                    const DeliveryProfileHeading(
+                      title: 'Profile Information',
+                      subtitle:
+                          'Manage your delivery identity and contact details.',
+                    ),
+                    const SizedBox(height: 24),
+                    DeliveryProfilePortrait(
+                      onEdit: _busy ? null : _pickPhoto,
+                      avatar: ProfileAvatar(
+                        name: _name.text,
+                        url: widget.profile['photoUrl'] as String? ?? '',
+                        bytes: _photo,
+                        radius: 44,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    DeliveryProfileField(
+                      label: 'Full name',
+                      icon: Icons.person_outline,
+                      controller: _name,
+                      enabled: !_busy,
+                      maxLength: 100,
+                      onChanged: (_) => setState(() {}),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Enter your name.'
+                          : null,
+                    ),
+                    DeliveryProfileField(
+                      label: 'Email address',
+                      icon: Icons.mail_outline,
+                      value: widget.profile['email'] as String? ?? '',
+                      readOnly: true,
+                    ),
+                    DeliveryProfileField(
+                      label: 'Mobile number',
+                      icon: Icons.phone_outlined,
+                      value:
+                          widget.profile['phone'] as String? ??
+                          widget.repository.auth.currentUser?.phoneNumber ??
+                          '',
+                      readOnly: true,
+                    ),
+                    DeliveryProfileField(
+                      label: 'Delivery area',
+                      icon: Icons.location_on_outlined,
+                      controller: _area,
+                      enabled: !_busy,
+                      maxLength: 100,
+                    ),
+                    if (widget.completedDeliveries != null) ...[
+                      DeliveryCompletedSummary(
+                        count: widget.completedDeliveries!,
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                  ],
                 ),
               ),
-            FilledButton(
-              onPressed: _busy ? null : _save,
-              child: Text(_busy ? 'Please wait...' : 'Save profile'),
             ),
-          ],
+          ),
+        ),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Center(
+            heightFactor: 1,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 500),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_error != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Text(
+                          _error!,
+                          style: TextStyle(
+                            color: DeliveryStyle.theme.colorScheme.error,
+                          ),
+                        ),
+                      ),
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: DeliveryStyle.orange,
+                        foregroundColor: Colors.white,
+                        minimumSize: const Size(double.infinity, 50),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: _busy ? null : _save,
+                      icon: const Icon(Icons.check, size: 18),
+                      label: Text(_busy ? 'Please wait...' : 'Save changes'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ),
       ),
     ),

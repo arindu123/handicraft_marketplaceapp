@@ -4,7 +4,8 @@
     <application
         android:label="artisan_marketplace"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/craftisan_launcher"
+        android:roundIcon="@mipmap/craftisan_launcher">
         <!-- Some Android emulator GPU drivers render a blank surface when the
              keyboard appears with Impeller enabled. Use Skia for stability. -->
         <meta-data

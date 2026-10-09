@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Keep the bag inside the adaptive icon's circular safe area. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:insetLeft="15%" android:insetRight="15%"
+    android:insetTop="15%" android:insetBottom="15%">
+    <bitmap android:src="@drawable/craftisan_bag_icon" android:gravity="fill" android:filter="true" />
+</inset>

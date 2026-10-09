@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108" role="img" aria-labelledby="title">
+  <title id="title">Craftisan pottery and leaf emblem</title>
+  <rect width="108" height="108" rx="24" fill="#FAF8F5"/>
+  <g transform="translate(22 20)">
+    <path d="M25 20C25 29 16 34 17 46C18 64 46 64 47 46C48 34 39 29 39 20M23 20H41M19 43Q32 52 45 43M32 18V9" fill="none" stroke="#A23F23" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M32 12Q30 4 40 4Q40 12 32 12Z" fill="#A23F23"/>
+  </g>
+</svg>

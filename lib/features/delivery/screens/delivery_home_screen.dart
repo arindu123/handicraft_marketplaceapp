@@ -6,6 +6,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import '../../../shared/data/profile_repository.dart';
 import '../../../shared/widgets/role_selection_back_button.dart';
 import '../widgets/delivery_profile_editor.dart';
+import '../widgets/delivery_profile_widgets.dart';
+import '../../../core/theme/app_colors.dart';
 
 import '../../../shared/data/marketplace_repository.dart';
 
@@ -103,8 +105,13 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
     final saved = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            DeliveryProfileEditor(repository: _profiles!, profile: _profile!),
+        builder: (_) => DeliveryProfileEditor(
+          repository: _profiles!,
+          profile: _profile!,
+          completedDeliveries: _receivedOrders
+              ? _orders.where((order) => order.delivered).length
+              : null,
+        ),
       ),
     );
     if (saved == true && mounted) {
@@ -319,7 +326,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
 
         backgroundColor: Colors.white,
 
-        indicatorColor: const Color(0xFFFFEEE3),
+        indicatorColor: DeliveryStyle.peach,
 
         destinations: const [
           NavigationDestination(
@@ -398,11 +405,11 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
 
             end: Alignment.center,
 
-            colors: [Color(0xFFFFE1C8), Colors.white],
+            colors: [DeliveryStyle.heroCream, Colors.white],
           ),
         ),
 
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 22),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
 
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -666,12 +673,12 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
   }
 
   Widget _balanceCard() => Container(
-    padding: const EdgeInsets.all(16),
+    padding: const EdgeInsets.all(20),
 
     decoration: BoxDecoration(
-      color: const Color(0xFFF3F3F5),
+      color: AppColors.surface,
 
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(16),
     ),
 
     child: Column(
@@ -684,7 +691,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
           style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
         ),
 
-        const SizedBox(height: 14),
+        const SizedBox(height: 18),
 
         Wrap(
           spacing: 24,
@@ -725,6 +732,14 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
           ),
 
         FilledButton.icon(
+          style: FilledButton.styleFrom(
+            backgroundColor: DeliveryStyle.orange,
+            foregroundColor: Colors.white,
+            minimumSize: const Size(double.infinity, 46),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
           onPressed: () => showDeliveryNotice(
             context,
 
@@ -1178,7 +1193,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
   }
 
   Widget _wallet() => ListView(
-    padding: const EdgeInsets.all(20),
+    padding: const EdgeInsets.all(24),
 
     children: [
       _heading('My Earnings', 'Your completed delivery earnings.'),
@@ -1214,115 +1229,154 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
     ],
   );
 
-  Widget _account() => ListView(
-    padding: const EdgeInsets.all(20),
+  Widget _account() => Material(
+    color: AppColors.background,
+    child: ListView(
+      padding: const EdgeInsets.all(24),
 
-    children: [
-      _heading('Profile', 'Your Craftisan delivery workspace.'),
-
-      const SizedBox(height: 24),
-
-      Center(
-        child: ProfileAvatar(name: _riderName, url: _photoUrl, radius: 35),
-      ),
-
-      const SizedBox(height: 12),
-
-      Text(
-        _riderName,
-
-        textAlign: TextAlign.center,
-
-        style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-      ),
-
-      Text(
-        _locationLabel,
-
-        textAlign: TextAlign.center,
-
-        style: TextStyle(color: DeliveryStyle.muted),
-      ),
-
-      const SizedBox(height: 12),
-
-      if (_email.isNotEmpty) Text(_email, textAlign: TextAlign.center),
-      if (_profiles != null)
-        TextButton.icon(
-          onPressed: _profile == null ? null : _editProfile,
-          icon: const Icon(Icons.edit_outlined),
-          label: const Text('Edit profile / photo'),
-        ),
-      _availability(),
-
-      const SizedBox(height: 24),
-
-      SwitchListTile(
-        contentPadding: EdgeInsets.zero,
-
-        title: const Text('Notifications'),
-
-        subtitle: Text(
-          MarketplaceBackend.enabled && DeliveryNotifications.supported
-              ? 'Delivery alerts even when the app is closed'
-              : 'New delivery alerts while this page is open',
+      children: [
+        const DeliveryProfileHeading(
+          title: 'Profile Information',
+          subtitle: 'Manage your delivery identity and contact details.',
         ),
 
-        value: _notifications,
+        const SizedBox(height: 24),
 
-        onChanged: _savingNotifications ? null : _setNotifications,
-      ),
-
-      ListTile(
-        contentPadding: EdgeInsets.zero,
-
-        leading: const Icon(Icons.help_outline),
-
-        title: const Text('Handling guide'),
-
-        trailing: const Icon(Icons.chevron_right),
-
-        onTap: () => showDeliveryNotice(
-          context,
-
-          'Care for every creation',
-
-          'Keep ceramics upright. Check protective packaging before pickup, secure parcels during transit, and inspect the package with the recipient.',
+        DeliveryProfilePortrait(
+          onEdit: _profile != null && _profiles != null ? _editProfile : null,
+          avatar: ProfileAvatar(name: _riderName, url: _photoUrl, radius: 44),
         ),
-      ),
 
-      ListTile(
-        contentPadding: EdgeInsets.zero,
+        const SizedBox(height: 12),
 
-        leading: const Icon(Icons.swap_horiz),
+        Text(
+          _riderName,
 
-        title: const Text('Back to role selection'),
+          textAlign: TextAlign.center,
 
-        trailing: const Icon(Icons.chevron_right),
-
-        onTap: () => Navigator.pushNamedAndRemoveUntil(
-          context,
-
-          RouteNames.roleSelection,
-
-          (_) => false,
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
         ),
-      ),
 
-      const SizedBox(height: 24),
+        Text(
+          _riderArea.isEmpty ? 'Add your delivery area' : _riderArea,
 
-      DeliveryButton(
-        label: MarketplaceBackend.enabled ? 'Log Out' : 'Sign in to delivery',
+          textAlign: TextAlign.center,
 
-        onPressed: () {
-          if (MarketplaceBackend.enabled) {
-            AuthSession.logout(context);
-          } else {
-            Navigator.pushReplacementNamed(context, RouteNames.deliveryLogin);
-          }
-        },
-      ),
-    ],
+          style: TextStyle(color: DeliveryStyle.muted),
+        ),
+
+        const SizedBox(height: 12),
+
+        _availability(),
+        if (!MarketplaceBackend.enabled || _receivedOrders) ...[
+          const SizedBox(height: 12),
+          DeliveryCompletedSummary(
+            count: _orders.where((order) => order.delivered).length,
+          ),
+        ],
+        if (_profiles != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 16, bottom: 8),
+            child: OutlinedButton.icon(
+              onPressed: _profile == null ? null : _editProfile,
+              style: OutlinedButton.styleFrom(
+                foregroundColor: DeliveryStyle.orange,
+                minimumSize: const Size(double.infinity, 48),
+                side: BorderSide(
+                  color: DeliveryStyle.orange.withValues(alpha: .3),
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              icon: const Icon(Icons.edit_outlined),
+              label: const Text('Edit profile / photo'),
+            ),
+          ),
+        const SizedBox(height: 24),
+
+        if (_email.isNotEmpty)
+          DeliveryProfileField(
+            label: 'Email address',
+            icon: Icons.mail_outline,
+            value: _email,
+            readOnly: true,
+          ),
+        if ((_profile?['phone'] as String? ?? '').isNotEmpty)
+          DeliveryProfileField(
+            label: 'Mobile number',
+            icon: Icons.phone_outlined,
+            value: _profile!['phone'] as String,
+            readOnly: true,
+          ),
+
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+
+          title: const Text('Notifications'),
+
+          subtitle: Text(
+            MarketplaceBackend.enabled && DeliveryNotifications.supported
+                ? 'Delivery alerts even when the app is closed'
+                : 'New delivery alerts while this page is open',
+          ),
+
+          value: _notifications,
+
+          onChanged: _savingNotifications ? null : _setNotifications,
+        ),
+
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+
+          leading: const Icon(Icons.help_outline),
+
+          title: const Text('Handling guide'),
+
+          trailing: const Icon(Icons.chevron_right),
+
+          onTap: () => showDeliveryNotice(
+            context,
+
+            'Care for every creation',
+
+            'Keep ceramics upright. Check protective packaging before pickup, secure parcels during transit, and inspect the package with the recipient.',
+          ),
+        ),
+
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+
+          leading: const Icon(Icons.swap_horiz),
+
+          title: const Text('Back to role selection'),
+
+          trailing: const Icon(Icons.chevron_right),
+
+          onTap: () => Navigator.pushNamedAndRemoveUntil(
+            context,
+
+            RouteNames.roleSelection,
+
+            (_) => false,
+          ),
+        ),
+
+        const SizedBox(height: 24),
+
+        DeliveryButton(
+          label: MarketplaceBackend.enabled ? 'Log Out' : 'Sign in to delivery',
+
+          onPressed: () {
+            if (MarketplaceBackend.enabled) {
+              AuthSession.logout(context);
+            } else {
+              Navigator.pushReplacementNamed(context, RouteNames.deliveryLogin);
+            }
+          },
+        ),
+      ],
+    ),
   );
 
   Widget _heading(String title, String subtitle) => Column(

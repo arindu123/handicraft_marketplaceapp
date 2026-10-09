@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 
 class DeliveryStyle {
-  static const orange = Color(0xFFE85B16);
+  // Match the buyer marketplace's button and navigation accent.
+  static const orange = Color(0xFF9A4023);
   static const ink = Color(0xFF252321);
   static const muted = Color(0xFF8C8782);
   static const surface = Color(0xFFF5F5F5);
-  static const peach = Color(0xFFFFE7D5);
+  static const peach = Color(0xFFF3E7DD);
+  static const heroCream = Color(0xFFF2E3D5);
   static const assets = 'lib/features/delivery/widgets/';
   static ThemeData get theme => ThemeData(
     useMaterial3: true,

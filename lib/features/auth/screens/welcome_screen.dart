@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../routes/route_names.dart';
 import '../../../shared/widgets/custom_button.dart';
-import '../widgets/craftisan_mark.dart';
 import '../models/marketplace_role.dart';
 
 class WelcomeScreen extends StatelessWidget {
@@ -176,7 +175,13 @@ class _WelcomeEmblem extends StatelessWidget {
               color: Colors.white,
             ),
             alignment: Alignment.center,
-            child: const CraftisanMark(),
+            child: Image.asset(
+              'assets/images/branding/craftisan_bag_icon.png',
+              width: 96,
+              height: 96,
+              fit: BoxFit.contain,
+              semanticLabel: 'Craftisan shopping bag logo',
+            ),
           ),
         ],
       ),

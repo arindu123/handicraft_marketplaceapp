@@ -30,6 +30,7 @@ int registerArtisanPhoto({String? url, Uint8List? bytes}) {
   name: p.name,
   category: p.category,
   price: p.price,
+  currency: p.currency,
   description: p.description,
   stock: p.stock,
   images: p.imageUrls.isEmpty
@@ -37,7 +38,10 @@ int registerArtisanPhoto({String? url, Uint8List? bytes}) {
       : p.imageUrls.map((url) => registerArtisanPhoto(url: url)).toList(),
 );
 final artisanPhotos = artisanDemoImages.map(base64Decode).toList();
-String artisanMoney(num amount) => '\$${amount.toStringAsFixed(2)}';
+String artisanMoney(num amount, [String currency = 'LKR']) =>
+    currency == 'USD'
+        ? '\$${amount.toStringAsFixed(2)}'
+        : '$currency ${amount.toStringAsFixed(2)}';
 const artisanCategories = ['Terracotta', 'Stoneware', 'Planters', 'Tableware'];
 
 class ArtisanProduct {
@@ -49,9 +53,11 @@ class ArtisanProduct {
     required this.description,
     required this.images,
     this.stock = 1,
+    this.currency = 'LKR',
   });
   final String id, name, category, description;
   final double price;
+  final String currency;
   final List<int> images;
   final int stock;
 }
@@ -113,6 +119,18 @@ class ArtisanOrder {
 
 /// One session's local UI data. No persistence or cross-role connections.
 class ArtisanDemo extends ChangeNotifier {
+  String get orderValueLabel {
+    final totals = <String, double>{'LKR': 0};
+    for (final order in orders) {
+      final currency = order.product.currency;
+      totals.update(currency, (value) => value + order.total,
+          ifAbsent: () => order.total);
+    }
+    return totals.entries
+        .map((entry) => artisanMoney(entry.value, entry.key))
+        .join('\n');
+  }
+
   MarketplaceRepository? repository;
   final _subscriptions = <StreamSubscription<dynamic>>[];
   String? error;
@@ -154,6 +172,7 @@ class ArtisanDemo extends ChangeNotifier {
                     name: item.productName,
                     category: '',
                     price: item.unitPrice,
+                    currency: order.currency,
                     description: '',
                     images: item.imageUrl == null
                         ? [-1]
@@ -197,7 +216,7 @@ class ArtisanDemo extends ChangeNotifier {
         name: product.name,
         category: product.category,
         price: product.price,
-        currency: 'USD',
+        currency: product.currency,
         description: product.description,
         imageUrls: product.images
             .where(artisanRemotePhotos.containsKey)

@@ -275,9 +275,9 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
     }
   }
 
-  String get _currency => MarketplaceBackend.enabled ? 'USD' : 'Rs.';
+  String get _currency => 'LKR';
   String _earningsLabel(DeliveryOrder order) => order.earningsConfirmed
-      ? '$_currency ${order.earnings.toStringAsFixed(2)}'
+      ? '${order.currency} ${order.earnings.toStringAsFixed(2)}'
       : 'Earnings pending';
 
   String get _riderName => MarketplaceBackend.enabled
@@ -659,17 +659,24 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
         : _setAvailability,
   );
 
-  double _earned({bool week = false}) {
+  double _earned({bool week = false, String currency = 'LKR'}) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final start = week
         ? DateTime(now.year, now.month, now.day - (now.weekday - 1))
         : today;
     return DeliveryOrder.earningsBetween(
-      _orders,
+      _orders.where((order) => order.currency == currency),
       start,
       DateTime(now.year, now.month, now.day + 1),
     );
+  }
+
+  String _balanceLabel({bool week = false}) {
+    final lkr = _earned(week: week);
+    final usd = _earned(week: week, currency: 'USD');
+    return '$_currency ${lkr.toStringAsFixed(2)}'
+        '${usd == 0 ? '' : '\nUSD ${usd.toStringAsFixed(2)}'}';
   }
 
   Widget _balanceCard() => Container(
@@ -702,7 +709,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
             _MoneyStat(
               label: 'Today',
 
-              amount: '$_currency ${_earned().toStringAsFixed(2)}',
+              amount: _balanceLabel(),
 
               icon: Icons.today,
 
@@ -712,7 +719,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
             _MoneyStat(
               label: 'This week',
 
-              amount: '$_currency ${_earned(week: true).toStringAsFixed(2)}',
+              amount: _balanceLabel(week: true),
 
               icon: Icons.date_range,
 

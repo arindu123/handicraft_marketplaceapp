@@ -66,6 +66,17 @@ test('checkout persists contact details, reserves stock, clears cart and retries
   assert.equal((await getDoc(doc(db, 'orders/one'))).data().recipientPhone, '0771234567');
   await assertSucceeds(getDocs(query(collection(db, 'orders'), where('buyerId', '==', 'buyer'))));
 });
+test('LKR orders preserve currency and cannot buy USD products', async () => {
+  const buyer = dbFor('buyer');
+  await assertFails(checkout(buyer, {...order('wrong-currency'), currency: 'LKR'}));
+  await env.withSecurityRulesDisabled(async ctx => {
+    await updateDoc(doc(ctx.firestore(), 'products/p0'), {currency: 'LKR'});
+  });
+  await assertSucceeds(checkout(buyer, {...order('lkr'), currency: 'LKR'}));
+  assert.equal((await getDoc(doc(buyer, 'orders/lkr'))).data().currency, 'LKR');
+  await assertFails(updateDoc(doc(dbFor('artisan'), 'products/p0'), {currency: 'USD'}));
+});
+
 test('four-product checkout stays within rules access limits', async () => {
   await assertSucceeds(checkout(dbFor('buyer'), order('four', 'buyer', 4)));
 });

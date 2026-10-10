@@ -160,7 +160,7 @@ void main() {
     expect(find.text('Handcrafted ceramic vase'), findsOneWidget);
     await tester.tap(find.widgetWithText(NavigationDestination, 'Earnings'));
     await tester.pumpAndSettle();
-    expect(find.text('Rs. 1500.00'), findsNWidgets(2));
+    expect(find.text('LKR 1500.00'), findsNWidgets(2));
     await tapText(tester, 'Cash out');
     expect(
       find.text('Payouts are not connected yet. No cash out has been made.'),

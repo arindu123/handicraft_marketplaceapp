@@ -111,10 +111,12 @@ class _BuyerLoginViewState extends State<BuyerLoginView> {
                                     ],
                                   ),
                                 ),
-                                const Icon(
-                                  Icons.spa_outlined,
-                                  size: 20,
-                                  color: _rust,
+                                Image.asset(
+                                  'assets/images/branding/craftisan_bag_icon.png',
+                                  width: 20,
+                                  height: 20,
+                                  fit: BoxFit.contain,
+                                  semanticLabel: 'Craftisan shopping bag logo',
                                 ),
                               ],
                             ),

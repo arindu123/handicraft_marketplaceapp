@@ -1,9 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../routes/route_names.dart';
 import '../../../shared/widgets/custom_button.dart';
-import '../widgets/craftisan_mark.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -11,12 +12,52 @@ class OnboardingScreen extends StatefulWidget {
   State<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends State<OnboardingScreen>
+    with WidgetsBindingObserver {
   final _controller = PageController();
+  Timer? _autoScrollTimer;
   int _page = 0;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _scheduleAutoScroll();
+  }
+
+  void _scheduleAutoScroll() {
+    _autoScrollTimer?.cancel();
+    if (_page == 2 || MediaQuery.disableAnimationsOf(context)) return;
+    _autoScrollTimer = Timer(const Duration(seconds: 5), () {
+      if (!mounted) return;
+      if (ModalRoute.of(context)?.isCurrent != true ||
+          !_controller.hasClients ||
+          _controller.position.isScrollingNotifier.value) {
+        _scheduleAutoScroll();
+        return;
+      }
+      _goTo(_page + 1);
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _scheduleAutoScroll();
+    } else {
+      _autoScrollTimer?.cancel();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _autoScrollTimer?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -52,7 +93,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         color: AppColors.surface,
                         shape: BoxShape.circle,
                       ),
-                      child: const CraftisanMark(size: 24),
+                      child: Image.asset(
+                        'assets/images/branding/craftisan_bag_icon.png',
+                        width: 24,
+                        height: 24,
+                        fit: BoxFit.contain,
+                        semanticLabel: 'Craftisan shopping bag logo',
+                      ),
                     ),
                     const SizedBox(width: 10),
                     const Expanded(
@@ -79,7 +126,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               Expanded(
                 child: PageView(
                   controller: _controller,
-                  onPageChanged: (value) => setState(() => _page = value),
+                  onPageChanged: (value) {
+                    setState(() => _page = value);
+                    _scheduleAutoScroll();
+                  },
                   children: const [
                     _StoryPage(index: 0),
                     _StoryPage(index: 1),

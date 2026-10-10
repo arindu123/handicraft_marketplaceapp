@@ -2039,7 +2039,7 @@ class BuyerArtisanProfile extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(product.name),
-                          Text(money(product.price)),
+                          Text(product.priceLabel()),
                         ],
                       ),
                     ),
@@ -2091,7 +2091,7 @@ class BuyerCart extends StatelessWidget {
       footer: demo.cart.isEmpty
           ? null
           : CustomButton(
-              label: 'Proceed to Checkout · ${money(demo.total)}',
+              label: 'Proceed to Checkout · ${money(demo.total, demo.currency)}',
               onPressed: () => _open(context, BuyerCheckout(demo: demo)),
             ),
       children: [
@@ -2148,7 +2148,7 @@ class BuyerCart extends StatelessWidget {
                               ),
                             ),
                             Text(entry.key.artisan),
-                            Text('${money(entry.key.price)} each'),
+                            Text('${entry.key.priceLabel()} each'),
                           ],
                         ),
                       ),
@@ -2157,7 +2157,7 @@ class BuyerCart extends StatelessWidget {
                 ),
                 Row(
                   children: [
-                    Expanded(child: Text(money(entry.key.price * entry.value))),
+                    Expanded(child: Text(entry.key.priceLabel(entry.value))),
                     _Quantity(
                       value: entry.value,
                       onChanged: (v) => demo.quantity(entry.key, v),
@@ -2192,10 +2192,10 @@ class _Totals extends StatelessWidget {
   Widget build(BuildContext context) => _Panel(
     child: Column(
       children: [
-        _Amount('Items subtotal (${demo.count})', money(demo.subtotal)),
-        _Amount('Delivery', demo.delivery == 0 ? 'Free' : money(demo.delivery)),
+        _Amount('Items subtotal (${demo.count})', money(demo.subtotal, demo.currency)),
+        _Amount('Delivery', demo.delivery == 0 ? 'Free' : money(demo.delivery, demo.currency)),
         const Divider(),
-        _Amount('Total', money(demo.total)),
+        _Amount('Total', money(demo.total, demo.currency)),
       ],
     ),
   );
@@ -2648,7 +2648,7 @@ class _BuyerCheckoutState extends State<BuyerCheckout> {
                       ),
                     ),
                     Text(
-                      money(d.total),
+                      money(d.total, d.currency),
                       style: const TextStyle(
                         fontSize: 26,
                         fontWeight: FontWeight.w700,
@@ -2817,7 +2817,7 @@ class _BuyerCheckoutState extends State<BuyerCheckout> {
                   ),
                   if (d.cart.isNotEmpty)
                     Text(
-                      money(d.delivery),
+                      money(d.delivery, d.currency),
                       style: const TextStyle(
                         fontWeight: FontWeight.w700,
                         fontSize: 18,
@@ -3005,8 +3005,8 @@ class _BuyerCheckoutState extends State<BuyerCheckout> {
                       ),
                     ),
                   const Divider(),
-                  if (step >= 1) _Amount('Subtotal', money(d.subtotal)),
-                  _Amount('Standard delivery', money(d.delivery)),
+                  if (step >= 1) _Amount('Subtotal', money(d.subtotal, d.currency)),
+                  _Amount('Standard delivery', money(d.delivery, d.currency)),
                 ],
               ),
             ),
@@ -3118,7 +3118,7 @@ class BuyerOrders extends StatelessWidget {
                       _BuyerOrderStatus(status: order.status),
                       const Spacer(),
                       Text(
-                        money(order.total),
+                        money(order.total, order.currency),
                         style: const TextStyle(
                           color: AppColors.terracotta,
                           fontWeight: FontWeight.w600,
@@ -3174,7 +3174,7 @@ class BuyerOrderDetails extends StatelessWidget {
                     '${entry.key.name}\n${entry.key.artisan}\nQty: ${entry.value}',
                   ),
                 ),
-                Text(money(entry.key.price * entry.value)),
+                Text(entry.key.priceLabel(entry.value)),
               ],
             ),
           ),
@@ -3196,13 +3196,13 @@ class BuyerOrderDetails extends StatelessWidget {
         _Panel(
           child: Column(
             children: [
-              _Amount('Items subtotal (${order.count})', money(order.subtotal)),
+              _Amount('Items subtotal (${order.count})', money(order.subtotal, order.currency)),
               _Amount(
                 'Delivery fee',
-                order.deliveryFee == 0 ? 'Free' : money(order.deliveryFee),
+                order.deliveryFee == 0 ? 'Free' : money(order.deliveryFee, order.currency),
               ),
               const Divider(),
-              _Amount('Total', money(order.total)),
+              _Amount('Total', money(order.total, order.currency)),
             ],
           ),
         ),
@@ -3372,7 +3372,7 @@ class BuyerOrderSuccess extends StatelessWidget {
               _Photo(e.key, height: 200),
               const SizedBox(height: 12),
               Text(e.key.name),
-              _Amount('Quantity: ${e.value}', money(e.key.price * e.value)),
+              _Amount('Quantity: ${e.value}', e.key.priceLabel(e.value)),
             ],
           ),
         ),
@@ -3380,7 +3380,7 @@ class BuyerOrderSuccess extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _Amount('Total · delivery included', money(order.total)),
+            _Amount('Total · delivery included', money(order.total, order.currency)),
             const Divider(),
             const _Eyebrow('DELIVERY LOCATION'),
             Text(demo.destination),

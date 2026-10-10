@@ -3,6 +3,33 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:artisan_marketplace/app.dart';
 
 void main() {
+  testWidgets('Onboarding advances automatically and waits on the last page', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MyApp());
+    await tester.tap(find.text('Get Started'));
+    await tester.pumpAndSettle();
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    expect(find.text('02 / 03'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    expect(find.text('03 / 03'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 15));
+    expect(find.text('Choose Your Role'), findsOneWidget);
+    expect(find.text('Roles Selection'), findsNothing);
+    await tester.tap(find.byTooltip('Previous page'));
+    await tester.pumpAndSettle();
+    expect(find.text('02 / 03'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pumpAndSettle();
+    expect(find.text('03 / 03'), findsOneWidget);
+    await tester.tap(find.text('Choose Your Role'));
+    await tester.pumpAndSettle();
+    expect(find.text('Roles Selection'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Welcome, next, back, swipe and completion navigate correctly', (
     tester,
   ) async {

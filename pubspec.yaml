@@ -76,6 +76,7 @@ flutter:
         - asset: lib/core/theme/cormorant_garamond.ttf
 
   assets:
+    - assets/images/branding/craftisan_bag_icon.png
     - assets/images/navigation/handicraft_atlas.png
     - assets/images/navigation/handicraft_extra.png
     - lib/features/auth/widgets/google_logo.png

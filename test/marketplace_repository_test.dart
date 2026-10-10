@@ -17,13 +17,14 @@ void main() {
     String artisan = 'artisan',
     double price = 48,
     int stock = 5,
+    String currency = 'USD',
   }) => Product(
     id: id,
     artisanId: artisan,
     name: 'Handmade mug',
     category: 'Stoneware',
     price: price,
-    currency: 'USD',
+    currency: currency,
     description: 'Clay mug',
     imageUrls: const [],
     stock: stock,
@@ -48,6 +49,23 @@ void main() {
     db = FakeFirebaseFirestore();
     repo = repository('buyer', UserRole.buyer);
     await db.collection('products').doc('p1').set(product().toMap());
+  });
+  test('LKR checkout snapshots currency and rejects mixed-currency carts', () {
+    final lkr = product(currency: 'LKR');
+    final order = MarketplaceRepository.buildOrder(
+      'lkr-order', 'buyer', [lkr], {'p1': 1}, 'Colombo', 'Cash on delivery',
+    );
+    expect(order.currency, 'LKR');
+    expect(Order.fromMap(order.toMap()).currency, 'LKR');
+    expect(
+      () => MarketplaceRepository.buildOrder(
+        'mixed', 'buyer', [lkr, product(id: 'usd')],
+        {'p1': 1, 'usd': 1}, 'Colombo', 'Cash on delivery',
+      ),
+      throwsA(isA<MarketplaceFailure>()),
+    );
+    final legacy = order.toMap()..remove('currency');
+    expect(Order.fromMap(legacy).currency, 'USD');
   });
   test(
     'Cart quantities and favorites persist and are isolated by UID',

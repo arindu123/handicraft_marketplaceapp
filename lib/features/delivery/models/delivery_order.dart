@@ -20,6 +20,7 @@ class DeliveryOrder {
     required this.destination,
     required this.service,
     this.earnings = 0,
+    this.currency = 'LKR',
     this.recipientName = '',
     this.recipientPhone = '',
     this.pickupName = '',
@@ -39,6 +40,7 @@ class DeliveryOrder {
   final String destination;
   final String service;
   final double earnings;
+  final String currency;
   final String recipientName, recipientPhone, pickupName, instructions;
   final double? deliveryFee;
   final DateTime createdAt;
@@ -86,6 +88,7 @@ class DeliveryOrder {
       recipientPhone: legacy ? lines.last : order.recipientPhone,
       instructions: order.deliveryInstructions,
       deliveryFee: order.deliveryFee,
+      currency: order.currency,
       createdAt: order.createdAt,
       completedAt: order.status == domain.OrderStatus.delivered
           ? order.updatedAt

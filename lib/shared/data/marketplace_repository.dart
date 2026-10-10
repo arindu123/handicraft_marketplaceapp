@@ -226,7 +226,7 @@ class MarketplaceRepository {
     }
   }
 
-  // Existing USD/COD contract, also enforced by firestore.rules validOrder.
+  // Keep the existing numeric fee policy; orders retain their own currency.
   static double deliveryFeeFor(double subtotal) => subtotal >= 250 ? 0 : 14;
 
   static model.Order buildOrder(
@@ -248,9 +248,10 @@ class MarketplaceRepository {
       );
     }
     if (products.map((p) => p.id).toSet().length != products.length ||
+        products.map((p) => p.currency).toSet().length != 1 ||
         address.trim().isEmpty ||
         products.any(
-          (p) => p.currency != 'USD' || !p.price.isFinite || p.price < 0,
+          (p) => !['LKR', 'USD'].contains(p.currency) || !p.price.isFinite || p.price < 0,
         )) {
       throw const MarketplaceFailure(
         'Please check your products and delivery address.',
@@ -292,6 +293,7 @@ class MarketplaceRepository {
       deliveryAddress: address,
       paymentMethod: payment,
       subtotal: subtotal,
+      currency: products.first.currency,
       deliveryFee: fee,
       total: subtotal + fee,
       createdAt: DateTime.now().toUtc(),

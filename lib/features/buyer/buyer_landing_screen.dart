@@ -249,7 +249,6 @@ class _Detail extends StatelessWidget {
   );
 }
 
-// Vector stand-in for the supplied brand reference until its source asset is available.
 class _ArtisanBrand extends StatelessWidget {
   const _ArtisanBrand();
 
@@ -260,7 +259,12 @@ class _ArtisanBrand extends StatelessWidget {
     child: ExcludeSemantics(
       child: Column(
         children: [
-          CustomPaint(size: const Size(172, 172), painter: _BagPainter()),
+          Image.asset(
+            'assets/images/branding/craftisan_bag_icon.png',
+            width: 172,
+            height: 172,
+            fit: BoxFit.contain,
+          ),
           const SizedBox(height: 8),
           const FittedBox(
             child: Text(
@@ -287,123 +291,4 @@ class _ArtisanBrand extends StatelessWidget {
       ),
     ),
   );
-}
-
-class _BagPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    canvas.scale(size.width / 180, size.height / 180);
-    final bag = Path()
-      ..moveTo(30, 58)
-      ..lineTo(149, 58)
-      ..quadraticBezierTo(155, 58, 157, 66)
-      ..lineTo(173, 146)
-      ..quadraticBezierTo(177, 174, 149, 175)
-      ..lineTo(31, 175)
-      ..quadraticBezierTo(4, 173, 8, 146)
-      ..lineTo(24, 66)
-      ..quadraticBezierTo(25, 58, 30, 58)
-      ..close();
-    canvas.drawPath(
-      bag,
-      Paint()
-        ..shader = const LinearGradient(
-          colors: [Color(0xFFD27738), _clay],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ).createShader(const Rect.fromLTWH(0, 50, 180, 130)),
-    );
-    canvas.save();
-    canvas.clipPath(bag);
-    for (final (path, color) in [
-      (
-        Path()
-          ..moveTo(85, 49)
-          ..quadraticBezierTo(98, 109, 177, 141),
-        _teal,
-      ),
-      (
-        Path()
-          ..moveTo(170, 85)
-          ..quadraticBezierTo(88, 110, 78, 188),
-        const Color(0xFFD69B3F),
-      ),
-      (
-        Path()
-          ..moveTo(103, 120)
-          ..lineTo(171, 163),
-        _teal,
-      ),
-    ]) {
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = _cream
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 29,
-      );
-      canvas.drawPath(
-        path,
-        Paint()
-          ..color = color
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 22,
-      );
-    }
-    canvas.drawPath(
-      Path()
-        ..moveTo(66, 179)
-        ..quadraticBezierTo(39, 143, 46, 96),
-      Paint()
-        ..color = const Color(0xFFF7E6C0)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3,
-    );
-    for (final offset in [
-      const Offset(45, 113),
-      const Offset(45, 140),
-      const Offset(53, 159),
-    ]) {
-      for (final direction in [-1.0, 1.0]) {
-        canvas.drawPath(
-          Path()
-            ..moveTo(offset.dx, offset.dy)
-            ..quadraticBezierTo(
-              offset.dx + direction * 25,
-              offset.dy - 9,
-              offset.dx + direction * 22,
-              offset.dy - 28,
-            )
-            ..quadraticBezierTo(
-              offset.dx,
-              offset.dy - 20,
-              offset.dx,
-              offset.dy,
-            ),
-          Paint()..color = const Color(0xFFF7E6C0),
-        );
-      }
-    }
-    canvas.restore();
-    for (final x in [54.0, 125.0]) {
-      canvas.drawCircle(
-        Offset(x, 68),
-        8,
-        Paint()..color = const Color(0xFFF7E6C0),
-      );
-    }
-    canvas.drawPath(
-      Path()
-        ..moveTo(54, 68)
-        ..cubicTo(53, -8, 125, -8, 125, 68),
-      Paint()
-        ..color = _clay
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 8
-        ..strokeCap = StrokeCap.round,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

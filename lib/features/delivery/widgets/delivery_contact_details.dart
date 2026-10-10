@@ -60,7 +60,7 @@ class DeliveryContactDetails extends StatelessWidget {
               : order.recipientPhone,
         ),
         if (order.deliveryFee != null)
-          Text('Delivery fee: USD ${order.deliveryFee!.toStringAsFixed(2)}'),
+          Text('Delivery fee: ${order.currency} ${order.deliveryFee!.toStringAsFixed(2)}'),
         if (order.instructions.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 8),

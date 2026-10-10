@@ -271,10 +271,12 @@ class Order {
     this.pickupName = '',
     this.deliveryInstructions = '',
     this.courierEarnings,
+    this.currency = 'USD',
   }) : items = List.unmodifiable(items);
 
   final String id, buyerId, artisanId, deliveryAddress, paymentMethod;
   final String? courierId;
+  final String currency;
   final String recipientName,
       recipientPhone,
       pickupAddress,
@@ -305,6 +307,7 @@ class Order {
       'deliveryInstructions': deliveryInstructions,
     'subtotal': subtotal,
     'deliveryFee': deliveryFee,
+    'currency': currency,
     if (courierEarnings != null) 'courierEarnings': courierEarnings,
     'total': total,
     'createdAt': createdAt.toIso8601String(),
@@ -330,6 +333,7 @@ class Order {
     pickupName: map['pickupName'] as String? ?? '',
     deliveryInstructions: map['deliveryInstructions'] as String? ?? '',
     courierEarnings: (map['courierEarnings'] as num?)?.toDouble(),
+    currency: map['currency'] as String? ?? 'USD',
     subtotal: _number(map, 'subtotal'),
     deliveryFee: _number(map, 'deliveryFee'),
     total: _number(map, 'total'),

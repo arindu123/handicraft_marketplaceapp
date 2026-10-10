@@ -22,7 +22,7 @@ class DemoProduct {
     this.id = '',
     this.imageUrl,
     this.imageUrls = const [],
-    this.currency = 'USD',
+    this.currency = 'LKR',
     this.stock,
     this.createdAt,
     this.isVerified = false,
@@ -34,9 +34,7 @@ class DemoProduct {
   final String currency;
   final int? stock;
   final bool isVerified;
-  String priceLabel([int quantity = 1]) => currency == 'USD'
-      ? money(price * quantity)
-      : '$currency ${(price * quantity).toStringAsFixed(2)}';
+  String priceLabel([int quantity = 1]) => money(price * quantity, currency);
   factory DemoProduct.fromProduct(
     canonical.Product p, {
     String studio = '',
@@ -207,7 +205,10 @@ BuyerArtisan artisanFor(String name) => buyerArtisans.firstWhere(
   ),
 );
 
-String money(num value) => '\$${value.toStringAsFixed(2)}';
+String money(num value, [String currency = 'LKR']) =>
+    currency == 'USD'
+        ? '\$${value.toStringAsFixed(2)}'
+        : '$currency ${value.toStringAsFixed(2)}';
 
 enum BuyerOrderStatus {
   pending('Pending'),
@@ -242,6 +243,7 @@ class BuyerDemoOrder {
   );
   double get total => subtotal + deliveryFee;
   DemoProduct get primaryProduct => items.keys.first;
+  String get currency => primaryProduct.currency;
   int get count => items.values.fold(0, (total, quantity) => total + quantity);
 }
 
@@ -456,6 +458,7 @@ class BuyerDemo extends ChangeNotifier {
           0,
           id: i.productId,
           imageUrl: i.imageUrl,
+          currency: o.currency,
         ): i.quantity,
     },
     status: BuyerOrderStatus.values.byName(o.status.name),
@@ -534,10 +537,16 @@ class BuyerDemo extends ChangeNotifier {
   double get delivery =>
       cart.isEmpty ? 0 : MarketplaceRepository.deliveryFeeFor(subtotal);
   double get total => subtotal + delivery;
+  String get currency => cart.keys.firstOrNull?.currency ?? 'LKR';
   String get destination =>
       '$name\n$address\n$city, $postalCode\n$country\n$phone';
 
   Future<void> add(DemoProduct product, [int quantity = 1]) async {
+    if (cart.keys.any((item) => item.currency != product.currency)) {
+      throw const MarketplaceFailure(
+        'Check out or clear your cart before adding a different currency.',
+      );
+    }
     if (repository == null) {
       throw const MarketplaceFailure(
         'The marketplace connection is unavailable.',

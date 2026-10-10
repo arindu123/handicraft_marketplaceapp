@@ -116,7 +116,13 @@ class ParcelWordmark extends StatelessWidget {
   Widget build(BuildContext context) => Row(
     mainAxisSize: MainAxisSize.min,
     children: [
-      Icon(Icons.delivery_dining, color: DeliveryStyle.orange, size: size + 4),
+      Image.asset(
+        'assets/images/branding/craftisan_bag_icon.png',
+        width: size + 4,
+        height: size + 4,
+        fit: BoxFit.contain,
+        semanticLabel: 'Craftisan shopping bag logo',
+      ),
       const SizedBox(width: 7),
       Text.rich(
         TextSpan(

@@ -71,7 +71,7 @@ service cloud.firestore {
         && p.id == id && p.artisanId == request.auth.uid
         && p.name is string && p.name.size() > 0 && p.category is string && p.description is string
         && p.price is number && p.price >= 0 && p.price < 1000000
-        && p.currency == 'USD' && p.stock is int && p.stock >= 0
+        && p.currency in ['LKR','USD'] && p.stock is int && p.stock >= 0
         && p.imageUrls is list && p.imageUrls.size() <= 4
         && p.status in ['draft','active','hidden'] && p.createdAt is string;
     }
@@ -95,7 +95,8 @@ service cloud.firestore {
       allow list: if isAdmin() || signedIn() && (resource.data.status == 'active' || resource.data.artisanId == request.auth.uid);
       allow create: if role('artisan') && validProduct(id);
       allow update: if (isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) && request.resource.data.status in ['active','hidden']) || role('artisan') && resource.data.artisanId == request.auth.uid
-        && validProduct(id) && request.resource.data.createdAt == resource.data.createdAt;
+        && validProduct(id) && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.currency == resource.data.currency;
       allow update: if role('buyer') && reserveStock();
       allow delete: if role('artisan') && resource.data.artisanId == request.auth.uid;
     }
@@ -105,7 +106,8 @@ service cloud.firestore {
     function validPresentItem(i, artisan) {
       let p = getAfter(/databases/$(database)/documents/products/$(i.productId)).data;
       return i.keys().hasOnly(['productId','productName','imageUrl','unitPrice','quantity'])
-        && p.status == 'active' && p.artisanId == artisan && p.currency == 'USD'
+        && p.status == 'active' && p.artisanId == artisan
+        && p.currency == request.resource.data.get('currency', 'USD')
         && i.productName == p.name && i.unitPrice == p.price
         && i.quantity is int && i.quantity > 0 && p.stock >= 0
         && p.lastOrderId == request.resource.data.id
@@ -115,7 +117,8 @@ service cloud.firestore {
     function validOrder(id) {
       let o = request.resource.data;
       let subtotal = amount(o.items,0) + amount(o.items,1) + amount(o.items,2) + amount(o.items,3);
-      return o.keys().hasOnly(['id','buyerId','artisanId','courierId','items','status','deliveryAddress','paymentMethod','subtotal','deliveryFee','total','createdAt','updatedAt','recipientName','recipientPhone','pickupAddress','pickupName','deliveryInstructions'])
+      return o.keys().hasOnly(['id','buyerId','artisanId','courierId','items','status','deliveryAddress','paymentMethod','subtotal','deliveryFee','total','createdAt','updatedAt','recipientName','recipientPhone','pickupAddress','pickupName','deliveryInstructions','currency'])
+        && o.get('currency', 'USD') in ['LKR','USD']
         && o.get('recipientName', '') is string && o.get('recipientName', '').size() <= 100
         && o.get('recipientPhone', '') is string && o.get('recipientPhone', '').size() <= 40
         && o.get('pickupAddress', '') is string && o.get('pickupAddress', '').size() <= 2000

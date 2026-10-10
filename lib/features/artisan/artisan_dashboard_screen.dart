@@ -150,9 +150,7 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
               children: [
                 _Stat(
                   'DEMO ORDER VALUE',
-                  artisanMoney(
-                    demo.orders.fold<double>(0, (sum, o) => sum + o.total),
-                  ),
+                  demo.orderValueLabel,
                 ),
                 _Stat('ORDERS', '${demo.orders.length}'),
                 _Stat(
@@ -212,7 +210,7 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
                     ),
                     title: Text(o.product.name),
                     subtitle: Text(
-                      'Qty: ${o.quantity} · ${artisanMoney(o.total)}',
+                      'Qty: ${o.quantity} · ${artisanMoney(o.total, o.product.currency)}',
                     ),
                   ),
                   OutlinedButton(
@@ -493,7 +491,7 @@ class _ProductCard extends StatelessWidget {
         ),
         _Heading(product.name),
         Text(
-          artisanMoney(product.price),
+          artisanMoney(product.price, product.currency),
           style: const TextStyle(color: AppColors.terracotta, fontSize: 21),
         ),
         Text('${product.stock} in studio stock · ${product.id}'),
@@ -561,6 +559,7 @@ class _ArtisanProductFormState extends State<ArtisanProductForm> {
     name: name.text.trim(),
     category: category!,
     price: double.parse(price.text.trim()),
+    currency: widget.product?.currency ?? 'LKR',
     description: description.text.trim(),
     images: List.unmodifiable(images),
     stock: widget.product?.stock ?? 1,
@@ -593,6 +592,7 @@ class _ArtisanProductFormState extends State<ArtisanProductForm> {
       name: p.name,
       category: p.category,
       price: p.price,
+      currency: p.currency,
       description: p.description,
       images: p.images,
       stock: p.stock,
@@ -799,7 +799,7 @@ class _ArtisanProductFormState extends State<ArtisanProductForm> {
                 ),
                 const SizedBox(height: 18),
                 CustomTextField(
-                  label: 'Price (USD)',
+                  label: 'Price (${widget.product?.currency ?? 'LKR'})',
                   controller: price,
                   icon: Icons.attach_money,
                   keyboardType: const TextInputType.numberWithOptions(
@@ -874,7 +874,7 @@ List<Widget> _productInformation(ArtisanProduct p) => [
     ),
   _Heading(p.name),
   Text(
-    artisanMoney(p.price),
+    artisanMoney(p.price, p.currency),
     style: const TextStyle(fontSize: 24, color: AppColors.terracotta),
   ),
   _Card(
@@ -923,7 +923,7 @@ class ArtisanPublishedScreen extends StatelessWidget {
               children: [
                 _Photo(p.images.first, height: 180),
                 _Heading(p.name),
-                Text('${artisanMoney(p.price)} · LIVE · ${p.id}'),
+                Text('${artisanMoney(p.price, p.currency)} · LIVE · ${p.id}'),
               ],
             ),
           ),
@@ -1041,10 +1041,10 @@ class ArtisanOrderDetails extends StatelessWidget {
                 Text('Delivery: ${o.delivery}'),
                 const Divider(),
                 Text(
-                  'Quantity: ${o.quantity} × ${artisanMoney(o.product.price)}',
+                  'Quantity: ${o.quantity} × ${artisanMoney(o.product.price, o.product.currency)}',
                 ),
                 Text(
-                  'Order total: ${artisanMoney(o.total)}',
+                  'Order total: ${artisanMoney(o.total, o.product.currency)}',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ],

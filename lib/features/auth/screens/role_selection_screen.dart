@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../routes/route_names.dart';
-import '../widgets/craftisan_mark.dart';
 import '../models/marketplace_role.dart';
 
 export '../models/marketplace_role.dart';
@@ -95,7 +94,13 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                           color: const Color(0xFFF5F1EC),
                           border: Border.all(color: const Color(0xFFEADCD2)),
                         ),
-                        child: const CraftisanMark(size: 29),
+                        child: Image.asset(
+                          'assets/images/branding/craftisan_bag_icon.png',
+                          width: 40,
+                          height: 40,
+                          fit: BoxFit.contain,
+                          semanticLabel: 'Craftisan shopping bag logo',
+                        ),
                       ),
                     ),
                     const SizedBox(height: 14),

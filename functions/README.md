@@ -1,6 +1,16 @@
-# Delivery notifications and proof setup
+# Delivery and admin notifications and proof setup
 
-The app changes are limited to delivery features. The existing Firebase configuration supports Android; web and iOS push are not configured by this change.
+The Firebase configuration supports Android notifications. Web and iOS push are not configured by this change.
+
+## Admin notifications
+
+The admin bell opens the current applications, order updates and unresolved complaints. Category preferences and per-admin read state persist in Firestore. The inbox works through live Firestore subscriptions without Cloud Functions. Courier issues feed the same inbox through the admin-only `deliveryIssues` collection-group query.
+
+The admin push triggers in `index.js` send Android background alerts, honor each admin's category preferences, skip paused accounts, and remove invalid device tokens. Payloads omit customer addresses, phone numbers and complaint details. A dispatch record prevents duplicate events from sending the same push again; the Firestore inbox remains the source for viewing actual records.
+
+The notification Firestore rules were deployed to `craftisan-we114-2026`. Cloud Functions deployment is pending explicit production/billing approval; automatic approval review rejected the attempted functions deployment. The project's Cloud Functions API is currently disabled. Deploying functions requires the Blaze plan, as described in the linked Firebase Functions setup guide below. No billing plan changes were made.
+
+Verification: `flutter test test/admin_notifications_test.dart` and `node --test functions/delivery.test.js functions/admin-notifications.test.js`. Background push requires deployed functions and an Android device with notification permission.
 
 ## Activate on Firebase
 

@@ -6,6 +6,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../shared/data/marketplace_repository.dart';
+import '../../../shared/data/notification_token_lifecycle.dart';
 
 /// Keeps token refresh registration alive when the delivery screen is closed.
 class DeliveryNotifications {
@@ -22,6 +23,7 @@ class DeliveryNotifications {
   Future<void> enable() async {
     if (!supported) return;
     await _tokenReset;
+    await NotificationTokenLifecycle.pendingReset;
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid == null) return;
     _uid = uid;
@@ -36,7 +38,7 @@ class DeliveryNotifications {
       if (_uid != null && user?.uid != _uid) {
         _uid = null;
         _token = null;
-        _tokenReset = messaging.deleteToken().catchError((Object _) {});
+        _tokenReset = NotificationTokenLifecycle.reset();
         unawaited(_tokenReset);
       }
     });

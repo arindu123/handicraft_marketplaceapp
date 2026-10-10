@@ -20,6 +20,7 @@ import '../../auth/services/auth_session.dart';
 import '../../auth/models/marketplace_role.dart';
 
 import '../models/delivery_order.dart';
+import '../models/delivery_history_filter.dart';
 import '../widgets/delivery_contact_details.dart';
 
 import '../widgets/delivery_widgets.dart';
@@ -29,6 +30,8 @@ import '../widgets/delivery_workflow_dialogs.dart';
 import '../../../shared/data/delivery_workflow_repository.dart';
 import '../services/delivery_notifications.dart';
 import '../widgets/delivery_extras.dart';
+import '../services/demo_cash_out_repository.dart';
+import '../widgets/demo_cash_out_dialog.dart';
 
 class DeliveryHomeScreen extends StatefulWidget {
   const DeliveryHomeScreen({super.key});
@@ -38,6 +41,7 @@ class DeliveryHomeScreen extends StatefulWidget {
 }
 
 class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
+  late final _demoCashOut = DemoCashOutRepository();
   final _orders = MarketplaceBackend.enabled
       ? <DeliveryOrder>[]
       : DeliveryOrder.demoOrders();
@@ -66,6 +70,8 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
         setState(() {
           _tab = 1;
           _filter = 'Active';
+          _historyStatus = null;
+          _historyDates = null;
         });
       }
     });
@@ -75,6 +81,8 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
         setState(() {
           _tab = 1;
           _filter = 'Active';
+          _historyStatus = null;
+          _historyDates = null;
         });
       }
       if (_notifications) await DeliveryNotifications.instance.enable();
@@ -252,6 +260,8 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
   int _tab = 0;
 
   String _filter = 'All';
+  DeliveryStatus? _historyStatus;
+  DateTimeRange? _historyDates;
 
   bool _notifications = true;
 
@@ -589,6 +599,8 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
                             _tab = 1;
 
                             _filter = 'Active';
+                            _historyStatus = null;
+                            _historyDates = null;
                           }),
 
                           style: FilledButton.styleFrom(
@@ -747,13 +759,8 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
               borderRadius: BorderRadius.circular(12),
             ),
           ),
-          onPressed: () => showDeliveryNotice(
-            context,
-
-            'Cash out unavailable',
-
-            'Payouts are not connected yet. No cash out has been made.',
-          ),
+          onPressed: () => showDialog<void>(context: context,
+            builder: (_) => DemoCashOutDialog(repository: _demoCashOut)),
 
           icon: const Icon(Icons.account_balance_outlined),
 
@@ -840,9 +847,8 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
   Widget _orderList() {
     final filtered = _orders
         .where(
-          (order) =>
-              _filter == 'All' ||
-              (_filter == 'Completed' ? order.delivered : !order.delivered),
+          (order) => DeliveryHistoryFilter.matches(order, scope: _filter,
+            status: _historyStatus, from: _historyDates?.start, through: _historyDates?.end),
         )
         .toList();
 
@@ -874,7 +880,7 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
                   selected: _filter == filter,
 
                   onSelected: (_) {
-                    setState(() => _filter = filter);
+                    setState(() { _filter = filter; _historyStatus = null; });
 
                     _ordersScroll.jumpTo(0);
                   },
@@ -883,6 +889,31 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
               .toList(),
         ),
 
+        const SizedBox(height: 16),
+        Wrap(spacing: 12, runSpacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+          SizedBox(width: 170, child: DropdownButton<DeliveryStatus>(
+            key: const ValueKey('delivery-history-status'),
+            isExpanded: true, value: _historyStatus, hint: const Text('All statuses'),
+            items: [
+              const DropdownMenuItem<DeliveryStatus>(value: null, child: Text('All statuses')),
+              for (final status in DeliveryStatus.values)
+                DropdownMenuItem(value: status, child: Text(status.label)),
+            ],
+            onChanged: (value) => setState(() { _historyStatus = value; _filter = 'All'; }),
+          )),
+          TextButton.icon(
+            onPressed: _chooseHistoryDates, icon: const Icon(Icons.date_range_outlined, size: 18),
+            label: Text(_historyDates == null ? 'All dates'
+                : '${_historyDateLabel(_historyDates!.start)} – ${_historyDateLabel(_historyDates!.end)}'),
+            style: TextButton.styleFrom(foregroundColor: DeliveryStyle.orange),
+          ),
+          if (_historyDates != null || _historyStatus != null || _filter != 'All')
+            IconButton(tooltip: 'Clear history filters', icon: const Icon(Icons.filter_alt_off_outlined),
+              onPressed: () => setState(() { _historyDates = null; _historyStatus = null; _filter = 'All'; })),
+        ]),
+        const SizedBox(height: 8),
+        const Text('Completed deliveries use the completion date.',
+          style: TextStyle(fontSize: 12, color: DeliveryStyle.muted)),
         const SizedBox(height: 16),
 
         if (filtered.isEmpty)
@@ -895,6 +926,16 @@ class _DeliveryHomeScreenState extends State<DeliveryHomeScreen> {
         for (final order in filtered) _orderCard(order),
       ],
     );
+  }
+
+  String _historyDateLabel(DateTime date) => '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
+
+  Future<void> _chooseHistoryDates() async {
+    final now = DateTime.now();
+    final selected = await showDateRangePicker(context: context,
+      firstDate: DateTime(2000), lastDate: DateTime(now.year + 1, 12, 31),
+      initialDateRange: _historyDates, helpText: 'Delivery history dates');
+    if (mounted && selected != null) setState(() => _historyDates = selected);
   }
 
   List<DeliveryOrder> get _notificationOrders => _orders

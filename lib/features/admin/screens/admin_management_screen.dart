@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../models/admin_demo_store.dart';
 import '../widgets/admin_widgets.dart';
+import '../widgets/admin_operations_widgets.dart';
+import '../widgets/admin_notification_panel.dart';
+import '../../../shared/data/marketplace_repository.dart';
 import 'admin_artisan_review_screen.dart';
 
-enum AdminSection { users, products, couriers, reports, settings }
+enum AdminSection { users, products, couriers, reports, settings, activity, notifications }
 
 class AdminManagementScreen extends StatefulWidget {
   const AdminManagementScreen({
@@ -32,6 +35,8 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
     AdminSection.couriers => 'Courier directory',
     AdminSection.reports => 'Reports & issues',
     AdminSection.settings => 'Settings',
+    AdminSection.activity => 'Admin activity history',
+    AdminSection.notifications => 'Notifications',
   };
 
   @override
@@ -78,6 +83,10 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                   ..._settings()
                 else if (widget.section == AdminSection.reports)
                   ..._reports()
+                else if (widget.section == AdminSection.activity)
+                  AdminActivityPanel(store: widget.store)
+                else if (widget.section == AdminSection.notifications)
+                  AdminNotificationPanel(store: widget.store)
                 else
                   ..._directory(),
               ],
@@ -254,28 +263,34 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
     const SizedBox(height: 22),
     const AdminSectionHeading('Reports'),
     const SizedBox(height: 14),
-    const AdminEmptyState(
-      'No persisted reports are available yet. New product and delivery reports will appear here when submitted.',
-    ),
+    AdminReportsPanel(store: widget.store),
   ];
 
   List<Widget> _settings() => [
+    AdminDeliveryFeePanel(store: widget.store),
+    const SizedBox(height: 24),
     SwitchListTile(
       contentPadding: EdgeInsets.zero,
       title: const Text('Application notifications'),
-      subtitle: const Text('Notification delivery is not configured yet.'),
+      subtitle: const Text('Alerts for applications awaiting review.'),
       activeThumbColor: AdminStyle.sage,
       value: widget.store.applicationNotifications,
-      onChanged: null,
+      onChanged: widget.store.noticePreferencesLoaded ? (value) => _setNotifications(applications: value) : null,
     ),
     const Divider(color: AdminStyle.border),
     SwitchListTile(
       contentPadding: EdgeInsets.zero,
       title: const Text('Order notifications'),
-      subtitle: const Text('Notification delivery is not configured yet.'),
+      subtitle: const Text('Alerts for new orders and status changes.'),
       activeThumbColor: AdminStyle.sage,
       value: widget.store.orderNotifications,
-      onChanged: null,
+      onChanged: widget.store.noticePreferencesLoaded ? (value) => _setNotifications(orders: value) : null,
+    ),
+    SwitchListTile(
+      contentPadding: EdgeInsets.zero, title: const Text('Complaint notifications'),
+      subtitle: const Text('Alerts for unresolved product and delivery complaints.'),
+      activeThumbColor: AdminStyle.sage, value: widget.store.reportNotifications,
+      onChanged: widget.store.noticePreferencesLoaded ? (value) => _setNotifications(reports: value) : null,
     ),
     const SizedBox(height: 24),
     const AdminPanel(
@@ -300,4 +315,11 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
       ),
     ),
   ];
+
+  Future<void> _setNotifications({bool? applications, bool? orders, bool? reports}) async {
+    try { await widget.store.setNotifications(applications: applications, orders: orders, reports: reports); }
+    catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(marketplaceError(error))));
+    }
+  }
 }

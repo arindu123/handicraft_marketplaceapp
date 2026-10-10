@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../../shared/data/marketplace_repository.dart';
 import '../../shared/models/domain_models.dart' as canonical;
+import '../../shared/models/delivery_fee_policy.dart';
 
 import 'dart:convert';
 
@@ -249,6 +250,7 @@ class BuyerDemoOrder {
 
 /// Ephemeral UI state, owned and disposed by the Buyer marketplace.
 class BuyerDemo extends ChangeNotifier {
+  DeliveryFeePolicy _deliveryPolicy = const DeliveryFeePolicy();
   bool get isSignedIn =>
       repository?.auth.currentUser != null &&
       repository?.auth.currentUser?.isAnonymous == false;
@@ -288,6 +290,14 @@ class BuyerDemo extends ChangeNotifier {
     orders.clear();
     try {
       repository = backend ?? MarketplaceRepository();
+      _subscriptions.add(repository!.db.collection('marketplaceSettings')
+          .doc('deliveryLkr').snapshots().listen((snapshot) {
+        if (_disposed) return;
+        try {
+          _deliveryPolicy = DeliveryFeePolicy.fromMap(snapshot.data());
+          notifyListeners();
+        } catch (error) { _failed(error); }
+      }, onError: _failed));
       _subscriptions.add(
         repository!.products().listen(
           (rows) {
@@ -497,6 +507,7 @@ class BuyerDemo extends ChangeNotifier {
         recipientName: name,
         recipientPhone: phone,
         deliveryInstructions: instructions,
+        expectedDeliveryFee: delivery,
       );
       _checkoutId = null;
       final receipt =
@@ -535,7 +546,8 @@ class BuyerDemo extends ChangeNotifier {
   double get subtotal =>
       cart.entries.fold(0, (a, e) => a + e.key.price * e.value);
   double get delivery =>
-      cart.isEmpty ? 0 : MarketplaceRepository.deliveryFeeFor(subtotal);
+      cart.isEmpty ? 0 : MarketplaceRepository.deliveryFeeFor(subtotal,
+          currency: currency, policy: _deliveryPolicy);
   double get total => subtotal + delivery;
   String get currency => cart.keys.firstOrNull?.currency ?? 'LKR';
   String get destination =>

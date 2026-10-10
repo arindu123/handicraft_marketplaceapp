@@ -1,4 +1,3 @@
-import '../../../shared/data/community_repository.dart';
 
 import 'dart:async';
 
@@ -6,6 +5,11 @@ import '../../../shared/data/marketplace_repository.dart';
 import '../../../shared/models/domain_models.dart' as canonical;
 
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../../../shared/models/delivery_fee_policy.dart';
+import '../services/admin_operations_repository.dart';
+import 'admin_operations.dart';
+import 'admin_notice.dart';
 
 class AdminApproval {
   AdminApproval(this.id, this.name, this.type, this.location, this.description);
@@ -20,11 +24,16 @@ class AdminOrder {
     this.product,
     this.studio,
     this.amount,
-    this.status,
-  );
+    this.status, {
+    this.courierId,
+    this.updatedAt,
+  });
   final String id, customer, product, studio;
   final int amount;
   String status;
+  String? courierId;
+  final DateTime? updatedAt;
+  bool get canAssignCourier => ['confirmed', 'courierAssigned'].contains(status);
 }
 
 class AdminDirectoryItem {
@@ -43,9 +52,41 @@ class AdminDirectoryItem {
 
 // Session-only sample data: no network, account authorization or real payments.
 class AdminDemoStore extends ChangeNotifier {
+  final MarketplaceRepository? _repository;
+  bool _disposed = false;
+  bool get connected => _repository != null;
+  DeliveryFeePolicy deliveryPolicy = const DeliveryFeePolicy();
+  bool settingsLoaded = false;
+  final reports = <AdminReport>[];
+  final activity = <AdminActivity>[];
+  final readNoticeIds = <String>{};
+  bool noticePreferencesLoaded = false;
+  bool reportNotifications = true;
+  List<AdminNotice> get notifications {
+    final notices = <AdminNotice>[
+      if (applicationNotifications) for (final approval in approvals.where((item) => item.status == 'Pending'))
+        AdminNotice(category: 'applications', targetId: approval.id, title: 'Application awaiting review',
+          body: approval.name, revision: 'pending'),
+      if (orderNotifications) for (final order in orders)
+        AdminNotice(category: 'orders', targetId: order.id, title: 'Order ${order.status}',
+          body: order.product, revision: '${order.status}:${order.updatedAt?.toUtc().toIso8601String() ?? ''}', date: order.updatedAt),
+      if (reportNotifications) for (final report in reports.where((item) => item.status == 'Open'))
+        AdminNotice(category: 'reports', targetId: report.sourcePath, title: '${report.kind} complaint',
+          body: report.reason, revision: report.createdAt?.toUtc().toIso8601String() ?? 'open', date: report.createdAt),
+    ];
+    notices.sort((a, b) => (b.date ?? DateTime(1970)).compareTo(a.date ?? DateTime(1970)));
+    return notices.take(100).toList();
+  }
+  int get unreadNotifications => notifications.where((notice) => !readNoticeIds.contains(notice.id)).length;
+  final _reportSources = <String, Map<String, dynamic>>{};
+  final _resolutions = <String, Map<String, dynamic>>{};
+  AdminOperationsRepository get operations => AdminOperationsRepository(
+    _repository ?? (throw const MarketplaceFailure('Connect to Firebase to save changes.')),
+  );
   final _subscriptions = <StreamSubscription<dynamic>>[];
   String? error;
-  AdminDemoStore() {
+  AdminDemoStore({MarketplaceRepository? backend})
+      : _repository = backend ?? (MarketplaceBackend.enabled ? MarketplaceRepository() : null) {
     // Never expose the legacy preview fixtures. When Firebase is unavailable
     // the dashboard must show an empty/error state instead of fake activity.
     orders.clear();
@@ -53,13 +94,66 @@ class AdminDemoStore extends ChangeNotifier {
     users.clear();
     couriers.clear();
     approvals.clear();
-    if (!MarketplaceBackend.enabled) {
+    if (!connected) {
       error = 'Live marketplace data is unavailable. Sign in to Firebase to load the admin workspace.';
       return;
     }
     // Read the canonical collections. Deployed rules deny these global reads
     // until a trusted administrative authorization mechanism is supplied.
-    final repo = MarketplaceRepository();
+    final repo = _repository!;
+    _subscriptions.add(repo.db.collection('adminPreferences').doc(repo.uid).snapshots().listen((snapshot) {
+      if (_disposed) return;
+      final preferences = snapshot.data() ?? {};
+      applicationNotifications = preferences['applications'] != false;
+      orderNotifications = preferences['orders'] != false;
+      reportNotifications = preferences['reports'] != false;
+      noticePreferencesLoaded = true;
+      notifyListeners();
+    }, onError: _failed));
+    _subscriptions.add(repo.db.collection('adminNotificationReads').doc(repo.uid)
+        .collection('events').snapshots().listen((snapshot) {
+      if (_disposed) return;
+      readNoticeIds.clear();
+      readNoticeIds.addAll(snapshot.docs.map((document) => document.id));
+      notifyListeners();
+    }, onError: _failed));
+    _subscriptions.add(repo.db.collection('marketplaceSettings').doc('deliveryLkr')
+        .snapshots().listen((snapshot) {
+      if (_disposed) return;
+      try {
+        deliveryPolicy = DeliveryFeePolicy.fromMap(snapshot.data());
+        settingsLoaded = true;
+        notifyListeners();
+      } catch (error) { _failed(error); }
+    }, onError: _failed));
+    void listenReports(Query<Map<String, dynamic>> query, String prefix) {
+      _subscriptions.add(query.snapshots().listen((snapshot) {
+        if (_disposed) return;
+        _reportSources.removeWhere((path, _) => prefix == 'delivery'
+            ? path.startsWith('orders/') : path.startsWith('marketplaceReports/'));
+        for (final document in snapshot.docs) {
+          _reportSources[document.reference.path] = document.data();
+        }
+        _refreshReports();
+      }, onError: _failed));
+    }
+    listenReports(repo.db.collectionGroup('deliveryIssues'), 'delivery');
+    listenReports(repo.db.collection('marketplaceReports'), 'manual');
+    _subscriptions.add(repo.db.collection('reportResolutions').snapshots().listen((snapshot) {
+      if (_disposed) return;
+      _resolutions.clear();
+      for (final document in snapshot.docs) {
+        _resolutions[document.data()['sourcePath'] as String] = document.data();
+      }
+      _refreshReports();
+    }, onError: _failed));
+    _subscriptions.add(repo.db.collection('adminActivity')
+        .orderBy('createdAt', descending: true).limit(100).snapshots().listen((snapshot) {
+      if (_disposed) return;
+      activity.clear();
+      activity.addAll(snapshot.docs.map((document) => AdminActivity.fromMap(document.data())));
+      notifyListeners();
+    }, onError: _failed));
     _subscriptions.add(
       repo.db.collection('users').snapshots().listen((snapshot) {
         final previous = {for (final u in users) u.id: u};
@@ -121,6 +215,8 @@ class AdminDemoStore extends ChangeNotifier {
               o.artisanId,
               o.total.round(),
               o.status.name,
+              courierId: o.courierId,
+              updatedAt: o.updatedAt ?? o.createdAt,
             );
           }),
         );
@@ -146,12 +242,14 @@ class AdminDemoStore extends ChangeNotifier {
     );
   }
   void _failed(Object e) {
+    if (_disposed) return;
     error = marketplaceError(e);
     notifyListeners();
   }
 
   @override
   void dispose() {
+    _disposed = true;
     for (final s in _subscriptions) {
       s.cancel();
     }
@@ -256,28 +354,32 @@ class AdminDemoStore extends ChangeNotifier {
   ];
   bool applicationNotifications = true;
   bool orderNotifications = true;
-  bool productReportResolved = false;
-  bool deliveryIssueResolved = false;
+  bool productReportResolved = true;
+  bool deliveryIssueResolved = true;
   int get pending => approvals.where((item) => item.status == 'Pending').length;
   int get activeArtisans => users
       .where((item) => item.active && item.detail.startsWith('Artisan'))
       .length;
-  int get revenue => orders.fold(0, (sum, order) => sum + order.amount);
+  int get revenue => orders.fold(0, (total, order) => total + order.amount);
   int get attentionCount =>
-      pending +
-      (productReportResolved ? 0 : 1) +
-      (deliveryIssueResolved ? 0 : 1);
+      pending + reports.where((report) => report.status == 'Open').length;
+
+  void _refreshReports() {
+    reports.clear();
+    reports.addAll(_reportSources.entries.map((entry) =>
+        AdminReport.fromMap(entry.key, entry.value, _resolutions[entry.key])));
+    reports.sort((a, b) => (b.createdAt ?? DateTime(1970)).compareTo(a.createdAt ?? DateTime(1970)));
+    productReportResolved = !reports.any((report) => report.kind == 'Product' && report.status == 'Open');
+    deliveryIssueResolved = !reports.any((report) => report.kind != 'Product' && report.status == 'Open');
+    notifyListeners();
+  }
+
+  Future<void> saveDeliveryPolicy(DeliveryFeePolicy policy) => operations.saveDeliveryPolicy(policy);
 
   void decide(AdminApproval item, bool approved) {
-    if (MarketplaceBackend.enabled) {
-      CommunityRepository()
-          .verify(
-            item.id,
-            approved
-                ? canonical.VerificationStatus.verified
-                : canonical.VerificationStatus.rejected,
-          )
-          .catchError(_failed);
+    if (connected) {
+      operations.change('artisanProfiles', item.id, approved ? 'Artisan approved' : 'Artisan rejected',
+          {'verificationStatus': approved ? 'verified' : 'rejected'}).catchError(_failed);
       return;
     }
     if (item.status != 'Pending') return;
@@ -294,7 +396,7 @@ class AdminDemoStore extends ChangeNotifier {
   }
 
   void updateOrder(AdminOrder order, String status) {
-    if (MarketplaceBackend.enabled) {
+    if (connected) {
       final mapped = {
         'Pending': 'pending',
         'Processing': 'confirmed',
@@ -302,10 +404,7 @@ class AdminDemoStore extends ChangeNotifier {
         'Delivered': 'delivered',
       }[status];
       if (mapped != null) {
-        MarketplaceRepository().db
-            .collection('orders')
-            .doc(order.id)
-            .update({
+        operations.change('orders', order.id, 'Order status updated', {
               'status': mapped,
               'updatedAt': DateTime.now().toUtc().toIso8601String(),
             })
@@ -318,11 +417,9 @@ class AdminDemoStore extends ChangeNotifier {
   }
 
   void toggleItem(AdminDirectoryItem item) {
-    if (MarketplaceBackend.enabled) {
-      MarketplaceRepository().db
-          .collection(item.collection)
-          .doc(item.id)
-          .update(
+    if (connected) {
+      operations.change(item.collection, item.id, item.collection == 'products'
+          ? 'Product visibility updated' : 'Account availability updated',
             item.collection == 'products'
                 ? {'status': item.active ? 'hidden' : 'active'}
                 : {'active': !item.active},
@@ -335,10 +432,9 @@ class AdminDemoStore extends ChangeNotifier {
   }
 
   void verifyArtisan(AdminDirectoryItem item) {
-    if (MarketplaceBackend.enabled) {
-      CommunityRepository()
-          .verify(item.id, canonical.VerificationStatus.verified)
-          .catchError(_failed);
+    if (connected) {
+      operations.change('artisanProfiles', item.id, 'Artisan approved',
+          {'verificationStatus': 'verified'}).catchError(_failed);
       return;
     }
     if (!users.contains(item) ||
@@ -364,15 +460,27 @@ class AdminDemoStore extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setNotifications({bool? applications, bool? orders}) {
-    if (MarketplaceBackend.enabled) {
-      error = 'Notification delivery is not configured.';
-      notifyListeners();
-      return;
-    }
-    applicationNotifications = applications ?? applicationNotifications;
-    orderNotifications = orders ?? orderNotifications;
-    notifyListeners();
+  Future<void> setNotifications({bool? applications, bool? orders, bool? reports}) async {
+    final repo = _repository ?? (throw const MarketplaceFailure('Connect to Firebase to save preferences.'));
+    await repo.requireRole(canonical.UserRole.admin);
+    final reference = repo.db.collection('adminPreferences').doc(repo.uid);
+    await repo.db.runTransaction((transaction) async {
+      final snapshot = await transaction.get(reference);
+      final before = snapshot.data() ?? {};
+      transaction.set(reference, {
+        'applications': applications ?? before['applications'] ?? true,
+        'orders': orders ?? before['orders'] ?? true,
+        'reports': reports ?? before['reports'] ?? true,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  Future<void> markNoticeRead(AdminNotice notice) async {
+    final repo = _repository ?? (throw const MarketplaceFailure('Connect to Firebase to read notifications.'));
+    await repo.requireRole(canonical.UserRole.admin);
+    await repo.db.collection('adminNotificationReads').doc(repo.uid).collection('events')
+        .doc(notice.id).set({'readAt': FieldValue.serverTimestamp()});
   }
 }
 

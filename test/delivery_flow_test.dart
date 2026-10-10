@@ -163,10 +163,10 @@ void main() {
     expect(find.text('LKR 1500.00'), findsNWidgets(2));
     await tapText(tester, 'Cash out');
     expect(
-      find.text('Payouts are not connected yet. No cash out has been made.'),
+      find.text('Cash out · Test mode'),
       findsOneWidget,
     );
-    await tapText(tester, 'Got it');
+    await tapText(tester, 'Close');
     await tester.tap(find.widgetWithText(NavigationDestination, 'Home'));
     await tester.pumpAndSettle();
     expect(find.text('1 delivery\nwaiting today'), findsOneWidget);

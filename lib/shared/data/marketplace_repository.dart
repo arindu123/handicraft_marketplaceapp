@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'cloudinary_upload.dart';
+import '../models/delivery_fee_policy.dart';
 
 import '../models/domain_models.dart' as model;
 import '../../features/auth/services/auth_session.dart';
@@ -227,7 +228,14 @@ class MarketplaceRepository {
   }
 
   // Keep the existing numeric fee policy; orders retain their own currency.
-  static double deliveryFeeFor(double subtotal) => subtotal >= 250 ? 0 : 14;
+  static double deliveryFeeFor(double subtotal, {
+    String currency = 'LKR', DeliveryFeePolicy policy = const DeliveryFeePolicy(),
+  }) => (currency == 'LKR' ? policy : const DeliveryFeePolicy()).feeFor(subtotal);
+
+  Future<DeliveryFeePolicy> loadDeliveryPolicy() async => DeliveryFeePolicy.fromMap(
+    (await db.collection('marketplaceSettings').doc('deliveryLkr')
+        .get(const GetOptions(source: Source.server))).data(),
+  );
 
   static model.Order buildOrder(
     String id,
@@ -235,8 +243,9 @@ class MarketplaceRepository {
     List<model.Product> products,
     Map<String, int> quantities,
     String address,
-    String payment,
-  ) {
+    String payment, {
+    DeliveryFeePolicy deliveryPolicy = const DeliveryFeePolicy(),
+  }) {
     if (products.isEmpty || products.length > 4) {
       throw const MarketplaceFailure(
         'Choose between 1 and 4 different products per order.',
@@ -283,7 +292,7 @@ class MarketplaceRepository {
       0,
       (total, i) => total + i.unitPrice * i.quantity,
     );
-    final fee = deliveryFeeFor(subtotal);
+    final fee = deliveryFeeFor(subtotal, currency: products.first.currency, policy: deliveryPolicy);
     return model.Order(
       id: id,
       buyerId: buyer,
@@ -322,7 +331,9 @@ class MarketplaceRepository {
       products.add(model.Product.fromMap(product.data()!));
       quantities[row.id] = row.data()['quantity'] as int;
     }
-    return buildOrder('', uid, products, quantities, address, payment);
+    final policy = products.any((product) => product.currency == 'LKR')
+        ? await loadDeliveryPolicy() : const DeliveryFeePolicy();
+    return buildOrder('', uid, products, quantities, address, payment, deliveryPolicy: policy);
   }
 
   Future<model.Order> checkout(
@@ -332,6 +343,7 @@ class MarketplaceRepository {
     String recipientName = '',
     String recipientPhone = '',
     String deliveryInstructions = '',
+    double? expectedDeliveryFee,
   }) async {
     await requireRole(model.UserRole.buyer);
     if (recipientName.length > 100 ||
@@ -369,6 +381,10 @@ class MarketplaceRepository {
         }
         products.add(model.Product.fromMap(product.data()!));
       }
+      final policy = products.any((product) => product.currency == 'LKR')
+          ? DeliveryFeePolicy.fromMap((await tx.get(db.collection('marketplaceSettings')
+              .doc('deliveryLkr'))).data())
+          : const DeliveryFeePolicy();
       final order = buildOrder(
         ref.id,
         buyer,
@@ -376,7 +392,11 @@ class MarketplaceRepository {
         quantities,
         address,
         payment,
+        deliveryPolicy: policy,
       );
+      if (expectedDeliveryFee != null && (order.deliveryFee - expectedDeliveryFee).abs() > 0.001) {
+        throw const MarketplaceFailure('Delivery fees changed. Review your order total and try again.');
+      }
       final studio = products.isEmpty
           ? null
           : await tx.get(

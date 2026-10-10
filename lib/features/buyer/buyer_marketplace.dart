@@ -15,6 +15,7 @@ import '../../shared/models/craftisan_demo_messages.dart';
 import '../../shared/widgets/custom_button.dart';
 import '../../shared/widgets/craftisan_messaging.dart';
 import 'buyer_demo.dart';
+import 'buyer_order_problems.dart';
 import 'collector_profile_header.dart';
 import '../../shared/data/profile_repository.dart';
 import 'rotating_product_banner.dart';
@@ -3206,6 +3207,12 @@ class BuyerOrderDetails extends StatelessWidget {
             ],
           ),
         ),
+        if (demo.repository != null)
+          BuyerOrderProblems(
+            key: ValueKey('problems-${order.id}'),
+            repository: BuyerProblemsRepository(demo.repository!),
+            orderId: order.id,
+          ),
       ],
     ),
   );

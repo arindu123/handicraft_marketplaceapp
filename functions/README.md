@@ -1,5 +1,32 @@
 # Delivery notifications and proof setup
 
+## Buyer order alerts
+
+The buyer marketplace displays a live alert when an existing order changes status.
+The notification bell lists saved confirmation, courier assignment, pickup, on-the-way,
+delivery and cancellation updates. Opening an entry marks it read and opens that order.
+Initial order snapshots and unrelated edits do not generate live alerts.
+
+Deploy the buyer trigger and updated rules from the repository root:
+
+```powershell
+firebase.cmd deploy --only firestore:rules,functions:delivery:notifyBuyerOrderUpdates --project craftisan-we114-2026
+```
+
+Android buyers are asked for notification permission when their signed-in marketplace
+opens. The bell screen also provides **Enable phone alerts** to retry registration.
+Web and desktop receive live in-app alerts and the saved inbox; Android background
+alerts use FCM. Notification taps open the buyer inbox. Notification history is written
+only by the function; buyers can only read their own entries and mark them read.
+One entry is saved per order milestone, and trigger retries preserve its read state.
+FCM may redeliver a push on a retry; the Android tag replaces the same milestone alert.
+
+No Firebase deployment is performed by these code changes. After deployment, test
+on a physical Android device with an artisan account and a courier account advancing
+the buyer's order through every stage, including while the buyer app is backgrounded.
+See [Firebase message handling](https://firebase.google.com/docs/cloud-messaging/flutter/receive-messages)
+and [Firestore trigger delivery semantics](https://firebase.google.com/docs/functions/firestore-events).
+
 The app changes are limited to delivery features. The existing Firebase configuration supports Android; web and iOS push are not configured by this change.
 
 ## Activate on Firebase

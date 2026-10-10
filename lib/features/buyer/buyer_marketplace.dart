@@ -1,4 +1,9 @@
 import 'craftisan_home_hero.dart';
+
+import 'dart:async';
+
+import 'package:firebase_messaging/firebase_messaging.dart';
+
 import 'home/craftisan_preview_home.dart';
 import 'handicraft_navigation_bar.dart';
 import '../auth/models/marketplace_role.dart';
@@ -19,6 +24,7 @@ import 'buyer_orders_screens.dart';
 import 'collector_profile_header.dart';
 import '../../shared/data/profile_repository.dart';
 import 'rotating_product_banner.dart';
+import 'services/buyer_notifications.dart';
 
 void _signIn(BuildContext context) => Navigator.pushNamed(
   context,
@@ -39,18 +45,68 @@ class BuyerMarketplace extends StatefulWidget {
 
 class _BuyerMarketplaceState extends State<BuyerMarketplace> {
   late final demo = BuyerDemo(backend: widget.backend);
+  StreamSubscription<RemoteMessage>? _notificationTap;
   @override
   void initState() {
     super.initState();
     if (!widget.preview || widget.backend != null) demo.addListener(_refresh);
+    if (!widget.preview &&
+        MarketplaceBackend.enabled &&
+        demo.isSignedIn &&
+        BuyerNotifications.supported) {
+      unawaited(BuyerNotifications.instance.enable().catchError((Object _) {}));
+      _notificationTap = FirebaseMessaging.onMessageOpenedApp.listen(
+        _openAlert,
+      );
+      unawaited(
+        FirebaseMessaging.instance
+            .getInitialMessage()
+            .then((message) {
+              if (message != null) _openAlert(message);
+            })
+            .catchError((Object _) {}),
+      );
+    }
+  }
+
+  void _openAlert(RemoteMessage message) {
+    if (message.data['type'] != 'buyerOrder') return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && demo.isSignedIn) _notifications(context);
+    });
   }
 
   void _refresh() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    if (demo.orderAlerts.isNotEmpty) {
+      final alerts = [...demo.orderAlerts];
+      demo.orderAlerts.clear();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        for (final alert in alerts) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(alert),
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      });
+    }
+  }
+
+  void _notifications(BuildContext context) {
+    if (!demo.isSignedIn) {
+      _signIn(context);
+      return;
+    }
+    _open(context, _BuyerNotificationsScreen(demo: demo));
   }
 
   @override
   void dispose() {
+    _notificationTap?.cancel();
     if (!widget.preview || widget.backend != null) demo.dispose();
     super.dispose();
   }
@@ -233,6 +289,23 @@ class _BuyerMarketplaceState extends State<BuyerMarketplace> {
                                                     fontWeight: FontWeight.w700,
                                                     letterSpacing: -1,
                                                     color: _charcoal,
+                                                  ),
+                                                ),
+                                              ),
+                                              IconButton(
+                                                tooltip: 'Order notifications',
+                                                onPressed: () =>
+                                                    _notifications(context),
+                                                icon: Badge(
+                                                  isLabelVisible:
+                                                      demo.unreadNotifications >
+                                                      0,
+                                                  label: Text(
+                                                    '${demo.unreadNotifications}',
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons
+                                                        .notifications_outlined,
                                                   ),
                                                 ),
                                               ),
@@ -689,6 +762,127 @@ class _BuyerMarketplaceState extends State<BuyerMarketplace> {
       ),
     );
   }
+}
+
+class _BuyerNotificationsScreen extends StatefulWidget {
+  const _BuyerNotificationsScreen({required this.demo});
+  final BuyerDemo demo;
+
+  @override
+  State<_BuyerNotificationsScreen> createState() =>
+      _BuyerNotificationsScreenState();
+}
+
+class _BuyerNotificationsScreenState extends State<_BuyerNotificationsScreen> {
+  bool _enabling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.demo.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    widget.demo.removeListener(_refresh);
+    super.dispose();
+  }
+
+  Future<void> _enable() async {
+    setState(() => _enabling = true);
+    try {
+      await BuyerNotifications.instance.enable();
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Order alerts enabled.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(marketplaceError(e))));
+      }
+    } finally {
+      if (mounted) setState(() => _enabling = false);
+    }
+  }
+
+  Future<void> _select(Map<String, dynamic> notification) async {
+    try {
+      await widget.demo.readNotification(notification['id'] as String);
+      if (!mounted) return;
+      _open(
+        context,
+        BuyerOrderDetailsScreen(
+          demo: widget.demo,
+          orderId: notification['orderId'] as String,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(marketplaceError(e))));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Order notifications')),
+    body: Column(
+      children: [
+        if (BuyerNotifications.supported)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: OutlinedButton.icon(
+              onPressed: _enabling ? null : _enable,
+              icon: const Icon(Icons.notifications_active_outlined),
+              label: Text(
+                _enabling ? 'Enabling alerts…' : 'Enable phone alerts',
+              ),
+            ),
+          ),
+        if (widget.demo.notificationError != null)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(widget.demo.notificationError!),
+          ),
+        Expanded(
+          child: widget.demo.notifications.isEmpty
+              ? const Center(child: Text('Order updates will appear here.'))
+              : ListView.separated(
+                  itemCount: widget.demo.notifications.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final notification = widget.demo.notifications[index];
+                    return ListTile(
+                      leading: Icon(
+                        notification['read'] == true
+                            ? Icons.notifications_none
+                            : Icons.notifications_active,
+                        color: AppColors.warmBrown,
+                      ),
+                      title: Text(
+                        notification['body'] as String? ?? 'Order updated',
+                        style: TextStyle(
+                          fontWeight: notification['read'] == true
+                              ? FontWeight.normal
+                              : FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: Text('Order #${notification['orderId']}'),
+                      onTap: () => _select(notification),
+                    );
+                  },
+                ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _HomeSectionState extends StatelessWidget {
@@ -1206,7 +1400,11 @@ class _ProductCard extends StatelessWidget {
                       ? const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.verified, size: 12, color: Color(0xFF47745C)),
+                            Icon(
+                              Icons.verified,
+                              size: 12,
+                              color: Color(0xFF47745C),
+                            ),
                             SizedBox(width: 4),
                             Text(
                               'Verified maker',
@@ -1760,7 +1958,11 @@ class _BuyerProductDetailsState extends State<BuyerProductDetails> {
                 ),
                 if (p.isVerified) ...[
                   const SizedBox(width: 6),
-                  const Icon(Icons.verified, size: 16, color: Color(0xFF47745C)),
+                  const Icon(
+                    Icons.verified,
+                    size: 16,
+                    color: Color(0xFF47745C),
+                  ),
                 ],
               ],
             ),
@@ -1914,7 +2116,10 @@ class BuyerArtisanProfile extends StatelessWidget {
           if (avatarProduct.isVerified)
             Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFEAF4ED),
                   borderRadius: BorderRadius.circular(20),
@@ -2092,7 +2297,8 @@ class BuyerCart extends StatelessWidget {
       footer: demo.cart.isEmpty
           ? null
           : CustomButton(
-              label: 'Proceed to Checkout · ${money(demo.total, demo.currency)}',
+              label:
+                  'Proceed to Checkout · ${money(demo.total, demo.currency)}',
               onPressed: () => _open(context, BuyerCheckout(demo: demo)),
             ),
       children: [
@@ -2193,8 +2399,14 @@ class _Totals extends StatelessWidget {
   Widget build(BuildContext context) => _Panel(
     child: Column(
       children: [
-        _Amount('Items subtotal (${demo.count})', money(demo.subtotal, demo.currency)),
-        _Amount('Delivery', demo.delivery == 0 ? 'Free' : money(demo.delivery, demo.currency)),
+        _Amount(
+          'Items subtotal (${demo.count})',
+          money(demo.subtotal, demo.currency),
+        ),
+        _Amount(
+          'Delivery',
+          demo.delivery == 0 ? 'Free' : money(demo.delivery, demo.currency),
+        ),
         const Divider(),
         _Amount('Total', money(demo.total, demo.currency)),
       ],
@@ -3029,7 +3241,8 @@ class _BuyerCheckoutState extends State<BuyerCheckout> {
                       ),
                     ),
                   const Divider(),
-                  if (step >= 1) _Amount('Subtotal', money(d.subtotal, d.currency)),
+                  if (step >= 1)
+                    _Amount('Subtotal', money(d.subtotal, d.currency)),
                   _Amount('Standard delivery', money(d.delivery, d.currency)),
                 ],
               ),
@@ -3220,10 +3433,15 @@ class BuyerOrderDetails extends StatelessWidget {
         _Panel(
           child: Column(
             children: [
-              _Amount('Items subtotal (${order.count})', money(order.subtotal, order.currency)),
+              _Amount(
+                'Items subtotal (${order.count})',
+                money(order.subtotal, order.currency),
+              ),
               _Amount(
                 'Delivery fee',
-                order.deliveryFee == 0 ? 'Free' : money(order.deliveryFee, order.currency),
+                order.deliveryFee == 0
+                    ? 'Free'
+                    : money(order.deliveryFee, order.currency),
               ),
               const Divider(),
               _Amount('Total', money(order.total, order.currency)),
@@ -3404,7 +3622,10 @@ class BuyerOrderSuccess extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _Amount('Total · delivery included', money(order.total, order.currency)),
+            _Amount(
+              'Total · delivery included',
+              money(order.total, order.currency),
+            ),
             const Divider(),
             const _Eyebrow('DELIVERY LOCATION'),
             Text(demo.destination),

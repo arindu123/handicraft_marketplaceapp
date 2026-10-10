@@ -1,6 +1,6 @@
 import '../../shared/data/community_repository.dart';
 
-import 'package:image_picker/image_picker.dart';
+ import 'package:image_picker/image_picker.dart';
 
 import '../../shared/data/marketplace_repository.dart';
 
@@ -21,9 +21,6 @@ void _dashboard(BuildContext context) => Navigator.popUntil(
   context,
   (r) => r.settings.name == RouteNames.marketplace || r.isFirst,
 );
-
-
-//artisanproduct converts a conical products and artisan products
 
 class ArtisanDashboardScreen extends StatefulWidget {
   const ArtisanDashboardScreen({super.key});
@@ -110,7 +107,7 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
       children: switch (tab) {
         0 => [
           const _Caption('CERAMICS & KILN'),
-          const _Heading('Welcome back, Elena'),
+          _Heading('Welcome back, ${demo.artisanName}'),
           _Card(
             color: AppColors.terracotta,
             child: Column(
@@ -150,7 +147,9 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
               children: [
                 _Stat(
                   'DEMO ORDER VALUE',
-                  demo.orderValueLabel,
+                  artisanMoney(
+                    demo.orders.fold<double>(0, (sum, o) => sum + o.total),
+                  ),
                 ),
                 _Stat('ORDERS', '${demo.orders.length}'),
                 _Stat(
@@ -186,7 +185,7 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
         ],
         2 => [
           const _Caption('STUDIO DISPATCH & LOGISTICS'),
-          const _Heading('Elena Vance Pottery'),
+          _Heading("${demo.artisanName}'s Studio Orders"),
           Text('${demo.orders.length} demo orders'),
           const _Card(
             child: Text(
@@ -210,7 +209,7 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
                     ),
                     title: Text(o.product.name),
                     subtitle: Text(
-                      'Qty: ${o.quantity} · ${artisanMoney(o.total, o.product.currency)}',
+                      'Qty: ${o.quantity} · ${artisanMoney(o.total)}',
                     ),
                   ),
                   OutlinedButton(
@@ -232,15 +231,13 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
               backgroundImage: MemoryImage(artisanPhotos[4]),
             ),
           ),
-          _Heading(
-            MarketplaceBackend.enabled
-                ? (demo.profile['studioName'] as String? ?? '')
-                : 'Elena Vance',
-          ),
+          _Heading(demo.artisanName),
           Text(
-            MarketplaceBackend.enabled
-                ? (demo.profile['location'] as String? ?? '')
-                : '@elenavance.ceramics',
+            demo.artisanLocation.isNotEmpty
+                ? demo.artisanLocation
+                : (demo.studioName.isNotEmpty
+                      ? demo.studioName
+                      : 'Artisan profile'),
           ),
           _Caption(
             MarketplaceBackend.enabled
@@ -265,23 +262,23 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
               children: [
                 const _Caption('ATELIER NAME'),
                 Text(
-                  MarketplaceBackend.enabled
-                      ? (demo.profile['studioName'] as String? ?? '')
-                      : 'St. Ives Hearth & Clay',
+                  demo.studioName.isNotEmpty
+                      ? demo.studioName
+                      : 'Studio name not added',
                 ),
                 SizedBox(height: 18),
                 _Caption('PUBLIC BIO'),
                 Text(
-                  MarketplaceBackend.enabled
-                      ? (demo.profile['bio'] as String? ?? '')
-                      : 'Specializing in wheel-thrown fluted terracotta and wood-ash stoneware. Every piece is shaped, fired and finished by hand in our coastal studio.',
+                  demo.artisanBio.isNotEmpty
+                      ? demo.artisanBio
+                      : 'No public bio has been added yet.',
                 ),
                 SizedBox(height: 18),
                 _Caption('STUDIO LOCATION'),
                 Text(
-                  MarketplaceBackend.enabled
-                      ? (demo.profile['location'] as String? ?? '')
-                      : 'St. Ives, Cornwall, UK',
+                  demo.artisanLocation.isNotEmpty
+                      ? demo.artisanLocation
+                      : 'Location not added',
                 ),
                 SizedBox(height: 18),
                 _Caption('KILN SPECIFICATIONS'),
@@ -491,7 +488,7 @@ class _ProductCard extends StatelessWidget {
         ),
         _Heading(product.name),
         Text(
-          artisanMoney(product.price, product.currency),
+          artisanMoney(product.price),
           style: const TextStyle(color: AppColors.terracotta, fontSize: 21),
         ),
         Text('${product.stock} in studio stock · ${product.id}'),
@@ -559,7 +556,6 @@ class _ArtisanProductFormState extends State<ArtisanProductForm> {
     name: name.text.trim(),
     category: category!,
     price: double.parse(price.text.trim()),
-    currency: widget.product?.currency ?? 'LKR',
     description: description.text.trim(),
     images: List.unmodifiable(images),
     stock: widget.product?.stock ?? 1,
@@ -592,7 +588,6 @@ class _ArtisanProductFormState extends State<ArtisanProductForm> {
       name: p.name,
       category: p.category,
       price: p.price,
-      currency: p.currency,
       description: p.description,
       images: p.images,
       stock: p.stock,
@@ -799,7 +794,7 @@ class _ArtisanProductFormState extends State<ArtisanProductForm> {
                 ),
                 const SizedBox(height: 18),
                 CustomTextField(
-                  label: 'Price (${widget.product?.currency ?? 'LKR'})',
+                  label: 'Price (USD)',
                   controller: price,
                   icon: Icons.attach_money,
                   keyboardType: const TextInputType.numberWithOptions(
@@ -874,7 +869,7 @@ List<Widget> _productInformation(ArtisanProduct p) => [
     ),
   _Heading(p.name),
   Text(
-    artisanMoney(p.price, p.currency),
+    artisanMoney(p.price),
     style: const TextStyle(fontSize: 24, color: AppColors.terracotta),
   ),
   _Card(
@@ -923,7 +918,7 @@ class ArtisanPublishedScreen extends StatelessWidget {
               children: [
                 _Photo(p.images.first, height: 180),
                 _Heading(p.name),
-                Text('${artisanMoney(p.price, p.currency)} · LIVE · ${p.id}'),
+                Text('${artisanMoney(p.price)} · LIVE · ${p.id}'),
               ],
             ),
           ),
@@ -991,9 +986,12 @@ class ArtisanProductScreen extends StatelessWidget {
         children: [
           _Caption('LIVE CATALOG · ${p.id}'),
           ..._productInformation(p),
-          const _Card(
+          _Card(
             child: Text(
-              'Elena Vance · St. Ives Hearth & Clay\nGuild Certified Potter · St. Ives, Cornwall, UK',
+              '${demo.artisanName}'
+              '${demo.studioName.isNotEmpty ? ' · ${demo.studioName}' : ''}\n'
+              '${(demo.profile['verificationStatus'] as String?) ?? 'Verification pending'}'
+              '${demo.artisanLocation.isNotEmpty ? ' · ${demo.artisanLocation}' : ''}',
             ),
           ),
           TextButton(
@@ -1041,10 +1039,10 @@ class ArtisanOrderDetails extends StatelessWidget {
                 Text('Delivery: ${o.delivery}'),
                 const Divider(),
                 Text(
-                  'Quantity: ${o.quantity} × ${artisanMoney(o.product.price, o.product.currency)}',
+                  'Quantity: ${o.quantity} × ${artisanMoney(o.product.price)}',
                 ),
                 Text(
-                  'Order total: ${artisanMoney(o.total, o.product.currency)}',
+                  'Order total: ${artisanMoney(o.total)}',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ],
@@ -1083,6 +1081,20 @@ class ArtisanVerificationScreen extends StatelessWidget {
           stream: CommunityRepository().profile(CommunityRepository().uid),
           builder: (context, snapshot) {
             final p = snapshot.data?.data() ?? {};
+            final artisanName =
+                [
+                      p['fullName'],
+                      p['displayName'],
+                      p['artisanName'],
+                      p['name'],
+                      p['userName'],
+                    ]
+                    .whereType<String>()
+                    .map((value) => value.trim())
+                    .firstWhere(
+                      (value) => value.isNotEmpty,
+                      orElse: () => 'Artisan',
+                    );
             return _Page(
               title: 'Verification Status',
               children: [
@@ -1094,7 +1106,9 @@ class ArtisanVerificationScreen extends StatelessWidget {
                     children: [
                       _Caption(p['verificationStatus'] as String? ?? 'pending'),
                       const SizedBox(height: 16),
-                      Text('${p['studioName'] ?? ''}\n${p['location'] ?? ''}'),
+                      Text(
+                        '$artisanName\n${p['studioName'] ?? ''}\n${p['location'] ?? ''}',
+                      ),
                       const SizedBox(height: 16),
                       Text(p['bio'] as String? ?? ''),
                     ],
@@ -1119,7 +1133,7 @@ class ArtisanVerificationScreen extends StatelessWidget {
                   _Caption('VERIFIED PROVENANCE SEAL · ACTIVE'),
                   SizedBox(height: 16),
                   Text(
-                    'Elena Vance\nSt. Ives Hearth & Clay\nSt. Ives, Cornwall, UK',
+                    'Artisan profile\nStudio name not added\nLocation not added',
                   ),
                   SizedBox(height: 16),
                   Text(

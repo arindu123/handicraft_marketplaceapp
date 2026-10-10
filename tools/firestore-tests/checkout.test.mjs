@@ -76,6 +76,15 @@ async function adminChange(db, collectionName, id, action, changes, actorId = 'a
 const deliveryPolicy = (fee = 350, freeDeliveryThreshold = 10000) => ({
   currency: 'LKR', fee, freeDeliveryThreshold, updatedBy: 'admin', updatedAt: serverTimestamp(),
 });
+test('couriers publish limited contact details for assigned buyers', async () => {
+  const profile = {
+    displayName: 'Courier One', area: 'Colombo', photoUrl: '', phone: '',
+  };
+  await assertSucceeds(setDoc(doc(dbFor('courier'), 'courierPublicProfiles/courier'), profile));
+  assert.deepEqual((await getDoc(doc(dbFor('buyer'), 'courierPublicProfiles/courier'))).data(), profile);
+  await assertFails(setDoc(doc(dbFor('buyer'), 'courierPublicProfiles/courier2'), profile));
+  await assertFails(setDoc(doc(dbFor('artisan'), 'courierPublicProfiles/artisan'), profile));
+});
 function order(id, buyer = 'buyer', count = 1, quantity = 2) {
   const subtotal = count * quantity * 60;
   const fee = subtotal >= 250 ? 0 : 14;

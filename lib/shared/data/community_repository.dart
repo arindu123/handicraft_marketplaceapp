@@ -119,6 +119,20 @@ class CommunityRepository {
 
   Stream<DocumentSnapshot<Map<String, dynamic>>> profile(String id) =>
       db.collection('artisanProfiles').doc(id).snapshots();
+
+  Stream<DocumentSnapshot<Map<String, dynamic>>> userProfile(String id) =>
+      db.collection('users').doc(id).snapshots();
+
+  static String readName(Map<String, dynamic> data) {
+    for (final key in ['displayName', 'fullName', 'name']) {
+      final value = data[key];
+      if (value is String && value.trim().isNotEmpty) {
+        return value.trim();
+      }
+    }
+    return '';
+  }
+
   Future<void> ensureArtisanProfile() async {
     final id = uid;
     final ref = db.collection('artisanProfiles').doc(id);

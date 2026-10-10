@@ -4,6 +4,7 @@ const { getMessaging } = require('firebase-admin/messaging');
 const { onDocumentWritten } = require('firebase-functions/v2/firestore');
 const { deliveryAudience, sendDeliveryAlerts } = require('./delivery');
 const { adminEvent, sendAdminAlerts } = require('./admin-notifications');
+const { buyerUpdate, sendBuyerAlert } = require('./buyer');
 
 initializeApp();
 exports.notifyDeliveryRequests = onDocumentWritten('orders/{orderId}', async event => {
@@ -20,3 +21,8 @@ exports.notifyAdminApplications = adminTrigger('applications', 'artisanProfiles/
 exports.notifyAdminOrders = adminTrigger('orders', 'orders/{orderId}');
 exports.notifyAdminComplaints = adminTrigger('reports', 'marketplaceReports/{reportId}');
 exports.notifyAdminDeliveryIssues = adminTrigger('reports', 'orders/{orderId}/deliveryIssues/{reportId}');
+exports.notifyBuyerOrderUpdates = onDocumentWritten({ document: 'orders/{orderId}', retry: true }, async event => {
+  const update = buyerUpdate(event.data?.before.data(), event.data?.after.data());
+  if (update) await sendBuyerAlert(getFirestore(), getMessaging(), event.params.orderId,
+    update, event.data.after.updateTime);
+});

@@ -73,6 +73,15 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
                 'createdAt': FieldValue.serverTimestamp(),
                 'updatedAt': FieldValue.serverTimestamp(),
               });
+          await FirebaseFirestore.instance
+              .collection('courierPublicProfiles')
+              .doc(user.uid)
+              .set({
+                'displayName': name,
+                'area': '',
+                'photoUrl': '',
+                'phone': user.phoneNumber ?? '',
+              });
         } catch (_) {
           _incompleteSignup = user;
           await _cleanUpSignup();

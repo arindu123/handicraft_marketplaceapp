@@ -206,10 +206,9 @@ BuyerArtisan artisanFor(String name) => buyerArtisans.firstWhere(
   ),
 );
 
-String money(num value, [String currency = 'LKR']) =>
-    currency == 'USD'
-        ? '\$${value.toStringAsFixed(2)}'
-        : '$currency ${value.toStringAsFixed(2)}';
+String money(num value, [String currency = 'LKR']) => currency == 'USD'
+    ? '\$${value.toStringAsFixed(2)}'
+    : '$currency ${value.toStringAsFixed(2)}';
 
 enum BuyerOrderStatus {
   pending('Pending'),
@@ -272,6 +271,29 @@ class BuyerDemo extends ChangeNotifier {
   bool _disposed = false;
   Map<String, int> _cartIds = {};
   Set<String> _favoriteIds = {};
+  final List<String> orderAlerts = [];
+  List<Map<String, dynamic>> notifications = [];
+  String? notificationError;
+  int get unreadNotifications =>
+      notifications.where((n) => n['read'] != true).length;
+
+  Future<void> readNotification(String id) async {
+    await repository!.userCollection('notifications').doc(id).update({
+      'read': true,
+    });
+  }
+
+  static String statusMessage(BuyerOrderStatus status) => switch (status) {
+    BuyerOrderStatus.confirmed => 'Your artisan has confirmed your order.',
+    BuyerOrderStatus.courierAssigned =>
+      'A courier has been assigned to your order.',
+    BuyerOrderStatus.pickedUp =>
+      'Your order has been picked up by the courier.',
+    BuyerOrderStatus.onTheWay => 'Your order is on the way to you.',
+    BuyerOrderStatus.delivered => 'Your order has been delivered.',
+    BuyerOrderStatus.cancelled => 'Your order has been cancelled.',
+    BuyerOrderStatus.pending => 'Your order is awaiting confirmation.',
+  };
   BuyerDemo({MarketplaceRepository? backend}) {
     if (!MarketplaceBackend.enabled && backend == null) {
       loading = false;
@@ -373,13 +395,49 @@ class BuyerDemo extends ChangeNotifier {
         }, onError: _failed),
       );
       _subscriptions.add(
+        repository!
+            .userCollection('notifications')
+            .snapshots()
+            .listen(
+              (s) {
+                if (_disposed) return;
+                notificationError = null;
+                notifications =
+                    s.docs
+                        .map((d) => <String, dynamic>{...d.data(), 'id': d.id})
+                        .toList()
+                      ..sort(
+                        (a, b) =>
+                            (b['createdAt']?.toDate() as DateTime? ??
+                                    DateTime(1970))
+                                .compareTo(
+                                  a['createdAt']?.toDate() as DateTime? ??
+                                      DateTime(1970),
+                                ),
+                      );
+                notifyListeners();
+              },
+              onError: (Object e) {
+                if (_disposed) return;
+                notificationError = marketplaceError(e);
+                notifyListeners();
+              },
+            ),
+      );
+      _subscriptions.add(
         repository!.orders('buyerId').listen((rows) {
+          if (_disposed) return;
           final previous = {for (final o in orders) o.id: o};
           orders.clear();
           for (final row in rows) {
             final order = fromOrder(row);
             final old = previous[row.id];
             if (old != null) {
+              if (old.status != order.status) {
+                orderAlerts.add(
+                  'Order #${order.id}: ${statusMessage(order.status)}',
+                );
+              }
               old.status = order.status;
               orders.add(old);
             } else {

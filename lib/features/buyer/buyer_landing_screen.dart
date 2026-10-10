@@ -4,7 +4,7 @@ import '../../routes/route_names.dart';
 import '../auth/models/marketplace_role.dart';
 
 const _teal = Color(0xFF10494D);
-const _clay = Color(0xFFB8512B);
+const _clay = Color(0xFFC85D3C);
 const _cream = Color(0xFFFCF9F2);
 
 class BuyerLandingScreen extends StatefulWidget {
@@ -183,7 +183,7 @@ class _BuyerLandingScreenState extends State<BuyerLandingScreen>
                                 FilledButton(
                                   onPressed: _login,
                                   style: FilledButton.styleFrom(
-                                    backgroundColor: _teal,
+                                    backgroundColor: _clay,
                                     foregroundColor: _cream,
                                     padding: const EdgeInsets.symmetric(
                                       horizontal: 24,

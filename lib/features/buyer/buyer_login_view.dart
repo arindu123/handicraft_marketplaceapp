@@ -5,7 +5,7 @@ import '../auth/models/marketplace_role.dart';
 
 const _ink = Color(0xFF10494D);
 const _paper = Color(0xFFFCF9F2);
-const _rust = Color(0xFFB8512B);
+const _rust = Color(0xFFC85D3C);
 const _muted = Color(0xFF687571);
 
 /// Buyer presentation; authentication and validation stay in AuthForm.
@@ -321,9 +321,9 @@ class _BuyerLoginViewState extends State<BuyerLoginView> {
           FilledButton(
             onPressed: widget.submitting ? null : widget.onSubmit,
             style: FilledButton.styleFrom(
-              backgroundColor: _ink,
+              backgroundColor: _rust,
               foregroundColor: Colors.white,
-              disabledBackgroundColor: _ink.withValues(alpha: .7),
+              disabledBackgroundColor: _rust.withValues(alpha: .7),
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(15),

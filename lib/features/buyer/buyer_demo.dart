@@ -268,6 +268,8 @@ class BuyerDemo extends ChangeNotifier {
   String? error;
   bool _disposed = false;
   Map<String, int> _cartIds = {};
+  bool cartLoading = true;
+  String? cartError;
   Set<String> _favoriteIds = {};
   final List<String> orderAlerts = [];
   List<Map<String, dynamic>> notifications = [];
@@ -297,6 +299,7 @@ class BuyerDemo extends ChangeNotifier {
       loading = false;
       addressesLoading = false;
       catalogError = 'The marketplace connection is unavailable.';
+      cartLoading = false;
       return;
     }
     name = '';
@@ -334,6 +337,7 @@ class BuyerDemo extends ChangeNotifier {
         }, onError: _failed),
       );
       if (!isSignedIn) {
+        cartLoading = false;
         addressesLoading = false;
         return;
       }
@@ -371,12 +375,24 @@ class BuyerDemo extends ChangeNotifier {
             ),
       );
       _subscriptions.add(
-        repository!.userCollection('cart').snapshots().listen((s) {
-          _cartIds = {
-            for (final d in s.docs) d.id: d.data()['quantity'] as int,
-          };
-          _resolve();
-        }, onError: _failed),
+        repository!
+            .userCollection('cart')
+            .snapshots()
+            .listen(
+              (s) {
+                cartLoading = false;
+                cartError = null;
+                _cartIds = {
+                  for (final d in s.docs) d.id: d.data()['quantity'] as int,
+                };
+                _resolve();
+              },
+              onError: (Object e) {
+                cartLoading = false;
+                cartError = marketplaceError(e);
+                _failed(e);
+              },
+            ),
       );
       _subscriptions.add(
         repository!.userCollection('favorites').snapshots().listen((s) {

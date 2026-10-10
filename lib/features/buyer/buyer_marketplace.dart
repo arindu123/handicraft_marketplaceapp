@@ -25,6 +25,7 @@ import 'collector_profile_header.dart';
 import '../../shared/data/profile_repository.dart';
 import 'rotating_product_banner.dart';
 import 'services/buyer_notifications.dart';
+import 'product_reviews.dart';
 
 void _signIn(BuildContext context) => Navigator.pushNamed(
   context,
@@ -1985,6 +1986,16 @@ class _BuyerProductDetailsState extends State<BuyerProductDetails> {
             ),
           ),
         ),
+        if (widget.demo.repository != null && widget.demo.isSignedIn)
+          _Panel(
+            child: ProductReviews(
+              repository: CommunityRepository(
+                firestore: widget.demo.repository!.db,
+                auth: widget.demo.repository!.auth,
+              ),
+              productId: p.id,
+            ),
+          ),
         if (p.description.isNotEmpty)
           _Panel(
             child: ExpansionTile(
@@ -2290,31 +2301,20 @@ class BuyerCart extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: demo,
-    builder: (context, _) => _BuyerPage(
+    builder: (context, _) => _ShoppingCartPage(
       demo: demo,
-      title: 'Atelier Bag (${demo.count} pieces)',
+      title: 'Cart (${demo.count})',
       requiresLogin: true,
-      footer: demo.cart.isEmpty
-          ? null
-          : CustomButton(
-              label:
-                  'Proceed to Checkout · ${money(demo.total, demo.currency)}',
-              onPressed: () => _open(context, BuyerCheckout(demo: demo)),
-            ),
       children: [
-        const _Eyebrow('STUDIO SELECTIONS'),
-        if (demo.cart.isEmpty) ...[
-          const _Heading('Your bag is waiting for a story'),
-          const Text('Discover a handmade piece to begin your collection.'),
-          const SizedBox(height: 20),
-          CustomButton(
-            label: 'Explore pieces',
-            onPressed: () => Navigator.popUntil(
-              context,
-              (r) => r.settings.name == RouteNames.marketplace || r.isFirst,
-            ),
-          ),
-        ],
+        if (demo.loading || demo.cartLoading)
+          const Padding(
+            padding: EdgeInsets.all(48),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (demo.cartError != null)
+          Text(demo.cartError!)
+        else if (demo.cart.isEmpty && demo.unavailableCartIds.isEmpty)
+          _EmptyShoppingCart(demo: demo),
         for (final id in demo.unavailableCartIds)
           _Panel(
             child: ListTile(
@@ -2387,7 +2387,302 @@ class BuyerCart extends StatelessWidget {
           ),
           _Totals(demo),
         ],
+        const Divider(height: 40),
+        const ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.local_shipping_outlined),
+          title: Text(
+            'Cash on delivery',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          subtitle: Text('Track your order from confirmation to delivery.'),
+        ),
+        const SizedBox(height: 24),
+        const _Heading('More to love'),
+        const SizedBox(height: 16),
+        if (demo.catalogError != null)
+          Text(demo.catalogError!)
+        else if (!demo.loading && demo.products.isEmpty)
+          const Text('No products available right now.')
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final products = demo.products
+                  .where((p) => (p.stock ?? 0) > 0)
+                  .take(12)
+                  .toList();
+              return Wrap(
+                spacing: 12,
+                runSpacing: 16,
+                children: [
+                  for (final product in products)
+                    SizedBox(
+                      width: (constraints.maxWidth - 12) / 2,
+                      child: _ProductCard(demo: demo, product: product),
+                    ),
+                ],
+              );
+            },
+          ),
       ],
+    ),
+  );
+}
+
+class _EmptyShoppingCart extends StatelessWidget {
+  const _EmptyShoppingCart({required this.demo});
+  final BuyerDemo demo;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 42),
+    child: Column(
+      children: [
+        Container(
+          width: 124,
+          height: 124,
+          decoration: const BoxDecoration(
+            color: Color(0xFFFFEEE8),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.shopping_cart_outlined,
+            size: 68,
+            color: Color(0xFFE63246),
+          ),
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'Your cart is empty.',
+          style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 10),
+        const Text(
+          'Continue shopping to explore more.',
+          style: TextStyle(color: Colors.grey, fontSize: 15),
+        ),
+        const SizedBox(height: 24),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFFF1F3F5),
+            foregroundColor: Colors.black,
+            padding: const EdgeInsets.symmetric(horizontal: 34, vertical: 16),
+          ),
+          onPressed: () => _open(context, BuyerSearch(demo: demo)),
+          child: const Text(
+            'Explore items',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ShoppingCartPage extends StatelessWidget {
+  const _ShoppingCartPage({
+    required this.demo,
+    required this.title,
+    required this.children,
+    this.requiresLogin = true,
+  });
+  final BuyerDemo demo;
+  final String title;
+  final List<Widget> children;
+  final bool requiresLogin;
+
+  Future<void> _clear(BuildContext context) async {
+    final repository = demo.repository;
+    if (repository == null) return;
+    try {
+      final snapshot = await repository.userCollection('cart').get();
+      final batch = repository.db.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(marketplaceError(e))));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Theme(
+    data: _buyerTheme(context),
+    child: Scaffold(
+      backgroundColor: _cream,
+      appBar: AppBar(
+        backgroundColor: _cream,
+        surfaceTintColor: Colors.transparent,
+        centerTitle: false,
+        titleSpacing: 0,
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 22),
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Search products',
+            onPressed: () => _open(context, BuyerSearch(demo: demo)),
+            icon: const Icon(Icons.search),
+          ),
+          IconButton(
+            tooltip: 'Saved products',
+            onPressed: () => _open(context, BuyerFavorites(demo: demo)),
+            icon: const Icon(Icons.favorite_border),
+          ),
+          IconButton(
+            tooltip: 'Clear cart',
+            onPressed: demo.cart.isEmpty && demo.unavailableCartIds.isEmpty
+                ? null
+                : () => _clear(context),
+            icon: const Icon(Icons.delete_outline),
+          ),
+        ],
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Color(0xFFF0F0F0))),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.location_on_outlined, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        demo.country.isEmpty
+                            ? 'Choose delivery address'
+                            : demo.country,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: demo.isSignedIn
+                          ? () => _open(context, BuyerCheckout(demo: demo))
+                          : () => _signIn(context),
+                      child: const Text('Change'),
+                    ),
+                  ],
+                ),
+              ),
+              if (demo.error != null)
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(demo.error!),
+                ),
+              if (requiresLogin && !demo.isSignedIn) ...[
+                const SizedBox(height: 40),
+                const Center(child: Text('Sign in to continue')),
+                TextButton(
+                  onPressed: () => _signIn(context),
+                  child: const Text('Sign in'),
+                ),
+              ] else
+                ...children,
+            ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            decoration: const BoxDecoration(
+              color: _cream,
+              border: Border(top: BorderSide(color: Color(0xFFEDEDED))),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${demo.count} items',
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
+                      ),
+                      Text(
+                        money(demo.total, demo.currency),
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFE60023),
+                    disabledBackgroundColor: const Color(0xFFFFDDE3),
+                    disabledForegroundColor: const Color(0xFFA96570),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 15,
+                    ),
+                  ),
+                  onPressed:
+                      demo.cart.isEmpty ||
+                          demo.cartLoading ||
+                          demo.cartError != null ||
+                          !demo.isSignedIn
+                      ? null
+                      : () => _open(context, BuyerCheckout(demo: demo)),
+                  child: Text(
+                    'Checkout (${demo.count})',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          NavigationBar(
+            backgroundColor: _cream,
+            indicatorColor: const Color(0xFFFFE4E8),
+            selectedIndex: 2,
+            height: 66,
+            onDestinationSelected: (index) {
+              if (index == 0) {
+                Navigator.popUntil(
+                  context,
+                  (route) =>
+                      route.isFirst ||
+                      route.settings.name == RouteNames.marketplace,
+                );
+              }
+              if (index == 1) _open(context, BuyerSearch(demo: demo));
+              if (index == 3) _open(context, BuyerProfile(demo: demo));
+            },
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.home_outlined),
+                label: 'Home',
+              ),
+              NavigationDestination(icon: Icon(Icons.search), label: 'Shop'),
+              NavigationDestination(
+                icon: Icon(Icons.shopping_cart, color: Color(0xFFE60023)),
+                label: 'Cart',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.person_outline),
+                label: 'Account',
+              ),
+            ],
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -2600,7 +2895,12 @@ class _BuyerFavoritesState extends State<BuyerFavorites> {
               ),
               const SizedBox(height: 12),
             ],
-            _Catalog(demo: demo, products: pieces),
+            for (final product in pieces)
+              _SavedProductRow(
+                key: ValueKey(product.id),
+                demo: demo,
+                product: product,
+              ),
             const SizedBox(height: 22),
             TextButton.icon(
               onPressed: () => _open(context, BuyerSearch(demo: demo)),
@@ -2612,6 +2912,157 @@ class _BuyerFavoritesState extends State<BuyerFavorites> {
       );
     },
   );
+}
+
+class _SavedProductRow extends StatefulWidget {
+  const _SavedProductRow({
+    super.key,
+    required this.demo,
+    required this.product,
+  });
+  final BuyerDemo demo;
+  final DemoProduct product;
+  @override
+  State<_SavedProductRow> createState() => _SavedProductRowState();
+}
+
+class _SavedProductRowState extends State<_SavedProductRow> {
+  bool _adding = false;
+  Future<void> _add() async {
+    if (!widget.demo.isSignedIn) {
+      _signIn(context);
+      return;
+    }
+    setState(() => _adding = true);
+    try {
+      await widget.demo.add(widget.product);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${widget.product.name} added to cart'),
+            action: SnackBarAction(
+              label: 'View cart',
+              onPressed: () => _open(context, BuyerCart(demo: widget.demo)),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(marketplaceError(e))));
+      }
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final product = widget.product;
+    final unavailable = product.stock != null && product.stock! <= 0;
+    void details() => _open(
+      context,
+      BuyerProductDetails(demo: widget.demo, product: product),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: LayoutBuilder(
+        builder: (context, constraints) => Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              onTap: details,
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: (constraints.maxWidth * .36).clamp(90.0, 190.0),
+                child: AspectRatio(
+                  aspectRatio: .85,
+                  child: _ProductCardPhotos(product),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  InkWell(
+                    onTap: details,
+                    child: Text(
+                      product.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  if (product.studio.isNotEmpty)
+                    Text(
+                      product.studio,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  if (product.category.isNotEmpty)
+                    Text(
+                      product.category,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  Text(
+                    product.priceLabel(),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF222222),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 10,
+                        ),
+                      ),
+                      onPressed: _adding || unavailable ? null : _add,
+                      child: Text(
+                        _adding
+                            ? 'Adding…'
+                            : unavailable
+                            ? 'Out of stock'
+                            : 'Add to cart',
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: IconButton(
+                      tooltip: 'Remove ${product.name} from saved',
+                      onPressed: () => widget.demo.favorite(product),
+                      icon: const Icon(Icons.favorite, color: _clay),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class BuyerProfile extends StatelessWidget {

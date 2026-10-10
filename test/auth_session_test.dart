@@ -43,6 +43,22 @@ void main() {
     },
   );
 
+  test(
+    'role checks require the server and recognize an updated admin role',
+    () async {
+      store.profile = {'role': 'buyer'};
+      expect(await AuthSession.loadRole(), UserRole.buyer);
+      store.profile = {'role': 'admin'};
+      expect(await AuthSession.loadRole(), UserRole.admin);
+      expect(store.lastReadSource, Source.server);
+      store.readError = 'unavailable';
+      await expectLater(
+        AuthSession.loadRole(),
+        throwsA(isA<FirebaseException>()),
+      );
+    },
+  );
+
   for (final role in [
     UserRole.buyer,
     UserRole.artisan,

@@ -84,6 +84,22 @@ class ProfileRepository {
         'Your session changed. Please sign in again.',
       );
     }
-    await db.collection('users').doc(owner).update(changes);
+    final userRef = db.collection('users').doc(owner);
+    final currentProfile = await userRef.get();
+    await userRef.update(changes);
+    if (currentProfile.data()?['role'] == 'courier') {
+      await db.collection('courierPublicProfiles').doc(owner).set({
+        'displayName': name,
+        'area': location,
+        'photoUrl':
+            changes['photoUrl'] ??
+            currentProfile.data()?['photoUrl'] as String? ??
+            '',
+        'phone':
+            auth.currentUser?.phoneNumber ??
+            currentProfile.data()?['phone'] as String? ??
+            '',
+      });
+    }
   }
 }

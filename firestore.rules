@@ -266,6 +266,23 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.courierId == request.auth.uid;
     }
 
+    match /courierPublicProfiles/{uid} {
+      allow read: if signedIn();
+      allow create, update: if owner(uid) && role('courier')
+        && request.resource.data.keys().hasOnly(['displayName', 'area', 'photoUrl', 'phone'])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 100
+        && request.resource.data.area is string
+        && request.resource.data.area.size() <= 100
+        && request.resource.data.photoUrl is string
+        && request.resource.data.photoUrl.size() <= 2048
+        && (request.resource.data.photoUrl == '' || request.resource.data.photoUrl.matches('https://.*'))
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() <= 40;
+      allow delete: if false;
+    }
+
     match /artisanProfiles/{id} {
       allow read: if signedIn();
       function fields() { return request.resource.data.keys().hasOnly(['userId','studioName','bio','location','kilnSpecifications','verificationStatus'])

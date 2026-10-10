@@ -15,6 +15,7 @@ import '../../shared/models/craftisan_demo_messages.dart';
 import '../../shared/widgets/custom_button.dart';
 import '../../shared/widgets/craftisan_messaging.dart';
 import 'buyer_demo.dart';
+import 'buyer_orders_screens.dart';
 import 'collector_profile_header.dart';
 import '../../shared/data/profile_repository.dart';
 import 'rotating_product_banner.dart';
@@ -2440,7 +2441,30 @@ class BuyerProfile extends StatelessWidget {
               leading: const Icon(Icons.receipt_long_outlined),
               title: const Text('My Orders'),
               trailing: const Icon(Icons.chevron_right),
-              onTap: () => _open(context, BuyerOrders(demo: demo)),
+              onTap: () => _open(
+                context,
+                BuyerOrdersScreen(
+                  demo: demo,
+                  onDestinationSelected: (index) {
+                    switch (index) {
+                      case 0:
+                        Navigator.of(context).popUntil(
+                          (route) =>
+                              route.settings.name == RouteNames.marketplace ||
+                              route.isFirst,
+                        );
+                      case 1:
+                        _open(context, BuyerSearch(demo: demo));
+                      case 2:
+                        _open(context, BuyerFavorites(demo: demo));
+                      case 3:
+                        _open(context, BuyerCart(demo: demo));
+                      case 4:
+                        Navigator.maybePop(context);
+                    }
+                  },
+                ),
+              ),
             ),
             ListTile(
               leading: const Icon(Icons.explore_outlined),
@@ -3391,8 +3415,10 @@ class BuyerOrderSuccess extends StatelessWidget {
       ),
       CustomButton(
         label: 'Track Order',
-        onPressed: () =>
-            _open(context, BuyerOrderTracking(demo: demo, order: order)),
+        onPressed: () => _open(
+          context,
+          BuyerOrderDetailsScreen(demo: demo, orderId: order.id),
+        ),
       ),
       TextButton(
         child: const Text('Back to dashboard'),

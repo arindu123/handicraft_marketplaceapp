@@ -77,6 +77,7 @@ flutter:
 
   assets:
     - assets/images/branding/craftisan_bag_icon.png
+    - assets/images/branding/craftisan_marketplace_logo.png
     - assets/images/navigation/handicraft_atlas.png
     - assets/images/navigation/handicraft_extra.png
     - lib/features/auth/widgets/google_logo.png

@@ -13,6 +13,22 @@ class AdminDashboardScreen extends StatefulWidget {
   State<AdminDashboardScreen> createState() => _AdminDashboardScreenState();
 }
 
+class _MissingProductImage extends StatelessWidget {
+  const _MissingProductImage();
+
+  @override
+  Widget build(BuildContext context) => const ColoredBox(
+    color: AdminStyle.cream,
+    child: Center(
+      child: Icon(
+        Icons.image_outlined,
+        size: 40,
+        color: AdminStyle.muted,
+      ),
+    ),
+  );
+}
+
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   late final _store = widget.store ?? AdminDemoStore();
   @override
@@ -357,12 +373,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     ),
   ];
 
-  String? _productPhoto(AdminOrder order) => switch (order.product) {
-    'Fluted terracotta vase' => 'lib/features/auth/widgets/pottery_vase.png',
-    'Handmade coffee cups' => 'lib/features/auth/widgets/pottery_mug.png',
-    _ => null,
-  };
-
   Widget _featuredCraft(AdminOrder order) => Material(
     color: Colors.white,
     borderRadius: BorderRadius.circular(20),
@@ -372,26 +382,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_productPhoto(order) case final photo?)
-            Ink.image(
-              image: AssetImage(photo),
-              height: 170,
-              width: double.infinity,
-              fit: BoxFit.cover,
-            )
-          else
-            const SizedBox(
-              height: 170,
-              width: double.infinity,
-              child: ColoredBox(
-                color: AdminStyle.cream,
-                child: Icon(
-                  Icons.image_outlined,
-                  size: 40,
-                  color: AdminStyle.muted,
-                ),
-              ),
-            ),
+          SizedBox(
+            height: 170,
+            width: double.infinity,
+            child: order.imageUrl?.isNotEmpty == true
+                ? Image.network(
+                    order.imageUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => const _MissingProductImage(),
+                  )
+                : const _MissingProductImage(),
+          ),
           Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -716,16 +717,24 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (_productPhoto(order) case final photo?) ...[
+              if (order.imageUrl?.isNotEmpty == true) ...[
                 ClipRRect(
                   borderRadius: BorderRadius.circular(12),
-                  child: Image.asset(
-                    photo,
+                  child: Image.network(
+                    order.imageUrl!,
                     width: double.infinity,
                     height: 120,
                     fit: BoxFit.cover,
                     semanticLabel: order.product,
+                    errorBuilder: (_, _, _) => const _MissingProductImage(),
                   ),
+                ),
+                _space(12),
+              ] else ...[
+                const SizedBox(
+                  height: 120,
+                  width: double.infinity,
+                  child: _MissingProductImage(),
                 ),
                 _space(12),
               ],

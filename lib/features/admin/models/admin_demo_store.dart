@@ -18,11 +18,13 @@ class AdminOrder {
     this.id,
     this.customer,
     this.product,
+    this.imageUrl,
     this.studio,
     this.amount,
     this.status,
   );
   final String id, customer, product, studio;
+  final String? imageUrl;
   final int amount;
   String status;
 }
@@ -118,6 +120,7 @@ class AdminDemoStore extends ChangeNotifier {
               o.id,
               o.buyerId,
               o.items.map((i) => i.productName).join(', '),
+              o.items.firstOrNull?.imageUrl,
               o.artisanId,
               o.total.round(),
               o.status.name,
@@ -186,6 +189,7 @@ class AdminDemoStore extends ChangeNotifier {
       'CR-2048',
       'Amaya Perera',
       'Fluted terracotta vase',
+      null,
       'Atelier Oread',
       7200,
       'Processing',
@@ -194,6 +198,7 @@ class AdminDemoStore extends ChangeNotifier {
       'CR-2047',
       'Nimal Silva',
       'Stoneware dinner set',
+      null,
       'Clay House',
       14500,
       'Shipped',
@@ -202,6 +207,7 @@ class AdminDemoStore extends ChangeNotifier {
       'CR-2046',
       'Sachi Fernando',
       'Handmade coffee cups',
+      null,
       'Kiln & Co',
       3800,
       'Delivered',
@@ -210,6 +216,7 @@ class AdminDemoStore extends ChangeNotifier {
       'CR-2045',
       'Ruwan Jayasuriya',
       'Textured ceramic collection',
+      null,
       'Atelier Oread',
       12000,
       'Delivered',
@@ -218,6 +225,7 @@ class AdminDemoStore extends ChangeNotifier {
       'CR-2044',
       'Nethmi Dias',
       'Glazed serving bowl',
+      null,
       'Clay House',
       6400,
       'Pending',
@@ -226,6 +234,7 @@ class AdminDemoStore extends ChangeNotifier {
       'CR-2043',
       'Kavindu De Silva',
       'Decorative amphora',
+      null,
       'Kiln & Co',
       9500,
       'Processing',

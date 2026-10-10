@@ -168,7 +168,10 @@ class _BuyerMarketplaceState extends State<BuyerMarketplace> {
                         );
                     final textScale =
                         MediaQuery.textScalerOf(context).scale(14) / 14;
-                    final cardHeight = cardWidth / 1.06 + 112 * textScale + 20;
+                    final detailsHeight =
+                        148 * textScale +
+                        80 * (textScale - 1).clamp(0, double.infinity);
+                    final cardHeight = cardWidth / 1.06 + detailsHeight;
                     Widget section(String title, {String? subtitle}) =>
                         SliverToBoxAdapter(
                           child: Padding(
@@ -676,9 +679,7 @@ class _BuyerMarketplaceState extends State<BuyerMarketplace> {
                                               crossAxisSpacing: 12,
                                               mainAxisSpacing: 14,
                                               mainAxisExtent:
-                                                  width / 1.06 +
-                                                  112 * textScale +
-                                                  20,
+                                                  width / 1.06 + detailsHeight,
                                             ),
                                         delegate: SliverChildBuilderDelegate(
                                           (_, index) => _ProductCard(
@@ -716,9 +717,7 @@ class _BuyerMarketplaceState extends State<BuyerMarketplace> {
                                               crossAxisSpacing: 12,
                                               mainAxisSpacing: 14,
                                               mainAxisExtent:
-                                                  width / 1.06 +
-                                                  112 * textScale +
-                                                  20,
+                                                  width / 1.06 + detailsHeight,
                                             ),
                                         delegate: SliverChildBuilderDelegate(
                                           (_, index) => _ProductCard(
@@ -1386,48 +1385,6 @@ class _ProductCard extends StatelessWidget {
                 child: _ProductCardPhotos(product),
               ),
               Positioned(
-                bottom: 8,
-                right: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF9F1E7),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: product.isVerified
-                      ? const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.verified,
-                              size: 12,
-                              color: Color(0xFF47745C),
-                            ),
-                            SizedBox(width: 4),
-                            Text(
-                              'Verified maker',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF47745C),
-                              ),
-                            ),
-                          ],
-                        )
-                      : const Text(
-                          'Handmade',
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF70452F),
-                          ),
-                        ),
-                ),
-              ),
-              Positioned(
                 top: 6,
                 right: 6,
                 child: _FavoriteButton(demo: demo, product: product),
@@ -1435,13 +1392,15 @@ class _ProductCard extends StatelessWidget {
             ],
           ),
           Padding(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                _ProductTrustBadge(verified: product.isVerified),
+                const SizedBox(height: 4),
                 Text(
                   product.name,
-                  maxLines: 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
@@ -1455,20 +1414,154 @@ class _ProductCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: Colors.grey),
                   ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   product.priceLabel(),
                   style: const TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 18,
+                    color: AppColors.terracotta,
                   ),
                 ),
+                const SizedBox(height: 4),
+                _ProductCardStats(demo: demo, product: product),
               ],
             ),
           ),
         ],
       ),
     ),
+  );
+}
+
+class _ProductTrustBadge extends StatelessWidget {
+  const _ProductTrustBadge({required this.verified});
+  final bool verified;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    decoration: BoxDecoration(
+      color: verified ? const Color(0xFFEDF5EF) : const Color(0xFFF9F1E7),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          verified ? Icons.verified_rounded : Icons.handyman_outlined,
+          size: 12,
+          color: verified ? const Color(0xFF47745C) : AppColors.terracotta,
+        ),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            verified ? 'Verified maker' : 'Handmade',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: verified ? const Color(0xFF47745C) : AppColors.terracotta,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ProductCardStats extends StatefulWidget {
+  const _ProductCardStats({required this.demo, required this.product});
+  final BuyerDemo demo;
+  final DemoProduct product;
+
+  @override
+  State<_ProductCardStats> createState() => _ProductCardStatsState();
+}
+
+class _ProductCardStatsState extends State<_ProductCardStats> {
+  Stream<List<double>>? _ratings;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscribe();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProductCardStats oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.product.id != widget.product.id ||
+        oldWidget.demo != widget.demo) {
+      _subscribe();
+    }
+  }
+
+  void _subscribe() {
+    final repository = widget.demo.repository;
+    _ratings =
+        repository == null ||
+            !widget.demo.isSignedIn ||
+            widget.product.id.isEmpty
+        ? null
+        : CommunityRepository(firestore: repository.db, auth: repository.auth)
+              .productReviews(widget.product.id)
+              .map(
+                (snapshot) => snapshot.docs
+                    .map((doc) => doc.data()['rating'])
+                    .whereType<num>()
+                    .map((rating) => rating.toDouble())
+                    .toList(),
+              );
+  }
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<List<double>>(
+    stream: _ratings,
+    builder: (context, snapshot) {
+      final product = widget.product;
+      final ratings = snapshot.hasError ? null : snapshot.data;
+      final count = ratings?.length ?? product.reviewCount;
+      final rating = ratings == null || ratings.isEmpty
+          ? product.rating
+          : ratings.reduce((a, b) => a + b) / ratings.length;
+      return Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.star_rounded,
+                size: 15,
+                color: Color(0xFFE8AD39),
+              ),
+              const SizedBox(width: 3),
+              Flexible(
+                child: Text(
+                  count == null
+                      ? 'Reviews \u2014'
+                      : count == 0
+                      ? 'No reviews'
+                      : '${rating?.toStringAsFixed(1) ?? '\u2014'} ($count)',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF68645F),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Text(
+            '${product.soldCount ?? '\u2014'} sold',
+            style: const TextStyle(fontSize: 11, color: Color(0xFF68645F)),
+          ),
+        ],
+      );
+    },
   );
 }
 

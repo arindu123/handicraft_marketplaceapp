@@ -26,6 +26,9 @@ class DemoProduct {
     this.stock,
     this.createdAt,
     this.isVerified = false,
+    this.rating,
+    this.reviewCount,
+    this.soldCount,
   });
   final String id;
   final DateTime? createdAt;
@@ -34,6 +37,8 @@ class DemoProduct {
   final String currency;
   final int? stock;
   final bool isVerified;
+  final double? rating;
+  final int? reviewCount, soldCount;
   String priceLabel([int quantity = 1]) => money(price * quantity, currency);
   factory DemoProduct.fromProduct(
     canonical.Product p, {
@@ -56,6 +61,9 @@ class DemoProduct {
     stock: p.stock,
     createdAt: p.createdAt,
     isVerified: isVerified,
+    rating: p.rating,
+    reviewCount: p.reviewCount,
+    soldCount: p.soldCount,
   );
   @override
   bool operator ==(Object other) =>

@@ -25,14 +25,12 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     super.dispose();
   }
 
-  void _openOnboarding() => Navigator.of(context).pushNamed(
-    RouteNames.onboarding,
-  );
+  void _openOnboarding() =>
+      Navigator.of(context).pushNamed(RouteNames.onboarding);
 
-  void _openSignIn() => Navigator.of(context).pushNamed(
-    RouteNames.roleSelection,
-    arguments: AuthEntry.signIn,
-  );
+  void _openSignIn() =>
+      Navigator.of(context)
+          .pushNamed(RouteNames.roleSelection, arguments: AuthEntry.signIn);
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +42,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFFFFFCF8), AppColors.background, Color(0xFFF3E9DF)],
+            colors: [
+              Color(0xFFFFFCF8),
+              AppColors.background,
+              Color(0xFFF3E9DF),
+            ],
             stops: [0, 0.68, 1],
           ),
         ),
@@ -68,8 +70,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     ),
                     child: ConstrainedBox(
                       constraints: BoxConstraints(
-                        minHeight: constraints.maxHeight -
-                            (compact ? 24 : 46),
+                        minHeight: constraints.maxHeight - (compact ? 24 : 46),
                       ),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -90,8 +91,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                 ? const AlwaysStoppedAnimation(1)
                                 : CurvedAnimation(
                                     parent: _entrance,
-                                    curve: const Interval(0, 0.72,
-                                        curve: Curves.easeOut),
+                                    curve: const Interval(
+                                      0,
+                                      0.72,
+                                      curve: Curves.easeOut,
+                                    ),
                                   ),
                             child: SlideTransition(
                               position: reduceMotion
@@ -99,48 +103,26 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                   : Tween<Offset>(
                                       begin: const Offset(0, 0.08),
                                       end: Offset.zero,
-                                    ).animate(CurvedAnimation(
-                                      parent: _entrance,
-                                      curve: Curves.easeOutCubic,
-                                    )),
+                                    ).animate(
+                                      CurvedAnimation(
+                                        parent: _entrance,
+                                        curve: Curves.easeOutCubic,
+                                      ),
+                                    ),
                               child: Column(
                                 children: [
                                   SizedBox(
                                     height: logoSize + 22,
                                     width: logoSize + 22,
-                                    child: Stack(
-                                      alignment: Alignment.center,
-                                      children: [
-                                        Container(
-                                          width: logoSize + 14,
-                                          height: logoSize + 14,
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle,
-                                            color: Colors.white.withValues(
-                                              alpha: 0.56,
-                                            ),
-                                            border: Border.all(
-                                              color: const Color(0xFFE8D6C9),
-                                            ),
-                                            boxShadow: const [
-                                              BoxShadow(
-                                                color: Color(0x1FA23F23),
-                                                blurRadius: 38,
-                                                spreadRadius: 4,
-                                                offset: Offset(0, 14),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        Image.asset(
-                                          'assets/images/branding/craftisan_marketplace_logo.png',
-                                          width: logoSize,
-                                          height: logoSize,
-                                          fit: BoxFit.contain,
-                                          semanticLabel:
-                                              'Craftisan Marketplace logo',
-                                        ),
-                                      ],
+                                    child: Center(
+                                      child: Image.asset(
+                                        'assets/images/branding/craftisan_marketplace_logo.png',
+                                        width: logoSize,
+                                        height: logoSize,
+                                        fit: BoxFit.contain,
+                                        semanticLabel:
+                                            'Craftisan Marketplace logo',
+                                      ),
                                     ),
                                   ),
                                   SizedBox(height: compact ? 4 : 12),
@@ -150,7 +132,9 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                       vertical: 7,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: Colors.white.withValues(alpha: .72),
+                                      color: Colors.white.withValues(
+                                        alpha: .72,
+                                      ),
                                       borderRadius: BorderRadius.circular(30),
                                       border: Border.all(
                                         color: const Color(0xFFE9D8CB),
@@ -159,9 +143,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                     child: const Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Icon(Icons.auto_awesome,
-                                            size: 14,
-                                            color: AppColors.terracotta),
+                                        Icon(
+                                          Icons.auto_awesome,
+                                          size: 14,
+                                          color: AppColors.terracotta,
+                                        ),
                                         SizedBox(width: 7),
                                         Text(
                                           'MADE SLOWLY. TREASURED ALWAYS.',
@@ -208,8 +194,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                 ? const AlwaysStoppedAnimation(1)
                                 : CurvedAnimation(
                                     parent: _entrance,
-                                    curve: const Interval(0.25, 1,
-                                        curve: Curves.easeOut),
+                                    curve: const Interval(
+                                      0.25,
+                                      1,
+                                      curve: Curves.easeOut,
+                                    ),
                                   ),
                             child: Column(
                               children: [
@@ -221,8 +210,11 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    const Icon(Icons.local_florist_outlined,
-                                        size: 15, color: AppColors.sage),
+                                    const Icon(
+                                      Icons.local_florist_outlined,
+                                      size: 15,
+                                      color: AppColors.sage,
+                                    ),
                                     const SizedBox(width: 7),
                                     Text(
                                       'Thoughtfully made by independent artisans',

@@ -27,6 +27,9 @@ class DemoProduct {
     this.stock,
     this.createdAt,
     this.isVerified = false,
+    this.rating,
+    this.reviewCount,
+    this.soldCount,
   });
   final String id;
   final DateTime? createdAt;
@@ -35,6 +38,8 @@ class DemoProduct {
   final String currency;
   final int? stock;
   final bool isVerified;
+  final double? rating;
+  final int? reviewCount, soldCount;
   String priceLabel([int quantity = 1]) => money(price * quantity, currency);
   factory DemoProduct.fromProduct(
     canonical.Product p, {
@@ -57,6 +62,9 @@ class DemoProduct {
     stock: p.stock,
     createdAt: p.createdAt,
     isVerified: isVerified,
+    rating: p.rating,
+    reviewCount: p.reviewCount,
+    soldCount: p.soldCount,
   );
   @override
   bool operator ==(Object other) =>
@@ -270,6 +278,8 @@ class BuyerDemo extends ChangeNotifier {
   String? error;
   bool _disposed = false;
   Map<String, int> _cartIds = {};
+  bool cartLoading = true;
+  String? cartError;
   Set<String> _favoriteIds = {};
   final List<String> orderAlerts = [];
   List<Map<String, dynamic>> notifications = [];
@@ -299,6 +309,7 @@ class BuyerDemo extends ChangeNotifier {
       loading = false;
       addressesLoading = false;
       catalogError = 'The marketplace connection is unavailable.';
+      cartLoading = false;
       return;
     }
     name = '';
@@ -344,6 +355,7 @@ class BuyerDemo extends ChangeNotifier {
         }, onError: _failed),
       );
       if (!isSignedIn) {
+        cartLoading = false;
         addressesLoading = false;
         return;
       }
@@ -381,12 +393,24 @@ class BuyerDemo extends ChangeNotifier {
             ),
       );
       _subscriptions.add(
-        repository!.userCollection('cart').snapshots().listen((s) {
-          _cartIds = {
-            for (final d in s.docs) d.id: d.data()['quantity'] as int,
-          };
-          _resolve();
-        }, onError: _failed),
+        repository!
+            .userCollection('cart')
+            .snapshots()
+            .listen(
+              (s) {
+                cartLoading = false;
+                cartError = null;
+                _cartIds = {
+                  for (final d in s.docs) d.id: d.data()['quantity'] as int,
+                };
+                _resolve();
+              },
+              onError: (Object e) {
+                cartLoading = false;
+                cartError = marketplaceError(e);
+                _failed(e);
+              },
+            ),
       );
       _subscriptions.add(
         repository!.userCollection('favorites').snapshots().listen((s) {

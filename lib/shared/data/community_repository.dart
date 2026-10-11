@@ -70,6 +70,8 @@ class CommunityRepository {
       .collection('reviews')
       .where('artisanId', isEqualTo: artisanId)
       .snapshots();
+  Stream<QuerySnapshot<Map<String, dynamic>>> productReviews(String productId) =>
+      db.collection('reviews').where('productId', isEqualTo: productId).snapshots();
   Future<void> review(
     String orderId,
     String productId,

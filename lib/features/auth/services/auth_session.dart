@@ -33,7 +33,8 @@ class AuthSession {
     final snapshot = await FirebaseFirestore.instance
         .collection('users')
         .doc(user.uid)
-        .get();
+        // Role changes made by administrators must be checked on the server.
+        .get(const GetOptions(source: Source.server));
     final data = snapshot.data();
     if (data == null) {
       throw const ProfileException(

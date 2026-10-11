@@ -115,6 +115,7 @@ class TestFirestore extends FirebaseFirestorePlatform {
   Map<String, dynamic>? profile = {'role': 'buyer'};
   String? readError;
   final reads = <String>[];
+  Source? lastReadSource;
   bool fails = false;
   Completer<void>? pending;
 
@@ -143,6 +144,7 @@ class TestDocument extends DocumentReferencePlatform {
   Future<DocumentSnapshotPlatform> get([GetOptions? options]) async {
     final store = firestore as TestFirestore;
     store.reads.add(path);
+    store.lastReadSource = options?.source;
     if (store.readError != null) {
       throw FirebaseException(
         plugin: 'cloud_firestore',

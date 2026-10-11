@@ -6,9 +6,13 @@ import 'package:flutter/material.dart';
 import 'app.dart';
 import 'firebase_options.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  MarketplaceBackend.enabled = true;
-  runApp(const MyApp());
+  final initialization =
+      Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform)
+          .then<void>((_) {
+            MarketplaceBackend.enabled = true;
+          });
+  // Welcome paints immediately while Firebase initializes in the background.
+  runApp(MyApp(initialization: initialization));
 }

@@ -1170,14 +1170,47 @@ Future<void> _leaveReview(
   model.Order order,
 ) async {
   if (demo.repository == null || order.items.isEmpty) return;
+  if (order.status != model.OrderStatus.delivered) return;
+  final reviewed = <String>{};
+  try {
+    final rows = await demo.repository!.db
+        .collection('reviews')
+        .where('orderId', isEqualTo: order.id)
+        .get();
+    reviewed.addAll(
+      rows.docs
+          .where((d) => d.data()['buyerId'] == demo.repository!.uid)
+          .map((d) => d.data()['productId'] as String),
+    );
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(marketplaceError(e))));
+    }
+    return;
+  }
+  if (!context.mounted) return;
+  if (order.items.every((item) => reviewed.contains(item.productId))) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('You have reviewed every product in this order.'),
+      ),
+    );
+    return;
+  }
   await showDialog<void>(
     context: context,
-    builder: (_) => _ReviewDialog(demo: demo, order: order),
+    builder: (_) => _ReviewDialog(demo: demo, order: order, reviewed: reviewed),
   );
 }
 
 class _ReviewDialog extends StatefulWidget {
-  const _ReviewDialog({required this.demo, required this.order});
+  const _ReviewDialog({
+    required this.demo,
+    required this.order,
+    required this.reviewed,
+  });
+  final Set<String> reviewed;
   final BuyerDemo demo;
   final model.Order order;
 
@@ -1186,7 +1219,11 @@ class _ReviewDialog extends StatefulWidget {
 }
 
 class _ReviewDialogState extends State<_ReviewDialog> {
-  late String _productId = widget.order.items.first.productId;
+  late final _items = widget.order.items
+      .where((item) => !widget.reviewed.contains(item.productId))
+      .toList();
+  late String _productId = _items.first.productId;
+  bool _saving = false;
   final _comment = TextEditingController();
   double _rating = 5;
 
@@ -1197,6 +1234,8 @@ class _ReviewDialogState extends State<_ReviewDialog> {
   }
 
   Future<void> _submit() async {
+    if (_saving) return;
+    setState(() => _saving = true);
     final repository = widget.demo.repository!;
     try {
       await CommunityRepository(
@@ -1209,6 +1248,8 @@ class _ReviewDialogState extends State<_ReviewDialog> {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(marketplaceError(error))));
       }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -1218,11 +1259,12 @@ class _ReviewDialogState extends State<_ReviewDialog> {
     content: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (widget.order.items.length > 1)
+        if (_items.length == 1) Text(_items.first.productName),
+        if (_items.length > 1)
           DropdownButtonFormField<String>(
             initialValue: _productId,
             items: [
-              for (final product in widget.order.items)
+              for (final product in _items)
                 DropdownMenuItem(
                   value: product.productId,
                   child: Text(
@@ -1261,7 +1303,10 @@ class _ReviewDialogState extends State<_ReviewDialog> {
         onPressed: () => Navigator.pop(context),
         child: const Text('Cancel'),
       ),
-      FilledButton(onPressed: _submit, child: const Text('Submit review')),
+      FilledButton(
+        onPressed: _saving ? null : _submit,
+        child: Text(_saving ? 'Submitting…' : 'Submit review'),
+      ),
     ],
   );
 }

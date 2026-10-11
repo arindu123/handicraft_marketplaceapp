@@ -152,10 +152,15 @@ class Product {
     required this.stock,
     required this.status,
     required this.createdAt,
+    this.rating,
+    this.reviewCount,
+    this.soldCount,
   }) : imageUrls = List.unmodifiable(imageUrls);
 
   final String id, artisanId, name, category, currency, description;
   final double price;
+  final double? rating;
+  final int? reviewCount, soldCount;
   final List<String> imageUrls;
   final int stock;
   final ProductStatus status;
@@ -173,6 +178,9 @@ class Product {
     'stock': stock,
     'status': status.name,
     'createdAt': createdAt.toIso8601String(),
+    if (rating != null) 'rating': rating,
+    if (reviewCount != null) 'reviewCount': reviewCount,
+    if (soldCount != null) 'soldCount': soldCount,
   };
   Map<String, dynamic> toJson() => toMap();
   factory Product.fromMap(Map<String, dynamic> map) => Product(
@@ -187,6 +195,9 @@ class Product {
     stock: map['stock'] as int,
     status: ProductStatus.values.byName(map['status'] as String),
     createdAt: _date(map, 'createdAt'),
+    rating: (map['rating'] as num?)?.toDouble(),
+    reviewCount: (map['reviewCount'] as num?)?.toInt(),
+    soldCount: (map['soldCount'] as num?)?.toInt(),
   );
   factory Product.fromJson(Map<String, dynamic> json) => Product.fromMap(json);
 }

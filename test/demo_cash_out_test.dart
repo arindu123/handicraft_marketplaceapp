@@ -83,7 +83,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Cash out'), findsNWidgets(2));
-      expect(find.textContaining('no money is transferred'), findsOneWidget);
+      expect(find.textContaining('No money is transferred'), findsOneWidget);
       await tester.ensureVisible(find.text('Cash out').last);
       await tester.tap(find.text('Cash out').last);
       await tester.pumpAndSettle();
@@ -103,8 +103,8 @@ void main() {
       api.completion.complete();
       await tester.pumpAndSettle();
       expect(find.text('Available balance: LKR 750.00'), findsOneWidget);
-      expect(find.text('LKR 250.00 · Demo completed'), findsOneWidget);
-      expect(find.textContaining('Demo cash out completed'), findsOneWidget);
+      expect(find.text('LKR 250.00 · Completed'), findsOneWidget);
+      expect(find.textContaining('Cash out completed'), findsOneWidget);
       expect(repository.bankAccount!.holder, 'Demo Courier');
       expect(repository.bankAccount!.maskedNumber, '•••• 7890');
       expect(
@@ -116,6 +116,45 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+  for (final empty in [true, false]) {
+    testWidgets(
+      empty
+          ? 'Empty wallet shows a popup and creates no cash out'
+          : 'Amount exceeding balance shows a popup and preserves funds',
+      (tester) async {
+        final api = _WidgetMockApi()..completion.complete();
+        repository = DemoCashOutRepository(api: api);
+        await repository.withdraw('existing', empty ? 100000 : 75000);
+        final before = await repository.load();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(body: DemoCashOutDialog(repository: repository)),
+          ),
+        );
+        await tester.pumpAndSettle();
+        if (!empty) {
+          await tester.enterText(find.byType(TextFormField).last, '500');
+        }
+        await tester.ensureVisible(find.text('Cash out').last);
+        await tester.tap(find.text('Cash out').last);
+        await tester.pumpAndSettle();
+        expect(find.text('Insufficient balance'), findsOneWidget);
+        if (empty) {
+          expect(
+            find.text('You have no available balance to cash out.'),
+            findsOneWidget,
+          );
+        }
+        final after = await repository.load();
+        expect(after.availableCents, before.availableCents);
+        expect(after.history.length, before.history.length);
+        await tester.tap(find.text('Got it'));
+        await tester.pumpAndSettle();
+        expect(find.text('Insufficient balance'), findsNothing);
+        expect(tester.takeException(), isNull);
+      },
+    );
+  }
 }
 
 class _WidgetMockApi extends MockPayoutApi {

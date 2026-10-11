@@ -127,12 +127,21 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if owner(uid) || isAdmin();
       allow create: if owner(uid)
-        && request.resource.data.keys().hasOnly(['uid', 'email', 'displayName', 'role', 'createdAt', 'updatedAt','courierApproval'])
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'displayName', 'role', 'createdAt', 'updatedAt','courierApproval','phone','area','vehicleType'])
         && request.resource.data.uid == uid
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.displayName is string
         && request.resource.data.role in ['buyer', 'artisan', 'courier']
         && (request.resource.data.role == 'courier' ? request.resource.data.courierApproval == 'pending' : !('courierApproval' in request.resource.data))
+        && (!request.resource.data.keys().hasAny(['phone','area','vehicleType'])
+          || (request.resource.data.role == 'courier'
+            && request.resource.data.keys().hasAll(['phone','area','vehicleType'])
+            && request.resource.data.phone is string
+            && request.resource.data.phone.size() >= 7 && request.resource.data.phone.size() <= 40
+            && request.resource.data.phone.matches('\\+?[0-9 ()-]+')
+            && request.resource.data.area is string
+            && request.resource.data.area.size() > 0 && request.resource.data.area.size() <= 100
+            && request.resource.data.vehicleType in ['Bike','Three-wheeler','Van']))
         && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
       // Role and ownership are immutable from the client.
       allow update: if owner(uid)

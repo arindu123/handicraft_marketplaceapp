@@ -59,7 +59,21 @@ class _DemoCashOutDialogState extends State<DemoCashOutDialog> {
   }
 
   Future<void> _withdraw() async {
-    if (_busy || !_form.currentState!.validate()) return;
+    if (_busy || _wallet == null) return;
+    final requestedCents = DemoCashOutRepository.parseAmount(_amount.text);
+    if (_wallet!.availableCents <= 0 ||
+        (requestedCents != null && requestedCents > _wallet!.availableCents)) {
+      FocusScope.of(context).unfocus();
+      showDeliveryNotice(
+        context,
+        'Insufficient balance',
+        _wallet!.availableCents <= 0
+            ? 'You have no available balance to cash out.'
+            : 'Your available balance is lower than the cash out amount. Enter a smaller amount.',
+      );
+      return;
+    }
+    if (!_form.currentState!.validate()) return;
     FocusScope.of(context).unfocus();
     final cents = DemoCashOutRepository.parseAmount(_amount.text)!;
     setState(() {
@@ -84,7 +98,7 @@ class _DemoCashOutDialogState extends State<DemoCashOutDialog> {
       _amount.clear();
       setState(() {
         _wallet = null;
-        _result = 'Demo cash out completed. Reference: $reference';
+        _result = 'Cash out completed. Reference: $reference';
       });
       await _load();
     } catch (error) {
@@ -135,7 +149,7 @@ class _DemoCashOutDialogState extends State<DemoCashOutDialog> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
-                'Demo: no money is transferred. Use sample bank details. Balance and account details stay in this session only.',
+                'No money is transferred. Use sample bank details. Balance and account details stay in this session only.',
               ),
               const SizedBox(height: 16),
               if (_wallet == null && _error == null)
@@ -190,9 +204,7 @@ class _DemoCashOutDialogState extends State<DemoCashOutDialog> {
                 ),
                 const SizedBox(height: 8),
                 FilledButton(
-                  onPressed: _busy || _wallet!.availableCents == 0
-                      ? null
-                      : _withdraw,
+                  onPressed: _busy ? null : _withdraw,
                   style: FilledButton.styleFrom(
                     backgroundColor: DeliveryStyle.orange,
                   ),
@@ -211,7 +223,7 @@ class _DemoCashOutDialogState extends State<DemoCashOutDialog> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '${DemoCashOutRepository.money(payout.amountCents)} · Demo completed',
+                          '${DemoCashOutRepository.money(payout.amountCents)} · Completed',
                         ),
                         Text(
                           payout.createdAt

@@ -258,7 +258,7 @@ class AdminDemoStore extends ChangeNotifier {
                 data['displayName'] as String? ?? d.id,
                 'Courier',
                 data['area'] as String? ?? '',
-                'Name: ${data['displayName'] ?? ''}\nEmail: ${data['email'] ?? ''}\nPhone: ${data['phone'] ?? 'Not provided'}\nArea: ${data['area'] ?? 'Not provided'}',
+                'Name: ${data['displayName'] ?? ''}\nEmail: ${data['email'] ?? ''}\nMobile number: ${data['phone'] ?? 'Not provided'}\nDelivery area: ${data['area'] ?? 'Not provided'}\nVehicle type: ${data['vehicleType'] ?? 'Not provided'}',
               )..status = item.verification,
             );
           }

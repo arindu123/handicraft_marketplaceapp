@@ -101,6 +101,25 @@ test('fresh courier signup can save both private and public profiles', async () 
   }));
 });
 
+test('new courier application details are validated and private; old profiles remain usable', async () => {
+  const db = env.authenticatedContext('new-details', {email: 'details@example.com'}).firestore();
+  const ref = doc(db, 'users/new-details');
+  const profile = {uid: 'new-details', email: 'details@example.com', displayName: 'Courier',
+    role: 'courier', courierApproval: 'pending', createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    phone: '0771234567', area: 'Colombo', vehicleType: 'Bike'};
+  await assertFails(setDoc(ref, {...profile, vehicleType: 'Plane'}));
+  await assertFails(setDoc(ref, {...profile, phone: 'invalid'}));
+  await assertFails(setDoc(ref, {...profile, area: ''}));
+  const partial = {...profile}; delete partial.vehicleType;
+  await assertFails(setDoc(ref, partial));
+  await assertSucceeds(setDoc(ref, profile));
+  assert.equal((await assertSucceeds(getDoc(doc(dbFor('admin'), 'users/new-details')))).data().vehicleType, 'Bike');
+  await assertFails(getDoc(doc(dbFor('buyer'), 'users/new-details')));
+  await assertFails(updateDoc(ref, {courierApproval: 'approved'}));
+  // Existing approved couriers have no application details and retain delivery access.
+  await assertSucceeds(getDocs(query(collection(dbFor('courier'), 'orders'), where('courierId', '==', 'courier'))));
+});
+
 test('pending couriers cannot access deliveries or approve themselves; only admin can approve and queue email', async () => {
   await env.withSecurityRulesDisabled(async ctx => {
     await setDoc(doc(ctx.firestore(), 'users/pending'), {uid: 'pending', role: 'courier', email: 'pending@example.com', courierApproval: 'pending'});

@@ -8,6 +8,7 @@ import '../../auth/services/auth_session.dart';
 import '../widgets/delivery_widgets.dart';
 import '../widgets/delivery_banner.dart';
 import '../services/courier_google_sign_in.dart';
+import '../widgets/courier_application_fields.dart';
 
 class DeliveryLoginScreen extends StatefulWidget {
   const DeliveryLoginScreen({super.key, this.googleSignIn});
@@ -21,6 +22,9 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
   final _email = TextEditingController();
   final _password = TextEditingController();
   final _name = TextEditingController();
+  final _phone = TextEditingController();
+  final _area = TextEditingController();
+  String? _vehicleType;
   bool _hidden = true;
   bool _submitting = false;
   bool _remember = true;
@@ -43,6 +47,8 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
     _email.dispose();
     _password.dispose();
     _name.dispose();
+    _phone.dispose();
+    _area.dispose();
     super.dispose();
   }
 
@@ -72,6 +78,9 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
                 'displayName': name,
                 'role': UserRole.courier.name,
                 'courierApproval': 'pending',
+                'phone': _phone.text.trim(),
+                'area': _area.text.trim(),
+                'vehicleType': _vehicleType,
                 'createdAt': FieldValue.serverTimestamp(),
                 'updatedAt': FieldValue.serverTimestamp(),
               });
@@ -80,9 +89,9 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
               .doc(user.uid)
               .set({
                 'displayName': name,
-                'area': '',
+                'area': _area.text.trim(),
                 'photoUrl': '',
-                'phone': user.phoneNumber ?? '',
+                'phone': _phone.text.trim(),
               });
         } catch (_) {
           _incompleteSignup = user;
@@ -143,7 +152,10 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
     try {
       if (_incompleteSignup != null) await _cleanUpSignup();
       final role =
-          await (widget.googleSignIn?.call() ?? CourierGoogleSignIn().signIn());
+          await (widget.googleSignIn?.call() ??
+              CourierGoogleSignIn(
+                requestApplicationDetails: _googleApplicationDetails,
+              ).signIn());
       if (role == null ||
           !mounted ||
           ModalRoute.of(context)?.isCurrent != true) {
@@ -166,6 +178,64 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  Future<void> _forgotPassword() async {
+    if (_submitting) return;
+    FocusScope.of(context).unfocus();
+    await showDialog<void>(
+      context: context,
+      builder: (_) => Theme(
+        data: DeliveryStyle.theme,
+        child: _CourierPasswordResetDialog(initialEmail: _email.text.trim()),
+      ),
+    );
+  }
+
+  Future<Map<String, dynamic>?> _googleApplicationDetails() async {
+    if (!mounted) return null;
+    final form = GlobalKey<FormState>();
+    return showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => Theme(
+        data: DeliveryStyle.theme,
+        child: StatefulBuilder(
+          builder: (context, updateDialog) => AlertDialog(
+            title: const Text('Courier application details'),
+            content: SingleChildScrollView(
+              child: Form(
+                key: form,
+                child: CourierApplicationFields(
+                  phone: _phone,
+                  area: _area,
+                  vehicleType: _vehicleType,
+                  onVehicleChanged: (value) =>
+                      updateDialog(() => _vehicleType = value),
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  if (!form.currentState!.validate()) return;
+                  Navigator.pop(dialogContext, <String, dynamic>{
+                    'phone': _phone.text.trim(),
+                    'area': _area.text.trim(),
+                    'vehicleType': _vehicleType,
+                  });
+                },
+                child: const Text('Submit application'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -287,6 +357,17 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
                           : null,
                     ),
                     const SizedBox(height: 8),
+                    if (_register) ...[
+                      const SizedBox(height: 6),
+                      CourierApplicationFields(
+                        phone: _phone,
+                        area: _area,
+                        vehicleType: _vehicleType,
+                        onVehicleChanged: (value) =>
+                            setState(() => _vehicleType = value),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
                     if (!_register)
                       Wrap(
                         alignment: WrapAlignment.spaceBetween,
@@ -318,11 +399,7 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
                             ),
                           ),
                           TextButton(
-                            onPressed: () => showDeliveryNotice(
-                              context,
-                              'Password reset',
-                              'Password reset will be available when delivery accounts launch.',
-                            ),
+                            onPressed: _submitting ? null : _forgotPassword,
                             child: const Text(
                               'Forgot Password?',
                               style: TextStyle(
@@ -449,6 +526,112 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
           ),
         ),
         const SizedBox(width: 22),
+      ],
+    ),
+  );
+}
+
+class _CourierPasswordResetDialog extends StatefulWidget {
+  const _CourierPasswordResetDialog({required this.initialEmail});
+  final String initialEmail;
+
+  @override
+  State<_CourierPasswordResetDialog> createState() =>
+      _CourierPasswordResetDialogState();
+}
+
+class _CourierPasswordResetDialogState
+    extends State<_CourierPasswordResetDialog> {
+  final _form = GlobalKey<FormState>();
+  late final _email = TextEditingController(text: widget.initialEmail);
+  bool _sending = false;
+  bool _sent = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _email.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    if (_sending || !_form.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    try {
+      await FirebaseAuth.instance.sendPasswordResetEmail(
+        email: _email.text.trim(),
+      );
+      if (mounted) setState(() => _sent = true);
+    } catch (error) {
+      if (mounted) setState(() => _error = AuthSession.message(error));
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+    canPop: !_sending,
+    child: AlertDialog(
+      title: Text(_sent ? 'Check your email' : 'Reset password'),
+      content: SingleChildScrollView(
+        child: _sent
+            ? const Text(
+                'If an account exists for this email, you will receive a reset link. Check your inbox and spam folder. Set your app password using the link, then return to Log In. This does not change your Google password or courier approval status.',
+              )
+            : Form(
+                key: _form,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Text(
+                      'Enter your account email to receive a password reset link. Your Google password is separate from your app password.',
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _email,
+                      enabled: !_sending,
+                      keyboardType: TextInputType.emailAddress,
+                      autofillHints: const [AutofillHints.email],
+                      decoration: const InputDecoration(
+                        labelText: 'Email address',
+                      ),
+                      validator: (value) {
+                        final email = value?.trim() ?? '';
+                        if (email.isEmpty) return 'Enter your email address.';
+                        return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$')
+                                .hasMatch(email)
+                            ? null
+                            : 'Enter a valid email address.';
+                      },
+                      onFieldSubmitted: (_) => _send(),
+                    ),
+                    if (_error != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        _error!,
+                        style: const TextStyle(color: DeliveryStyle.orange),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _sending ? null : () => Navigator.pop(context),
+          child: Text(_sent ? 'Back to Log In' : 'Cancel'),
+        ),
+        if (!_sent)
+          FilledButton(
+            onPressed: _sending ? null : _send,
+            child: Text(_sending ? 'Sending...' : 'Send reset email'),
+          ),
       ],
     ),
   );

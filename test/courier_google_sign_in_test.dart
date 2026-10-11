@@ -65,6 +65,59 @@ void main() {
       'Colombo',
     );
   });
+  test('New Google courier submits application details once; existing account needs no new fields', () async {
+    var requests = 0;
+    final registration = CourierGoogleSignIn(
+      auth: auth,
+      firestore: db,
+      authenticate: () => auth.signInWithCredential(
+        GoogleAuthProvider.credential(idToken: 'mock-token'),
+      ),
+      requestApplicationDetails: () async {
+        requests++;
+        return {
+          'phone': '0771234567',
+          'area': 'Colombo',
+          'vehicleType': 'Bike',
+        };
+      },
+    );
+    await expectLater(
+      registration.signIn(),
+      throwsA(isA<CourierApprovalException>()),
+    );
+    final profile = (await db.doc('users/google-user').get()).data()!;
+    expect(profile['phone'], '0771234567');
+    expect(profile['area'], 'Colombo');
+    expect(profile['vehicleType'], 'Bike');
+    expect(
+      (await db.doc('courierPublicProfiles/google-user').get())
+          .data()?['phone'],
+      '0771234567',
+    );
+    await db.doc('users/google-user').set({
+      'role': 'courier',
+      'courierApproval': 'approved',
+    });
+    expect(await registration.signIn(), UserRole.courier);
+    expect(requests, 1);
+  });
+  test(
+    'Cancelling new Google application signs out without submitting a profile',
+    () async {
+      final registration = CourierGoogleSignIn(
+        auth: auth,
+        firestore: db,
+        authenticate: () => auth.signInWithCredential(
+          GoogleAuthProvider.credential(idToken: 'mock-token'),
+        ),
+        requestApplicationDetails: () async => null,
+      );
+      expect(await registration.signIn(), isNull);
+      expect(auth.currentUser, isNull);
+      expect((await db.doc('users/google-user').get()).exists, false);
+    },
+  );
   for (final role in [UserRole.buyer, UserRole.artisan, UserRole.admin]) {
     test(
       'Existing $role role is retained without creating a courier profile',

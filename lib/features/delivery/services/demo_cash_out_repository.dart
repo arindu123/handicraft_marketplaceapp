@@ -52,7 +52,7 @@ class DemoCashOutRepository {
   int _sequence = 0;
   final _history = <DemoPayout>[];
   String newRequestId() =>
-      'DEMO-${DateTime.now().microsecondsSinceEpoch}-${++_sequence}';
+      'CASHOUT-${DateTime.now().microsecondsSinceEpoch}-${++_sequence}';
   static String money(int cents) => 'LKR ${(cents / 100).toStringAsFixed(2)}';
   static int? parseAmount(String value) {
     final text = value.trim();

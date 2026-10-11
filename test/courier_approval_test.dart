@@ -90,9 +90,20 @@ void main() {
     );
   });
   test('Pending courier applications remain visible alongside artisan applications', () async {
+    await db.doc('users/courier').update({
+      'phone': '0771234567',
+      'area': 'Colombo',
+      'vehicleType': 'Van',
+    });
     final store = AdminDemoStore(backend: admin);
     addTearDown(store.dispose);
     await Future<void>.delayed(Duration.zero);
+    final application = store.approvals.singleWhere(
+      (item) => item.type == 'Courier',
+    );
+    expect(application.description, contains('0771234567'));
+    expect(application.description, contains('Colombo'));
+    expect(application.description, contains('Van'));
     expect(
       store.approvals.any(
         (item) => item.type == 'Courier' && item.status == 'Pending',

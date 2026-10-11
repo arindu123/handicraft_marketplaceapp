@@ -11,11 +11,13 @@ class CourierGoogleSignIn {
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
     this.authenticate,
+    this.requestApplicationDetails,
   }) : _auth = auth ?? FirebaseAuth.instance,
        _db = firestore ?? FirebaseFirestore.instance;
   final FirebaseAuth _auth;
   final FirebaseFirestore _db;
   final Future<UserCredential?> Function()? authenticate;
+  final Future<Map<String, dynamic>?> Function()? requestApplicationDetails;
   static Future<void>? _initialization;
 
   Future<UserCredential?> _google() async {
@@ -45,6 +47,15 @@ class CourierGoogleSignIn {
         );
       }
       final ref = _db.collection('users').doc(user.uid);
+      Map<String, dynamic>? details;
+      if (requestApplicationDetails != null &&
+          !(await ref.get(const GetOptions(source: Source.server))).exists) {
+        details = await requestApplicationDetails!();
+        if (details == null) {
+          await _auth.signOut();
+          return null;
+        }
+      }
       final role = await _db.runTransaction<UserRole>((transaction) async {
         final snapshot = await transaction.get(ref);
         final data = snapshot.data();
@@ -71,6 +82,11 @@ class CourierGoogleSignIn {
           'displayName': _name(user),
           'role': 'courier',
           'courierApproval': 'pending',
+          if (details != null) ...{
+            'phone': details['phone'],
+            'area': details['area'],
+            'vehicleType': details['vehicleType'],
+          },
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         });
@@ -89,9 +105,9 @@ class CourierGoogleSignIn {
           if (!publicProfile.exists) {
             transaction.set(publicRef, {
               'displayName': profile.data()?['displayName'] ?? _name(user),
-              'area': '',
+              'area': profile.data()?['area'] ?? '',
               'photoUrl': '',
-              'phone': user.phoneNumber ?? '',
+              'phone': profile.data()?['phone'] ?? user.phoneNumber ?? '',
             });
           }
         });

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, setDoc, getDoc, getDocs, collection, query, where, runTransaction, updateDoc, deleteField, Timestamp, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, collection, collectionGroup, query, where, runTransaction, updateDoc, deleteDoc, deleteField, Timestamp, serverTimestamp } from 'firebase/firestore';
 
 let env;
 const now = '2026-10-05T00:00:00.000Z';
@@ -17,8 +17,8 @@ beforeEach(async () => {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async ctx => {
     const db = ctx.firestore();
-    for (const [uid, role] of Object.entries({buyer: 'buyer', other: 'buyer', artisan: 'artisan', courier: 'courier', courier2: 'courier'})) {
-      await setDoc(doc(db, 'users', uid), {uid, role});
+    for (const [uid, role] of Object.entries({admin: 'admin', buyer: 'buyer', other: 'buyer', artisan: 'artisan', courier: 'courier', courier2: 'courier'})) {
+      await setDoc(doc(db, 'users', uid), {uid, role, ...(role === 'courier' ? {courierApproval: 'approved'} : {})});
     }
     for (let i = 0; i < 8; i++) {
       await setDoc(doc(db, 'products', `p${i}`), {
@@ -30,6 +30,52 @@ beforeEach(async () => {
   });
 });
 const dbFor = uid => env.authenticatedContext(uid).firestore();
+
+test('buyers report only their own orders and read only their own resolutions', async () => {
+  const buyer = dbFor('buyer'), other = dbFor('other'), admin = dbFor('admin');
+  await checkout(buyer, order('buyer-problem'));
+  const report = {kind: 'Order', targetId: 'buyer-problem', reporterId: 'buyer', submittedBy: 'buyer',
+    reason: 'Damaged item', notes: 'Cracked mug', createdAt: serverTimestamp()};
+  await assertSucceeds(getDoc(doc(buyer, 'marketplaceReports/new-report')));
+  await assertSucceeds(setDoc(doc(buyer, 'marketplaceReports/new-report'), report));
+  await assertSucceeds(getDocs(query(collection(buyer, 'marketplaceReports'), where('submittedBy', '==', 'buyer'), where('reporterId', '==', 'buyer'), where('targetId', '==', 'buyer-problem'))));
+  await assertFails(getDoc(doc(other, 'marketplaceReports/new-report')));
+  await assertFails(getDocs(collection(buyer, 'marketplaceReports')));
+  await assertFails(setDoc(doc(other, 'marketplaceReports/stolen'), {...report, submittedBy: 'other', reporterId: 'other'}));
+  await assertFails(setDoc(doc(buyer, 'marketplaceReports/spoofed'), {...report, reporterId: 'other'}));
+  await assertFails(setDoc(doc(buyer, 'marketplaceReports/product'), {...report, kind: 'Product', targetId: 'p0'}));
+  await assertFails(setDoc(doc(buyer, 'marketplaceReports/unknown'), {...report, reason: 'Unknown'}));
+  await assertFails(setDoc(doc(buyer, 'marketplaceReports/blank'), {...report, notes: ''}));
+  await assertFails(updateDoc(doc(buyer, 'marketplaceReports/new-report'), {notes: 'Changed'}));
+  await assertFails(deleteDoc(doc(buyer, 'marketplaceReports/new-report')));
+  const resolutionId = Buffer.from('marketplaceReports/new-report').toString('base64url');
+  const resolution = doc(buyer, 'reportResolutions', resolutionId);
+  await assertSucceeds(getDoc(resolution));
+  await assertSucceeds(adminChange(admin, 'reportResolutions', resolutionId, 'Complaint resolved', {
+    sourcePath: 'marketplaceReports/new-report', status: 'Resolved', notes: 'Replacement arranged',
+    resolvedBy: 'admin', updatedAt: serverTimestamp(),
+  }));
+  assert.equal((await assertSucceeds(getDoc(resolution))).data().notes, 'Replacement arranged');
+  await assertFails(getDoc(doc(other, 'reportResolutions', resolutionId)));
+  await assertFails(updateDoc(resolution, {status: 'Resolved'}));
+  await assertFails(setDoc(doc(dbFor('courier'), 'marketplaceReports/courier-report'), {...report, submittedBy: 'courier', reporterId: 'courier'}));
+});
+async function adminChange(db, collectionName, id, action, changes, actorId = 'admin') {
+  const activity = doc(collection(db, 'adminActivity'));
+  await runTransaction(db, async transaction => {
+    const ref = doc(db, collectionName, id);
+    const snapshot = await transaction.get(ref);
+    const before = snapshot.exists() ? snapshot.data() : {};
+    const after = {...before, ...changes};
+    transaction.set(ref, after);
+    transaction.set(activity, {actorId, action, collection: collectionName,
+      targetId: id, before, after, createdAt: serverTimestamp()});
+  });
+  return activity;
+}
+const deliveryPolicy = (fee = 350, freeDeliveryThreshold = 10000) => ({
+  currency: 'LKR', fee, freeDeliveryThreshold, updatedBy: 'admin', updatedAt: serverTimestamp(),
+});
 test('couriers publish limited contact details for assigned buyers', async () => {
   const profile = {
     displayName: 'Courier One', area: 'Colombo', photoUrl: '', phone: '',
@@ -39,6 +85,98 @@ test('couriers publish limited contact details for assigned buyers', async () =>
   await assertFails(setDoc(doc(dbFor('buyer'), 'courierPublicProfiles/courier2'), profile));
   await assertFails(setDoc(doc(dbFor('artisan'), 'courierPublicProfiles/artisan'), profile));
 });
+
+test('fresh courier signup can save both private and public profiles', async () => {
+  const db = env.authenticatedContext('new-courier', {email: 'new-courier@example.com'}).firestore();
+  await assertSucceeds(setDoc(doc(db, 'users/new-courier'), {
+    uid: 'new-courier', email: 'new-courier@example.com', displayName: 'New Courier', role: 'courier', courierApproval: 'pending',
+    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(setDoc(doc(db, 'courierPublicProfiles/new-courier'), {
+    displayName: 'New Courier', area: '', photoUrl: '', phone: '',
+  }));
+  assert.equal((await getDoc(doc(db, 'users/new-courier'))).data().role, 'courier');
+  await assertFails(setDoc(doc(dbFor('other'), 'courierPublicProfiles/new-courier'), {
+    displayName: 'Other buyer', area: '', photoUrl: '', phone: '',
+  }));
+});
+
+test('pending couriers cannot access deliveries or approve themselves; only admin can approve and queue email', async () => {
+  await env.withSecurityRulesDisabled(async ctx => {
+    await setDoc(doc(ctx.firestore(), 'users/pending'), {uid: 'pending', role: 'courier', email: 'pending@example.com', courierApproval: 'pending'});
+    await setDoc(doc(ctx.firestore(), 'orders/pending-assigned'), {...order('pending-assigned'), status: 'courierAssigned', courierId: 'pending'});
+  });
+  const pending = dbFor('pending'), admin = dbFor('admin');
+  await assertFails(getDoc(doc(pending, 'orders/pending-assigned')));
+  await assertFails(getDocs(query(collection(pending, 'orders'), where('courierId', '==', 'pending'))));
+  await assertFails(updateDoc(doc(pending, 'users/pending'), {courierApproval: 'approved'}));
+  await assertFails(updateDoc(doc(pending, 'orders/pending-assigned'), {status: 'pickedUp', updatedAt: now}));
+  const email = {to: 'pending@example.com', message: {subject: 'Your Craftisan courier account is verified',
+    text: 'Your courier account has been verified and approved by admin. You can now log in to Craftisan Delivery.'}, createdAt: serverTimestamp()};
+  await assertFails(setDoc(doc(pending, 'courierApprovalEmails/pending'), email));
+  await assertFails(setDoc(doc(admin, 'courierApprovalEmails/pending'), email));
+  await assertFails(updateDoc(doc(admin, 'users/pending'), {courierApproval: 'approved', courierReviewedBy: 'admin', courierReviewedAt: serverTimestamp()}));
+  await assertSucceeds(runTransaction(admin, async tx => {
+    const ref = doc(admin, 'users/pending');
+    const before = (await tx.get(ref)).data();
+    const after = {...before, courierApproval: 'approved', courierReviewedBy: 'admin', courierReviewedAt: serverTimestamp()};
+    tx.set(ref, after);
+    tx.set(doc(admin, 'courierApprovalEmails/pending'), email);
+    tx.set(doc(collection(admin, 'adminActivity')), {actorId:'admin', action:'Courier approved', collection:'users', targetId:'pending', before, after, createdAt:serverTimestamp()});
+  }));
+  await assertSucceeds(getDoc(doc(pending, 'orders/pending-assigned')));
+  await assertFails(getDoc(doc(pending, 'courierApprovalEmails/pending')));
+  await assertFails(updateDoc(doc(pending, 'users/pending'), {courierApproval: 'pending'}));
+  await assertFails(updateDoc(doc(admin, 'courierApprovalEmails/pending'), {to: 'other@example.com'}));
+  const fresh = env.authenticatedContext('forged-courier', {email: 'forged@example.com'}).firestore();
+  await assertFails(setDoc(doc(fresh, 'users/forged-courier'), {uid:'forged-courier', email:'forged@example.com', displayName:'Forged', role:'courier', courierApproval:'approved',createdAt:serverTimestamp(),updatedAt:serverTimestamp()}));
+});
+test('admin rejection queues only the rejection message to the signup email', async () => {
+  await env.withSecurityRulesDisabled(async ctx => {
+    await setDoc(doc(ctx.firestore(), 'users/rejected-courier'), {role:'courier',email:'rejected@example.com',courierApproval:'pending'});
+  });
+  const admin=dbFor('admin');
+  const review = (recipient) => runTransaction(admin, async tx => {
+    const ref=doc(admin,'users/rejected-courier');
+    const before=(await tx.get(ref)).data();
+    const after={...before,courierApproval:'rejected',courierReviewedBy:'admin',courierReviewedAt:serverTimestamp()};
+    tx.set(ref,after);
+    tx.set(doc(admin,'courierApprovalEmails/rejected-courier'), {to:recipient,
+      message:{subject:'Your Craftisan courier application was not approved',
+        text:'Your courier application was reviewed and rejected by admin. Delivery access is not enabled. Please contact the Craftisan admin team for more information.'},createdAt:serverTimestamp()});
+    tx.set(doc(collection(admin,'adminActivity')), {actorId:'admin',action:'Courier rejected',collection:'users',targetId:'rejected-courier',before,after,createdAt:serverTimestamp()});
+  });
+  await assertFails(review('wrong@example.com'));
+  await assertSucceeds(review('rejected@example.com'));
+  assert.equal((await getDoc(doc(admin,'courierApprovalEmails/rejected-courier'))).data().to,'rejected@example.com');
+});
+
+test('email worker can claim and finish mail but cannot change recipients, accounts or orders', async () => {
+  await env.withSecurityRulesDisabled(async ctx => {
+    const db=ctx.firestore();
+    await setDoc(doc(db,'emailWorkers/mail-worker'),{enabled:true});
+    await setDoc(doc(db,'courierApprovalEmails/queued'),{to:'courier@example.com',message:{subject:'Approved',text:'Approved by admin'},createdAt:serverTimestamp()});
+    await setDoc(doc(db,'orders/private-worker-check'),order('private-worker-check'));
+  });
+  const worker=dbFor('mail-worker'), buyer=dbFor('buyer');
+  const ref=doc(worker,'courierApprovalEmails/queued');
+  await assertSucceeds(getDocs(collection(worker,'courierApprovalEmails')));
+  await assertFails(updateDoc(doc(buyer,'courierApprovalEmails/queued'),{delivery:{state:'PROCESSING',workerId:'buyer',attemptedAt:serverTimestamp()}}));
+  await assertFails(updateDoc(ref,{to:'attacker@example.com'}));
+  await assertFails(setDoc(doc(worker,'courierApprovalEmails/forged'),{to:'attacker@example.com',message:{subject:'Forged',text:'Forged'}}));
+  await assertFails(getDoc(doc(worker,'users/courier')));
+  await assertFails(getDoc(doc(worker,'orders/private-worker-check')));
+  await assertFails(updateDoc(doc(worker,'users/courier'),{courierApproval:'approved'}));
+  await assertFails(updateDoc(doc(worker,'emailWorkers/mail-worker'),{enabled:false}));
+  await assertSucceeds(updateDoc(ref,{delivery:{state:'PROCESSING',workerId:'mail-worker',attemptedAt:serverTimestamp()}}));
+  const claimed=(await getDoc(ref)).data().delivery;
+  await assertFails(updateDoc(ref,{delivery:{...claimed,state:'PROCESSING',attemptedAt:serverTimestamp()}}));
+  await assertSucceeds(updateDoc(ref,{delivery:{...claimed,state:'SENT',completedAt:serverTimestamp()}}));
+  await assertFails(updateDoc(ref,{delivery:{state:'PROCESSING',workerId:'mail-worker',attemptedAt:serverTimestamp()}}));
+  await env.withSecurityRulesDisabled(async ctx => updateDoc(doc(ctx.firestore(),'emailWorkers/mail-worker'),{enabled:false}));
+  await assertFails(getDoc(ref));
+});
+
 function order(id, buyer = 'buyer', count = 1, quantity = 2) {
   const subtotal = count * quantity * 60;
   const fee = subtotal >= 250 ? 0 : 14;
@@ -88,6 +226,117 @@ test('LKR orders preserve currency and cannot buy USD products', async () => {
 
 test('four-product checkout stays within rules access limits', async () => {
   await assertSucceeds(checkout(dbFor('buyer'), order('four', 'buyer', 4)));
+});
+
+test('admin notification preferences and read state are private to each admin', async () => {
+  const preferences = {applications: true, orders: false, reports: true, updatedAt: serverTimestamp()};
+  const admin = dbFor('admin'), buyer = dbFor('buyer');
+  await assertSucceeds(setDoc(doc(admin, 'adminPreferences/admin'), preferences));
+  await assertFails(getDoc(doc(buyer, 'adminPreferences/admin')));
+  await assertFails(setDoc(doc(buyer, 'adminPreferences/buyer'), preferences));
+  await assertFails(setDoc(doc(admin, 'adminPreferences/other'), preferences));
+  await assertSucceeds(setDoc(doc(admin, 'adminNotificationReads/admin/events/event'), {readAt: serverTimestamp()}));
+  await assertFails(getDoc(doc(buyer, 'adminNotificationReads/admin/events/event')));
+  await assertSucceeds(setDoc(doc(admin, 'adminDevices/token'), {adminId: 'admin', token: 'token', updatedAt: serverTimestamp()}));
+  await assertFails(setDoc(doc(buyer, 'adminDevices/forged'), {adminId: 'admin', token: 'forged', updatedAt: serverTimestamp()}));
+  await assertFails(getDoc(doc(admin, 'adminDevices/token')));
+});
+
+test('admin can assign/reassign before pickup and old courier loses access', async () => {
+  const admin = dbFor('admin');
+  await checkout(dbFor('buyer'), order('assignment'));
+  await updateDoc(doc(dbFor('artisan'), 'orders/assignment'), {status: 'confirmed', updatedAt: now});
+  await assertSucceeds(adminChange(admin, 'orders', 'assignment', 'Courier assigned', {
+    courierId: 'courier', status: 'courierAssigned', updatedAt: now,
+  }));
+  await assertSucceeds(adminChange(admin, 'orders', 'assignment', 'Courier assigned', {
+    courierId: 'courier2', status: 'courierAssigned', updatedAt: now,
+  }));
+  await assertFails(getDoc(doc(dbFor('courier'), 'orders/assignment')));
+  await assertFails(updateDoc(doc(dbFor('courier'), 'orders/assignment'), {status: 'pickedUp', updatedAt: now}));
+  await assertSucceeds(updateDoc(doc(dbFor('courier2'), 'orders/assignment'), {status: 'pickedUp', updatedAt: now}));
+  await assertFails(adminChange(admin, 'orders', 'assignment', 'Courier assigned', {
+    courierId: 'courier', status: 'courierAssigned', updatedAt: now,
+  }));
+});
+
+test('admin assignment rejects unpacked, paused, non-courier and held deliveries', async () => {
+  const admin = dbFor('admin');
+  await checkout(dbFor('buyer'), order('blocked-assignment'));
+  const changes = {courierId: 'courier', status: 'courierAssigned', updatedAt: now};
+  await assertFails(adminChange(admin, 'orders', 'blocked-assignment', 'Courier assigned', changes));
+  await updateDoc(doc(dbFor('artisan'), 'orders/blocked-assignment'), {status: 'confirmed', updatedAt: now});
+  await env.withSecurityRulesDisabled(async ctx => {
+    await updateDoc(doc(ctx.firestore(), 'users/courier'), {active: false});
+  });
+  await assertFails(adminChange(admin, 'orders', 'blocked-assignment', 'Courier assigned', changes));
+  await assertFails(adminChange(admin, 'orders', 'blocked-assignment', 'Courier assigned', {...changes, courierId: 'buyer'}));
+  await assertFails(adminChange(dbFor('buyer'), 'orders', 'blocked-assignment', 'Courier assigned', {...changes, courierId: 'courier2'}, 'buyer'));
+  await env.withSecurityRulesDisabled(async ctx => {
+    await setDoc(doc(ctx.firestore(), 'orders/blocked-assignment/deliveryPlan/current'), {outcome: 'returnRequested'});
+  });
+  await assertFails(adminChange(admin, 'orders', 'blocked-assignment', 'Courier assigned', {...changes, courierId: 'courier2'}));
+});
+
+test('admin delivery fees are enforced for new LKR orders only', async () => {
+  const admin = dbFor('admin'), buyer = dbFor('buyer');
+  await assertSucceeds(adminChange(admin, 'marketplaceSettings', 'deliveryLkr', 'Delivery fees updated', deliveryPolicy()));
+  await env.withSecurityRulesDisabled(async ctx => {
+    for (let i = 0; i < 4; i++) await updateDoc(doc(ctx.firestore(), 'products', `p${i}`), {currency: 'LKR'});
+  });
+  const stale = {...order('stale'), currency: 'LKR'};
+  await assertFails(checkout(buyer, stale));
+  const value = {...order('lkr-fee', 'buyer', 4), currency: 'LKR'};
+  value.deliveryFee = 350; value.total = value.subtotal + 350;
+  await assertSucceeds(checkout(buyer, value));
+  await assertSucceeds(adminChange(admin, 'marketplaceSettings', 'deliveryLkr', 'Delivery fees updated', deliveryPolicy(400)));
+  assert.equal((await getDoc(doc(buyer, 'orders/lkr-fee'))).data().deliveryFee, 350);
+  const usd = order('usd-fee'); usd.items[0].productId = 'p4';
+  await assertSucceeds(checkout(buyer, usd));
+});
+
+test('non-admins, invalid fees and spoofed audit actors are rejected', async () => {
+  await assertFails(setDoc(doc(dbFor('buyer'), 'marketplaceSettings/deliveryLkr'), deliveryPolicy()));
+  await assertFails(setDoc(doc(dbFor('admin'), 'marketplaceSettings/deliveryLkr'), deliveryPolicy(-1)));
+  await assertFails(adminChange(dbFor('admin'), 'marketplaceSettings', 'deliveryLkr', 'Delivery fees updated', deliveryPolicy(), 'buyer'));
+  assert.equal((await getDoc(doc(dbFor('admin'), 'marketplaceSettings/deliveryLkr'))).exists(), false);
+  await assertFails(getDocs(collection(dbFor('buyer'), 'adminActivity')));
+});
+
+test('audit requires a real atomic change and is immutable', async () => {
+  const admin = dbFor('admin');
+  const ref = await adminChange(admin, 'products', 'p0', 'Product visibility updated', {status: 'hidden'});
+  const activity = (await getDoc(ref)).data();
+  assert.equal(activity.before.status, 'active');
+  assert.equal(activity.after.status, 'hidden');
+  await assertFails(updateDoc(ref, {actorId: 'other'}));
+  await assertFails(deleteDoc(ref));
+  await assertFails(setDoc(doc(collection(admin, 'adminActivity')), {
+    ...activity, createdAt: serverTimestamp(),
+  }));
+});
+
+test('complaints and courier issues are private and resolution preserves evidence', async () => {
+  const admin = dbFor('admin');
+  await checkout(dbFor('buyer'), order('reported'));
+  await env.withSecurityRulesDisabled(async ctx => {
+    await setDoc(doc(ctx.firestore(), 'orders/reported/deliveryIssues/issue'), {
+      courierId: 'courier', reason: 'Damaged parcel', notes: 'Cracked mug', createdAt: new Date(),
+    });
+  });
+  await assertSucceeds(getDocs(collectionGroup(admin, 'deliveryIssues')));
+  await assertFails(getDocs(collectionGroup(dbFor('other'), 'deliveryIssues')));
+  const manual = {kind: 'Product', targetId: 'p0', reporterId: 'Buyer', reason: 'Wrong item',
+    notes: '', submittedBy: 'admin', createdAt: serverTimestamp()};
+  await assertSucceeds(adminChange(admin, 'marketplaceReports', 'manual', 'Complaint recorded', manual));
+  await assertFails(getDoc(doc(dbFor('buyer'), 'marketplaceReports/manual')));
+  await assertFails(setDoc(doc(dbFor('buyer'), 'marketplaceReports/forged'), {...manual, submittedBy: 'buyer'}));
+  const resolution = {sourcePath: 'orders/reported/deliveryIssues/issue', status: 'Resolved',
+    notes: 'Replacement arranged', resolvedBy: 'admin', updatedAt: serverTimestamp()};
+  await assertSucceeds(adminChange(admin, 'reportResolutions', 'resolution', 'Complaint resolved', resolution));
+  assert.equal((await getDoc(doc(admin, resolution.sourcePath))).data().notes, 'Cracked mug');
+  await assertFails(setDoc(doc(admin, 'reportResolutions/missing'), {...resolution, sourcePath: 'marketplaceReports/missing'}));
+  await assertFails(setDoc(doc(dbFor('courier'), 'reportResolutions/forged'), {...resolution, resolvedBy: 'courier'}));
 });
 test('order without inventory reservation is rejected', async () => {
   await assertFails(checkout(dbFor('buyer'), order('no-stock'), false));

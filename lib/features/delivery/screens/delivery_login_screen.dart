@@ -2,15 +2,16 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../../routes/route_names.dart';
 import '../../../shared/models/domain_models.dart' show UserRole;
 import '../../auth/models/marketplace_role.dart';
 import '../../auth/services/auth_session.dart';
 import '../widgets/delivery_widgets.dart';
 import '../widgets/delivery_banner.dart';
+import '../services/courier_google_sign_in.dart';
 
 class DeliveryLoginScreen extends StatefulWidget {
-  const DeliveryLoginScreen({super.key});
+  const DeliveryLoginScreen({super.key, this.googleSignIn});
+  final Future<UserRole?> Function()? googleSignIn;
   @override
   State<DeliveryLoginScreen> createState() => _DeliveryLoginScreenState();
 }
@@ -70,6 +71,7 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
                 'email': user.email ?? email,
                 'displayName': name,
                 'role': UserRole.courier.name,
+                'courierApproval': 'pending',
                 'createdAt': FieldValue.serverTimestamp(),
                 'updatedAt': FieldValue.serverTimestamp(),
               });
@@ -89,7 +91,17 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
             'We could not save your profile. Your new account was removed. Please try signing up again.',
           );
         }
-        role = UserRole.courier;
+        await FirebaseAuth.instance.signOut();
+        if (mounted) {
+          setState(() => _register = false);
+          _password.clear();
+          showDeliveryNotice(
+            context,
+            'Application sent',
+            'Your courier details have been sent to admin. You can log in after your account is approved.',
+          );
+        }
+        return;
       } else {
         role = await AuthSession.signIn(email, password);
       }
@@ -121,6 +133,38 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
       throw const ProfileException(
         'We could not finish account setup or remove the incomplete account. Check your connection and submit again to retry cleanup. If this continues, contact support.',
       );
+    }
+  }
+
+  Future<void> _googleSignIn() async {
+    if (_submitting) return;
+    FocusScope.of(context).unfocus();
+    setState(() => _submitting = true);
+    try {
+      if (_incompleteSignup != null) await _cleanUpSignup();
+      final role =
+          await (widget.googleSignIn?.call() ?? CourierGoogleSignIn().signIn());
+      if (role == null ||
+          !mounted ||
+          ModalRoute.of(context)?.isCurrent != true) {
+        return;
+      }
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AuthSession.route(role),
+        (_) => false,
+        arguments: AuthSession.selection(role),
+      );
+    } catch (error) {
+      if (mounted) {
+        showDeliveryNotice(
+          context,
+          'Unable to sign in with Google',
+          AuthSession.message(error),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
@@ -320,11 +364,11 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Row(
+                    Column(
                       children: [
-                        Expanded(child: _social('Google', Icons.g_mobiledata)),
-                        const SizedBox(width: 12),
-                        Expanded(child: _social('Apple', Icons.apple)),
+                        _social('Google'),
+                        const SizedBox(height: 10),
+                        _social('Apple'),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -358,27 +402,6 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
                         ),
                       ],
                     ),
-                    TextButton(
-                      onPressed: () => Navigator.pushReplacementNamed(
-                        context,
-                        RouteNames.deliveryHome,
-                      ),
-                      child: const Text(
-                        'Quick Track as Guest  →',
-                        style: TextStyle(
-                          color: DeliveryStyle.orange,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                    const Text(
-                      'Explore sample deliveries. No account required.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: DeliveryStyle.muted,
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -389,22 +412,44 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
     ),
   );
 
-  Widget _social(String name, IconData icon) => FilledButton.tonalIcon(
-    onPressed: () => showDeliveryNotice(
-      context,
-      '$name sign-in',
-      '$name sign-in is not connected yet. You can explore as a guest.',
+  Widget _social(String name) => OutlinedButton(
+    onPressed: _submitting
+        ? null
+        : name == 'Google'
+        ? _googleSignIn
+        : () => showDeliveryNotice(
+            context,
+            '$name sign-in',
+            '$name sign-in is not connected yet. Please use email or Google to sign in.',
+          ),
+    style: OutlinedButton.styleFrom(
+      backgroundColor: Colors.white,
+      foregroundColor: const Color(0xFF1F1F1F),
+      side: const BorderSide(color: Color(0xFFDADCE0)),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
     ),
-    style: FilledButton.styleFrom(
-      backgroundColor: DeliveryStyle.surface,
-      foregroundColor: DeliveryStyle.ink,
-      padding: const EdgeInsets.symmetric(vertical: 14),
+    child: Row(
+      children: [
+        ExcludeSemantics(
+          child: name == 'Google'
+              ? Image.asset(
+                  'lib/features/auth/widgets/google_logo.png',
+                  width: 22,
+                  height: 22,
+                )
+              : const Icon(Icons.apple, color: Colors.black, size: 25),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Text(
+            'Continue with $name',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+        ),
+        const SizedBox(width: 22),
+      ],
     ),
-    icon: Icon(
-      icon,
-      size: 23,
-      color: name == 'Google' ? const Color(0xFF4285F4) : DeliveryStyle.ink,
-    ),
-    label: Text(name),
   );
 }

@@ -12,7 +12,7 @@ import '../features/auth/screens/role_selection_screen.dart';
 import '../features/auth/screens/password_reset_screens.dart';
 import '../features/delivery/screens/delivery_splash_screen.dart';
 import '../features/delivery/screens/delivery_login_screen.dart';
-import '../features/delivery/screens/delivery_home_screen.dart';
+import '../features/delivery/screens/delivery_access_guard.dart';
 import '../features/admin/screens/admin_dashboard_screen.dart';
 import '../features/auth/services/auth_session.dart';
 import '../shared/models/domain_models.dart' show UserRole;
@@ -32,7 +32,7 @@ class AppRoutes {
     RouteNames.buyerLanding: (_) => const BuyerLandingScreen(),
     RouteNames.deliverySplash: (_) => const DeliverySplashScreen(),
     RouteNames.deliveryLogin: (_) => const DeliveryLoginScreen(),
-    RouteNames.deliveryHome: (_) => const DeliveryHomeScreen(),
+    RouteNames.deliveryHome: (_) => const DeliveryAccessGuard(),
     RouteNames.adminDashboard: (_) => const _AdminRouteGuard(),
     RouteNames.marketplace: (context) =>
         ModalRoute.of(context)?.settings.arguments == MarketplaceRole.buyer
@@ -49,9 +49,7 @@ class _AdminRouteGuard extends StatelessWidget {
     future: AuthSession.restore(),
     builder: (context, snapshot) {
       if (snapshot.connectionState != ConnectionState.done) {
-        return const Scaffold(
-          body: Center(child: CircularProgressIndicator()),
-        );
+        return const Scaffold(body: Center(child: CircularProgressIndicator()));
       }
       if (snapshot.data == UserRole.admin) {
         return const AdminDashboardScreen();

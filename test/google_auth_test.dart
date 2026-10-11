@@ -27,7 +27,7 @@ void main() {
       GoogleAuthProvider.credential(idToken: 'test-token'),
     ),
   );
-  for (final role in [UserRole.buyer, UserRole.artisan, UserRole.courier]) {
+  for (final role in [UserRole.buyer, UserRole.artisan]) {
     test('Google creates and restores a $role profile', () async {
       expect(await login(role), role);
       final saved = (await db.collection('users').doc(user.uid).get()).data()!;
@@ -40,6 +40,23 @@ void main() {
       expect((await db.collection('users').doc(user.uid).get()).data(), saved);
     });
   }
+  test(
+    'Google courier creation waits for admin approval before restoring',
+    () async {
+      await expectLater(
+        login(UserRole.courier),
+        throwsA(isA<CourierApprovalException>()),
+      );
+      final reference = db.collection('users').doc(user.uid);
+      final saved = (await reference.get()).data()!;
+      expect(saved['role'], 'courier');
+      expect(saved['courierApproval'], 'pending');
+      expect(auth.currentUser, isNull);
+      await reference.update({'courierApproval': 'approved'});
+      expect(await login(UserRole.buyer), UserRole.courier);
+      expect((await reference.get()).data()!['courierApproval'], 'approved');
+    },
+  );
   test('existing admin role is preserved without profile writes', () async {
     await db.collection('users').doc(user.uid).set({
       'role': 'admin',

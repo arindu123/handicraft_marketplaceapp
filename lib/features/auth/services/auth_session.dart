@@ -13,6 +13,10 @@ class ProfileException implements Exception {
   final String message;
 }
 
+class CourierApprovalException extends ProfileException {
+  const CourierApprovalException(super.message);
+}
+
 class AuthSession {
   static Future<void>? _googleInitialization;
 
@@ -64,6 +68,7 @@ class AuthSession {
               ? email.split('@').first
               : name,
           'role': newAccountRole.name,
+          if (newAccountRole == UserRole.courier) 'courierApproval': 'pending',
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
         });
@@ -119,7 +124,12 @@ class AuthSession {
       email: email.trim(),
       password: password,
     );
-    return loadRole();
+    try {
+      return await loadRole();
+    } on CourierApprovalException {
+      await FirebaseAuth.instance.signOut();
+      rethrow;
+    }
   }
 
   static Future<UserRole?> restore() async {
@@ -152,6 +162,7 @@ class AuthSession {
         'Your session changed. Please sign in again.',
       );
     }
+    if (data['role'] == 'courier') ensureCourierApproved(data);
     return switch (data['role']) {
       'admin' => UserRole.admin,
       'buyer' => UserRole.buyer,
@@ -161,6 +172,21 @@ class AuthSession {
         'This account cannot access the app here. Please contact support.',
       ),
     };
+  }
+
+  static void ensureCourierApproved(Map<String, dynamic> profile) {
+    if (profile['courierApproval'] != 'approved') {
+      throw CourierApprovalException(
+        profile['courierApproval'] == 'rejected'
+            ? 'Your courier application was not approved. Please contact admin.'
+            : 'Your courier account is awaiting admin approval. You can log in after approval.',
+      );
+    }
+    if (profile['active'] == false) {
+      throw const CourierApprovalException(
+        'Your courier account is paused. Please contact admin.',
+      );
+    }
   }
 
   static String route(UserRole role) => role == UserRole.admin

@@ -78,7 +78,8 @@ void main() {
     }
 
     await tap('Orders');
-    expect(find.text('Pending'), findsNWidgets(2));
+    expect(find.text('Pending'), findsOneWidget);
+    expect(find.byType(DropdownButton<DeliveryStatus>), findsOneWidget);
     await tap('Handcrafted ceramic vase');
     final sheet = find.byType(BottomSheet);
     final pickup = find.descendant(

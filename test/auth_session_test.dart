@@ -81,6 +81,34 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  test(
+    'Courier approval blocks pending login and signs out the session',
+    () async {
+      store.profile = {'role': 'courier', 'courierApproval': 'pending'};
+      await expectLater(
+        AuthSession.signIn('courier@example.com', 'sample-password'),
+        throwsA(isA<CourierApprovalException>()),
+      );
+      expect(auth.signedInUser, isNull);
+      expect(store.lastReadSource, Source.server);
+    },
+  );
+  test(
+    'Courier approval permits approved login and rejects legacy restore',
+    () async {
+      store.profile = {'role': 'courier', 'courierApproval': 'approved'};
+      expect(
+        await AuthSession.signIn('courier@example.com', 'sample-password'),
+        UserRole.courier,
+      );
+      store.profile = {'role': 'courier'};
+      await expectLater(
+        AuthSession.restore(),
+        throwsA(isA<CourierApprovalException>()),
+      );
+    },
+  );
+
   for (final role in [
     UserRole.buyer,
     UserRole.artisan,
@@ -90,7 +118,10 @@ void main() {
     testWidgets('Saved $role session does not skip the welcome screen', (
       tester,
     ) async {
-      store.profile = {'role': role.name};
+      store.profile = {
+        'role': role.name,
+        if (role == UserRole.courier) 'courierApproval': 'approved',
+      };
       final restored = await AuthSession.restore();
       expect(restored, role);
       expect(store.reads, ['users/new-user-uid']);

@@ -63,7 +63,7 @@ void main() {
   }
 
   testWidgets(
-    'Saves courier profile before navigation and prevents duplicate signup',
+    'Saves pending courier profile before signing out and prevents duplicate signup',
     (tester) async {
       await openSignup(tester);
       store.pending = Completer<void>();
@@ -79,6 +79,7 @@ void main() {
         'email': 'potter@example.com',
         'displayName': 'Courier Name',
         'role': 'courier',
+        'courierApproval': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -87,7 +88,9 @@ void main() {
       expect(auth.calls, hasLength(1));
       store.pending!.complete();
       await tester.pumpAndSettle();
-      expect(find.text('Courier dashboard'), findsOneWidget);
+      expect(find.text('Courier dashboard'), findsNothing);
+      expect(find.text('Application sent'), findsOneWidget);
+      expect(auth.signedInUser, isNull);
       expect(auth.deletions, 0);
     },
   );
@@ -107,7 +110,9 @@ void main() {
     await tapVisible(tester, 'Got it');
     store.fails = false;
     await tapVisible(tester, 'Sign Up');
-    expect(find.text('Courier dashboard'), findsOneWidget);
+    expect(find.text('Courier dashboard'), findsNothing);
+    expect(find.text('Application sent'), findsOneWidget);
+    expect(auth.signedInUser, isNull);
   });
 
   testWidgets('Failed cleanup is retried before creating another account', (
@@ -127,7 +132,9 @@ void main() {
     store.fails = false;
     await tapVisible(tester, 'Sign Up');
     expect(auth.calls, hasLength(2));
-    expect(find.text('Courier dashboard'), findsOneWidget);
+    expect(find.text('Courier dashboard'), findsNothing);
+    expect(find.text('Application sent'), findsOneWidget);
+    expect(auth.signedInUser, isNull);
   });
 
   testWidgets(

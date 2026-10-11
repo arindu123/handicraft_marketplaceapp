@@ -5,20 +5,14 @@ import 'package:flutter/material.dart';
 
 import 'app.dart';
 import 'firebase_options.dart';
-import 'shared/widgets/brand_splash_screen.dart';
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(
-    const MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: BrandSplashScreen(),
-    ),
-  );
-  await Future.wait([
-    Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform),
-    Future<void>.delayed(const Duration(milliseconds: 1000)),
-  ]);
-  MarketplaceBackend.enabled = true;
-  runApp(const MyApp());
+  final initialization =
+      Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform)
+          .then<void>((_) {
+            MarketplaceBackend.enabled = true;
+          });
+  // Welcome paints immediately while Firebase initializes in the background.
+  runApp(MyApp(initialization: initialization));
 }

@@ -6,7 +6,9 @@ import '../../../shared/widgets/custom_button.dart';
 import '../models/marketplace_role.dart';
 
 class WelcomeScreen extends StatefulWidget {
-  const WelcomeScreen({super.key});
+  const WelcomeScreen({super.key, this.initialization});
+
+  final Future<void>? initialization;
 
   @override
   State<WelcomeScreen> createState() => _WelcomeScreenState();
@@ -16,7 +18,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     with SingleTickerProviderStateMixin {
   late final AnimationController _entrance = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1000),
+    duration: const Duration(milliseconds: 400),
+    value: 0.85,
   )..forward();
 
   @override
@@ -25,12 +28,42 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     super.dispose();
   }
 
-  void _openOnboarding() =>
-      Navigator.of(context).pushNamed(RouteNames.onboarding);
+  bool _opening = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Keep startup errors available for the navigation retry without an
+    // unhandled asynchronous error while the welcome page is idle.
+    widget.initialization?.catchError((Object _) {});
+  }
+
+  Future<void> _navigate(String route, {Object? arguments}) async {
+    if (_opening) return;
+    setState(() => _opening = true);
+    try {
+      await widget.initialization;
+      if (!mounted) return;
+      await Navigator.of(context).pushNamed(route, arguments: arguments);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Unable to start the app. Please close it and try again.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _opening = false);
+    }
+  }
+
+  void _openOnboarding() => _navigate(RouteNames.onboarding);
 
   void _openSignIn() =>
-      Navigator.of(context)
-          .pushNamed(RouteNames.roleSelection, arguments: AuthEntry.signIn);
+      _navigate(RouteNames.roleSelection, arguments: AuthEntry.signIn);
 
   @override
   Widget build(BuildContext context) {
@@ -78,7 +111,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                           Align(
                             alignment: Alignment.centerRight,
                             child: TextButton.icon(
-                              onPressed: _openSignIn,
+                              onPressed: _opening ? null : _openSignIn,
                               icon: const Icon(Icons.login_rounded, size: 17),
                               label: const Text('Sign in'),
                               style: TextButton.styleFrom(
@@ -204,7 +237,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                               children: [
                                 CustomButton(
                                   label: 'Explore the marketplace',
-                                  onPressed: _openOnboarding,
+                                  onPressed: _opening ? null : _openOnboarding,
                                 ),
                                 const SizedBox(height: 13),
                                 Row(
@@ -216,13 +249,16 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                       color: AppColors.sage,
                                     ),
                                     const SizedBox(width: 7),
-                                    Text(
-                                      'Thoughtfully made by independent artisans',
-                                      style: TextStyle(
-                                        color: AppColors.muted.withValues(
-                                          alpha: .9,
+                                    Flexible(
+                                      child: Text(
+                                        'Thoughtfully made by independent artisans',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: AppColors.muted.withValues(
+                                            alpha: .9,
+                                          ),
+                                          fontSize: 11,
                                         ),
-                                        fontSize: 11,
                                       ),
                                     ),
                                   ],

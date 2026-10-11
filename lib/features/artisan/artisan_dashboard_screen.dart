@@ -1,6 +1,6 @@
 import '../../shared/data/community_repository.dart';
 
- import 'package:image_picker/image_picker.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../shared/data/marketplace_repository.dart';
 

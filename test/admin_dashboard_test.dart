@@ -7,6 +7,8 @@ import 'package:artisan_marketplace/routes/app_routes.dart';
 import 'package:artisan_marketplace/routes/route_names.dart';
 import 'package:artisan_marketplace/core/theme/app_theme.dart';
 
+import 'helpers/admin_test_store.dart';
+
 Future<void> tapText(WidgetTester tester, String text) async {
   final target = find.text(text).first;
   await tester.ensureVisible(target);
@@ -19,7 +21,7 @@ void main() {
   test(
     'Approval decisions update directories once and remain session-only',
     () {
-      final store = AdminDemoStore();
+      final store = adminTestStore();
       final count = store.users.length;
       store.decide(store.approvals.first, true);
       store.decide(store.approvals.first, true);
@@ -28,44 +30,50 @@ void main() {
       store.decide(store.approvals[1], false);
       expect(store.users.length, count + 1);
       expect(store.pending, 1);
-      expect(AdminDemoStore().pending, 3);
+      final offline = AdminDemoStore();
+      expect(offline.pending, 0);
+      offline.dispose();
       store.dispose();
     },
   );
 
-  testWidgets('Admin can preview without submitting account credentials', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        theme: AppTheme.light,
-        routes: AppRoutes.routes..remove('/'),
-        home: Builder(
-          builder: (context) => Scaffold(
-            body: TextButton(
-              onPressed: () => Navigator.pushNamed(
-                context,
-                RouteNames.signUp,
-                arguments: MarketplaceRole.admin,
+  testWidgets(
+    'Admin signup does not expose an unauthenticated dashboard preview',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light,
+          routes: AppRoutes.routes..remove('/'),
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: TextButton(
+                onPressed: () => Navigator.pushNamed(
+                  context,
+                  RouteNames.signUp,
+                  arguments: MarketplaceRole.admin,
+                ),
+                child: const Text('Open admin signup'),
               ),
-              child: const Text('Open admin signup'),
             ),
           ),
         ),
-      ),
-    );
-    await tapText(tester, 'Open admin signup');
-    await tapText(tester, 'Preview Admin Dashboard');
-    expect(find.byType(AdminDashboardScreen), findsOneWidget);
-    expect(find.text('Enter your full name.'), findsNothing);
-    expect(tester.takeException(), isNull);
-  });
+      );
+      await tapText(tester, 'Open admin signup');
+      expect(find.text('Preview Admin Dashboard'), findsNothing);
+      expect(find.byType(AdminDashboardScreen), findsNothing);
+      expect(find.text('Enter your full name.'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('Review can cancel then approve and updates the visible list', (
     tester,
   ) async {
     await tester.pumpWidget(
-      MaterialApp(theme: AppTheme.light, home: const AdminDashboardScreen()),
+      MaterialApp(
+        theme: AppTheme.light,
+        home: AdminDashboardScreen(store: adminTestStore()),
+      ),
     );
     await tapText(tester, 'Approvals');
     await tapText(tester, 'Review application →');
@@ -82,7 +90,10 @@ void main() {
 
   testWidgets('Order search and demo status updates work', (tester) async {
     await tester.pumpWidget(
-      MaterialApp(theme: AppTheme.light, home: const AdminDashboardScreen()),
+      MaterialApp(
+        theme: AppTheme.light,
+        home: AdminDashboardScreen(store: adminTestStore()),
+      ),
     );
     await tapText(tester, 'Orders');
     await tester.enterText(find.byType(TextField), 'no-such-order');
@@ -101,7 +112,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tapText(tester, 'Update demo status');
+    await tapText(tester, 'Update status');
     await tapText(tester, 'Confirm');
     expect(find.text('Delivered'), findsWidgets);
     expect(find.text('Processing'), findsOneWidget); // Filter only.
@@ -123,7 +134,7 @@ void main() {
               .copyWith(textScaler: const TextScaler.linear(1.5)),
           child: child!,
         ),
-        home: const AdminDashboardScreen(),
+        home: AdminDashboardScreen(store: adminTestStore()),
       ),
     );
     await tester.pumpAndSettle();
@@ -133,7 +144,7 @@ void main() {
       expect(tester.takeException(), isNull);
     }
     await tapText(tester, 'Users & artisans');
-    await tapText(tester, 'Pause in demo');
+    await tapText(tester, 'Pause');
     await tapText(tester, 'Confirm');
     expect(find.text('Paused'), findsOneWidget);
     expect(tester.takeException(), isNull);

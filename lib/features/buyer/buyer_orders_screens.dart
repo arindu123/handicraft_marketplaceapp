@@ -1,3 +1,4 @@
+import 'package:artisan_marketplace/shared/widgets/craftisan_dialog.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -546,7 +547,8 @@ class _BuyerOrderDetailsScreenState extends State<BuyerOrderDetailsScreen> {
       if (mounted) {
         showDialog<void>(
           context: context,
-          builder: (context) => AlertDialog(
+          builder: (context) => CraftisanDialog(
+            icon: Icons.verified_user_outlined,
             title: const Text('Delivery confirmation code'),
             content: Text(
               '$code\n\nShare it only when your parcel is handed to you.',
@@ -1254,7 +1256,8 @@ class _ReviewDialogState extends State<_ReviewDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => CraftisanDialog(
+    icon: Icons.star_outline_rounded,
     title: const Text('Leave a review'),
     content: Column(
       mainAxisSize: MainAxisSize.min,

@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "471804613144-8hqcmukc3j6kfv327buq8b2emnso57fv.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.artisan_marketplace",
+            "certificate_hash": "9e2546fdf05909192555d773410044b6c41719f9"
+          }
+        },
+        {
           "client_id": "471804613144-barpoqvb2v67e18sr3fueamrmq7nds6c.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {

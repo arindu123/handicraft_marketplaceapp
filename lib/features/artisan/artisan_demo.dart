@@ -1,5 +1,5 @@
 import 'dart:async';
- import 'dart:convert';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
@@ -149,17 +149,20 @@ class ArtisanDemo extends ChangeNotifier {
   Map<String, dynamic> profile = {};
   Map<String, dynamic> userProfileData = {};
 
-  ArtisanDemo() {
-    if (!MarketplaceBackend.enabled) return;
+  ArtisanDemo({MarketplaceRepository? backend}) {
+    if (!MarketplaceBackend.enabled && backend == null) return;
 
     products.clear();
     orders.clear();
 
-    repository = MarketplaceRepository();
+    repository = backend ?? MarketplaceRepository();
     profileLoading = true;
 
     try {
-      final communityRepository = CommunityRepository();
+      final communityRepository = CommunityRepository(
+        firestore: repository!.db,
+        auth: repository!.auth,
+      );
       final artisanUid = repository!.uid;
 
       // Ensure that the signed-in artisan has a profile document.

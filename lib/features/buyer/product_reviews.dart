@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
 import '../../shared/data/community_repository.dart';
+import '../../shared/models/domain_models.dart' show documentDate;
 
 class ProductReviews extends StatelessWidget {
   const ProductReviews({
@@ -25,8 +26,8 @@ class ProductReviews extends StatelessWidget {
           }
           final reviews = snapshot.data!.docs.map((d) => d.data()).toList()
             ..sort(
-              (a, b) => (b['createdAt'] as Timestamp? ?? Timestamp(0, 0))
-                  .compareTo(a['createdAt'] as Timestamp? ?? Timestamp(0, 0)),
+              (a, b) => (documentDate(b['createdAt']) ?? DateTime(1970))
+                  .compareTo(documentDate(a['createdAt']) ?? DateTime(1970)),
             );
           final average = reviews.isEmpty
               ? 0.0
@@ -77,10 +78,9 @@ class ProductReviews extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(review['comment'] as String),
-                      if (review['createdAt'] is Timestamp)
+                      if (review['createdAt'] != null)
                         Text(
-                          (review['createdAt'] as Timestamp)
-                              .toDate()
+                          documentDate(review['createdAt'])!
                               .toLocal()
                               .toString()
                               .split(' ')

@@ -182,13 +182,16 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                                           color: AppColors.terracotta,
                                         ),
                                         SizedBox(width: 7),
-                                        Text(
-                                          'MADE SLOWLY. TREASURED ALWAYS.',
-                                          style: TextStyle(
-                                            color: AppColors.ink,
-                                            fontSize: 9,
-                                            letterSpacing: 1.15,
-                                            fontWeight: FontWeight.w600,
+                                        Flexible(
+                                          child: Text(
+                                            'MADE SLOWLY. TREASURED ALWAYS.',
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              color: AppColors.ink,
+                                              fontSize: 9,
+                                              letterSpacing: 1.15,
+                                              fontWeight: FontWeight.w600,
+                                            ),
                                           ),
                                         ),
                                       ],

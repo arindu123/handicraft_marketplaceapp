@@ -1,3 +1,4 @@
+import 'package:artisan_marketplace/shared/widgets/craftisan_dialog.dart';
 import 'package:flutter/material.dart';
 
 class AdminStyle {
@@ -186,7 +187,8 @@ Future<bool> confirmAdminAction(
 ) async =>
     await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => CraftisanDialog(
+        icon: Icons.fact_check_outlined,
         title: Text(title),
         content: Text(message),
         actions: [

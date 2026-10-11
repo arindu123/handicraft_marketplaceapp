@@ -10,6 +10,7 @@ void main() {
     const Size(390, 844),
     const Size(320, 568),
     const Size(1280, 900),
+    const Size(568, 320),
   ]) {
     testWidgets('Buyer login fits $size with keyboard and enlarged text', (
       tester,
@@ -29,13 +30,25 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+      expect(find.text('Welcome to Craftisan'), findsOneWidget);
+      expect(find.text('Continue with Apple'), findsNothing);
+      expect(
+        find.bySemanticsLabel(
+          'Handcrafted ceramics, woven baskets and handmade decorations',
+        ),
+        findsOneWidget,
+      );
+      if (size == const Size(390, 844)) {
+        expect(find.text('Sign In').hitTestable(), findsOneWidget);
+        expect(find.text('Continue with Google').hitTestable(), findsOneWidget);
+      }
+      tester.platformDispatcher.textScaleFactorTestValue = 2;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
       tester.view.viewInsets = const FakeViewPadding(bottom: 250);
       addTearDown(tester.view.resetViewInsets);
       await tester.pumpAndSettle();
-      await tester.ensureVisible(find.text('Sign In to Collection'));
-      await tester.tap(find.text('Sign In to Collection'));
+      await tester.ensureVisible(find.text('Sign In'));
+      await tester.tap(find.text('Sign In'));
       await tester.pumpAndSettle();
       expect(find.text('Enter your email address.'), findsOneWidget);
       expect(find.text('Enter your password.'), findsOneWidget);

@@ -1,3 +1,5 @@
+import 'package:artisan_marketplace/shared/widgets/craftisan_dialog.dart';
+
 import 'craftisan_home_hero.dart';
 
 import 'dart:async';
@@ -23,6 +25,8 @@ import 'buyer_demo.dart';
 import 'buyer_order_problems.dart';
 import 'buyer_orders_screens.dart';
 import 'collector_profile_header.dart';
+import 'collector_profile_sections.dart';
+import '../auth/services/auth_session.dart';
 import '../../shared/data/profile_repository.dart';
 import 'rotating_product_banner.dart';
 import 'services/buyer_notifications.dart';
@@ -1077,23 +1081,44 @@ class _BuyerPage extends StatelessWidget {
     data: _buyerTheme(context),
     child: Builder(
       builder: (context) => Scaffold(
-        backgroundColor: _cream,
+        backgroundColor: tab == 4 ? const Color(0xFFF8F5F1) : _cream,
         appBar: AppBar(
-          backgroundColor: _cream,
+          backgroundColor: tab == 4 ? const Color(0xFFF8F5F1) : _cream,
           surfaceTintColor: Colors.transparent,
           automaticallyImplyLeading: tab != 0,
           leading: tab == 0
               ? null
               : BackButton(onPressed: () => Navigator.maybePop(context)),
           centerTitle: tab != 0,
-          title: Text(
-            title,
-            style: TextStyle(
-              fontSize: tab == 0 ? 30 : 20,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -.6,
-            ),
-          ),
+          title: tab == 4
+              ? Column(
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      'CRAFTISAN',
+                      style: TextStyle(
+                        fontSize: 9,
+                        letterSpacing: 3,
+                        color: collectorClay,
+                      ),
+                    ),
+                  ],
+                )
+              : Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: tab == 0 ? 30 : 20,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -.6,
+                  ),
+                ),
           actions: [
             IconButton(
               tooltip: 'Cart',
@@ -1418,6 +1443,8 @@ class _ProductCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   product.priceLabel(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 18,
@@ -2140,9 +2167,12 @@ class BuyerArtisanProfile extends StatelessWidget {
   final DemoProduct avatarProduct;
 
   @override
-  Widget build(BuildContext context) => MarketplaceBackend.enabled
+  Widget build(BuildContext context) => demo.repository != null
       ? StreamBuilder(
-          stream: CommunityRepository().reviews(avatarProduct.artisan),
+          stream: CommunityRepository(
+            firestore: demo.repository!.db,
+            auth: demo.repository!.auth,
+          ).reviews(avatarProduct.artisan),
           builder: (context, snapshot) {
             if (snapshot.hasError) {
               return _BuyerPage(
@@ -2163,8 +2193,18 @@ class BuyerArtisanProfile extends StatelessWidget {
                 )
                 .toList();
             return StreamBuilder(
-              stream: CommunityRepository().profile(avatarProduct.artisan),
+              stream: CommunityRepository(
+                firestore: demo.repository!.db,
+                auth: demo.repository!.auth,
+              ).profile(avatarProduct.artisan),
               builder: (context, profile) {
+                if (profile.hasError) {
+                  return _BuyerPage(
+                    demo: demo,
+                    title: 'Artisan Profile',
+                    children: [Text(marketplaceError(profile.error!))],
+                  );
+                }
                 final data = profile.data?.data() ?? {};
                 return _content(
                   context,
@@ -2195,7 +2235,10 @@ class BuyerArtisanProfile extends StatelessWidget {
   ) => ListenableBuilder(
     listenable: demo,
     builder: (context, _) {
-      final following = demo.followedArtisans.contains(artisan.name);
+      final artisanId = avatarProduct.artisan;
+      final following = demo.followedArtisans.contains(artisanId);
+      final followBusy =
+          demo.followsLoading || demo.followingWrites.contains(artisanId);
       final products = demo.products
           .where((product) => product.artisan == artisan.name)
           .toList();
@@ -2255,7 +2298,16 @@ class BuyerArtisanProfile extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: () => demo.followArtisan(artisan),
+            onPressed:
+                followBusy || (demo.isSignedIn && demo.followError != null)
+                ? null
+                : () {
+                    if (!demo.isSignedIn) {
+                      _signIn(context);
+                      return;
+                    }
+                    demo.followArtisan(artisan, artisanId: artisanId);
+                  },
             style: FilledButton.styleFrom(
               backgroundColor: following
                   ? AppColors.surface
@@ -2263,14 +2315,42 @@ class BuyerArtisanProfile extends StatelessWidget {
               foregroundColor: following ? AppColors.terracotta : Colors.white,
               minimumSize: const Size(180, 48),
             ),
-            icon: Icon(following ? Icons.check : Icons.add),
-            label: Text(following ? 'Following' : 'Follow Artisan'),
+            icon: followBusy
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(following ? Icons.check : Icons.add),
+            label: Text(
+              followBusy
+                  ? 'Please wait...'
+                  : following
+                  ? 'Following'
+                  : 'Follow Artisan',
+            ),
           ),
+          if (demo.followError != null) ...[
+            Text(
+              demo.followError!,
+              style: const TextStyle(color: AppColors.terracotta),
+            ),
+            TextButton(
+              onPressed: demo.retryFollows,
+              child: const Text('Retry follow status'),
+            ),
+          ],
           TextButton.icon(
             onPressed: () => _open(
               context,
               CraftisanConversationScreen(
                 artisanId: avatarProduct.artisan,
+                repository: demo.repository == null
+                    ? null
+                    : CommunityRepository(
+                        firestore: demo.repository!.db,
+                        auth: demo.repository!.auth,
+                      ),
                 viewer: DemoMessageAuthor.buyer,
               ),
             ),
@@ -3162,89 +3242,172 @@ class _SavedProductRowState extends State<_SavedProductRow> {
 class BuyerProfile extends StatelessWidget {
   const BuyerProfile({super.key, required this.demo});
   final BuyerDemo demo;
+
+  void _orders(BuildContext context) => _open(
+    context,
+    BuyerOrdersScreen(
+      demo: demo,
+      onDestinationSelected: (index) {
+        switch (index) {
+          case 0:
+            Navigator.of(context).popUntil(
+              (route) =>
+                  route.settings.name == RouteNames.marketplace ||
+                  route.isFirst,
+            );
+          case 1:
+            _open(context, BuyerSearch(demo: demo));
+          case 2:
+            _open(context, BuyerFavorites(demo: demo));
+          case 3:
+            _open(context, BuyerCart(demo: demo));
+          case 4:
+            Navigator.maybePop(context);
+        }
+      },
+    ),
+  );
+
+  Future<void> _logout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => CraftisanDialog(
+        icon: Icons.logout_rounded,
+        title: const Text('Log out of Craftisan?'),
+        content: const Text(
+          'Your saved pieces and orders will be here when you return.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Log Out'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && context.mounted) await AuthSession.logout(context);
+  }
+
   @override
-  Widget build(BuildContext context) => _BuyerPage(
-    demo: demo,
-    title: 'Collector Profile',
-    requiresLogin: true,
-    tab: 4,
-    children: [
-      CollectorProfileHeader(
-        repository: demo.repository == null
-            ? null
-            : ProfileRepository(
-                firestore: demo.repository!.db,
-                auth: demo.repository!.auth,
-              ),
-      ),
-      const SizedBox(height: 20),
-      const _Heading('Collector Hub'),
-      _Panel(
-        child: Column(
-          children: [
-            ListTile(
-              leading: const Icon(Icons.favorite_outline),
-              title: const Text('Saved pieces'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _open(context, BuyerFavorites(demo: demo)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.shopping_bag_outlined),
-              title: const Text('My bag'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _open(context, BuyerCart(demo: demo)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.receipt_long_outlined),
-              title: const Text('My Orders'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _open(
-                context,
-                BuyerOrdersScreen(
-                  demo: demo,
-                  onDestinationSelected: (index) {
-                    switch (index) {
-                      case 0:
-                        Navigator.of(context).popUntil(
-                          (route) =>
-                              route.settings.name == RouteNames.marketplace ||
-                              route.isFirst,
-                        );
-                      case 1:
-                        _open(context, BuyerSearch(demo: demo));
-                      case 2:
-                        _open(context, BuyerFavorites(demo: demo));
-                      case 3:
-                        _open(context, BuyerCart(demo: demo));
-                      case 4:
-                        Navigator.maybePop(context);
-                    }
-                  },
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: demo,
+    builder: (context, _) {
+      final repository = demo.repository == null
+          ? null
+          : ProfileRepository(
+              firestore: demo.repository!.db,
+              auth: demo.repository!.auth,
+            );
+      final actions = [
+        CollectorAction(
+          'Saved Pieces',
+          Icons.favorite_border,
+          () => _open(context, BuyerFavorites(demo: demo)),
+        ),
+        CollectorAction(
+          'My Bag',
+          Icons.shopping_bag_outlined,
+          () => _open(context, BuyerCart(demo: demo)),
+          color: collectorTeal,
+        ),
+        CollectorAction(
+          'My Orders',
+          Icons.inventory_2_outlined,
+          () => _orders(context),
+        ),
+        CollectorAction(
+          'Addresses',
+          Icons.location_on_outlined,
+          () => _open(context, BuyerCheckout(demo: demo, addressesOnly: true)),
+          color: const Color(0xFF8B611E),
+        ),
+      ];
+      return _BuyerPage(
+        demo: demo,
+        title: 'Collector Profile',
+        requiresLogin: true,
+        tab: 4,
+        children: [
+          CollectorProfileHeader(repository: repository),
+          const SizedBox(height: 16),
+          CollectorStatistics(
+            saved: demo.savedPieceCount,
+            bag: demo.bagItemCount,
+            orders: demo.orders.length,
+            bagLoading: demo.cartLoading,
+            actions: actions,
+          ),
+          const SizedBox(height: 24),
+          const _Heading('Quick Actions'),
+          const SizedBox(height: 12),
+          CollectorQuickActions(actions: actions),
+          const SizedBox(height: 24),
+          const _Heading('Account Settings'),
+          const SizedBox(height: 12),
+          CollectorSettings(
+            actions: [
+              if (repository != null)
+                CollectorAction(
+                  'Profile Information',
+                  Icons.person_outline,
+                  () => openCollectorProfileEditor(context, repository),
+                  color: collectorTeal,
+                  showProgress: true,
                 ),
+              CollectorAction(
+                'Manage Addresses',
+                Icons.location_on_outlined,
+                actions[3].onTap,
               ),
+              CollectorAction(
+                'Notifications',
+                Icons.notifications_outlined,
+                () => _open(context, _BuyerNotificationsScreen(demo: demo)),
+              ),
+              CollectorAction(
+                'Discover makers and pieces',
+                Icons.explore_outlined,
+                () => _open(context, BuyerSearch(demo: demo)),
+                color: collectorTeal,
+              ),
+              if (demo.isSignedIn)
+                CollectorAction(
+                  'Log Out',
+                  Icons.logout,
+                  () => _logout(context),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'A collection with meaning. Support independent makers and discover the story behind every piece.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.6,
+              color: Color(0xFF676760),
             ),
-            ListTile(
-              leading: const Icon(Icons.explore_outlined),
-              title: const Text('Discover makers and pieces'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _open(context, BuyerSearch(demo: demo)),
-            ),
-          ],
-        ),
-      ),
-      const _Panel(
-        child: Text(
-          'A collection with meaning\nSupport independent makers and discover the story behind every piece.',
-        ),
-      ),
-    ],
+          ),
+        ],
+      );
+    },
   );
 }
 
 class BuyerCheckout extends StatefulWidget {
-  const BuyerCheckout({super.key, required this.demo, this.step = 0});
+  const BuyerCheckout({
+    super.key,
+    required this.demo,
+    this.step = 0,
+    this.addressesOnly = false,
+  });
   final BuyerDemo demo;
   final int step;
+  final bool addressesOnly;
   @override
   State<BuyerCheckout> createState() => _BuyerCheckoutState();
 }
@@ -3404,12 +3567,86 @@ class _BuyerCheckoutState extends State<BuyerCheckout> {
     }
   }
 
+  List<Widget> _savedAddresses(BuyerDemo d) => [
+    if (d.addressesLoading) const Center(child: CircularProgressIndicator()),
+    if (d.addressError != null) _Panel(child: Text(d.addressError!)),
+    if (!d.addressesLoading && d.addressError == null && d.addresses.isEmpty)
+      const _Panel(child: Text('No saved addresses yet.')),
+    for (final address in d.addresses)
+      _SelectionPanel(
+        selected: address['id'] == d.selectedAddressId,
+        onTap: () => d.selectAddress(address),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  address['id'] == d.selectedAddressId
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
+                  color: _clay,
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: () => editAddress(address),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text('Edit'),
+                ),
+              ],
+            ),
+            Text(
+              address['name'] as String,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${address['address']}\n${address['city']}, ${address['postalCode']}\n${address['country']}',
+              style: const TextStyle(fontSize: 16, height: 1.4),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.phone_outlined, size: 20),
+                const SizedBox(width: 8),
+                Expanded(child: Text(address['phone'] as String)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    _Panel(
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.add),
+        title: const Text('Add a new address'),
+        onTap: d.repository == null ? null : () => editAddress(),
+      ),
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: widget.demo,
     builder: (context, _) {
       final d = widget.demo;
       final step = widget.step;
+      if (widget.addressesOnly) {
+        return _BuyerPage(
+          demo: d,
+          title: 'Delivery Addresses',
+          requiresLogin: true,
+          children: [
+            const Text(
+              'A special piece deserves the right destination.',
+              style: TextStyle(color: Color(0xFF676760)),
+            ),
+            const SizedBox(height: 16),
+            ..._savedAddresses(d),
+          ],
+        );
+      }
+
       return _BuyerPage(
         demo: d,
         title: 'Checkout',
@@ -3518,67 +3755,7 @@ class _BuyerCheckoutState extends State<BuyerCheckout> {
               child: Text('Your bag is empty. Add a piece before continuing.'),
             ),
           if (step == 0) ...[
-            if (d.addressesLoading)
-              const Center(child: CircularProgressIndicator()),
-            if (d.addressError != null) _Panel(child: Text(d.addressError!)),
-            if (!d.addressesLoading &&
-                d.addressError == null &&
-                d.addresses.isEmpty)
-              const _Panel(child: Text('No saved addresses yet.')),
-            for (final address in d.addresses)
-              _SelectionPanel(
-                selected: address['id'] == d.selectedAddressId,
-                onTap: () => d.selectAddress(address),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          address['id'] == d.selectedAddressId
-                              ? Icons.radio_button_checked
-                              : Icons.radio_button_off,
-                          color: _clay,
-                        ),
-                        const Spacer(),
-                        TextButton.icon(
-                          onPressed: () => editAddress(address),
-                          icon: const Icon(Icons.edit_outlined, size: 18),
-                          label: const Text('Edit'),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      address['name'] as String,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${address['address']}\n${address['city']}, ${address['postalCode']}\n${address['country']}',
-                      style: const TextStyle(fontSize: 16, height: 1.4),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        const Icon(Icons.phone_outlined, size: 20),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(address['phone'] as String)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            _Panel(
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.add),
-                title: const Text('Add a new address'),
-                onTap: d.repository == null ? null : () => editAddress(),
-              ),
-            ),
+            ..._savedAddresses(d),
             const SizedBox(height: 8),
             const _Heading('Delivery method'),
             _SelectionPanel(

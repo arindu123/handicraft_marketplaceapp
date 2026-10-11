@@ -4,6 +4,8 @@ import 'package:artisan_marketplace/features/admin/models/admin_demo_store.dart'
 import 'package:artisan_marketplace/features/admin/screens/admin_dashboard_screen.dart';
 import 'package:artisan_marketplace/features/admin/screens/admin_management_screen.dart';
 
+import 'helpers/admin_test_store.dart';
+
 void main() {
   Future<void> tap(WidgetTester t, String label) async {
     final f = find.text(label);
@@ -31,7 +33,9 @@ void main() {
     (t) async {
       await t.binding.setSurfaceSize(const Size(360, 740));
       addTearDown(() => t.binding.setSurfaceSize(null));
-      await t.pumpWidget(const MaterialApp(home: AdminDashboardScreen()));
+      await t.pumpWidget(
+        MaterialApp(home: AdminDashboardScreen(store: adminTestStore())),
+      );
       await t.pumpAndSettle();
       await tap(t, 'More');
       await tap(t, 'Users & artisans');
@@ -40,7 +44,7 @@ void main() {
       await tap(t, 'Review Profile');
       expect(find.text('Clay House'), findsNWidgets(2));
       expect(find.text('Nugegoda'), findsOneWidget);
-      expect(find.text('2 products in demo catalogue'), findsOneWidget);
+      expect(find.text('2 products in catalogue'), findsOneWidget);
       expect(find.text('Verification status'), findsOneWidget);
       expect(find.text('Account status'), findsOneWidget);
       await tap(t, 'Verify artisan');
@@ -50,10 +54,10 @@ void main() {
       await tap(t, 'Confirm');
       expect(find.text('Approved'), findsOneWidget);
       expect(find.text('Verify artisan'), findsNothing);
-      await tap(t, 'Pause in demo');
+      await tap(t, 'Pause');
       await tap(t, 'Confirm');
       expect(find.text('Paused'), findsOneWidget);
-      await tap(t, 'Reactivate in demo');
+      await tap(t, 'Reactivate');
       await tap(t, 'Confirm');
       await tap(t, 'Back to Users');
       expect(
@@ -73,7 +77,7 @@ void main() {
   testWidgets(
     'Non-artisans have no review action; approved applicant retains verification',
     (t) async {
-      final store = AdminDemoStore();
+      final store = adminTestStore();
       addTearDown(store.dispose);
       store.users.addAll([
         AdminDirectoryItem('Demo Courier', 'Courier · Colombo'),

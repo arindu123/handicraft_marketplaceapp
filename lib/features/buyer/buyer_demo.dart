@@ -332,6 +332,12 @@ class BuyerDemo extends ChangeNotifier {
         } catch (error) { _failed(error); }
       }, onError: _failed));
       _subscriptions.add(
+        repository!.auth.authStateChanges().listen((_) {
+          _loadFollows();
+        }),
+      );
+      _loadFollows();
+      _subscriptions.add(
         repository!.products().listen(
           (rows) {
             loading = false;
@@ -432,10 +438,10 @@ class BuyerDemo extends ChangeNotifier {
                         .toList()
                       ..sort(
                         (a, b) =>
-                            (b['createdAt']?.toDate() as DateTime? ??
+                            (canonical.documentDate(b['createdAt']) ??
                                     DateTime(1970))
                                 .compareTo(
-                                  a['createdAt']?.toDate() as DateTime? ??
+                                  canonical.documentDate(a['createdAt']) ??
                                       DateTime(1970),
                                 ),
                       );
@@ -606,6 +612,7 @@ class BuyerDemo extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    unawaited(_followSubscription?.cancel());
     for (final subscription in _subscriptions) {
       subscription.cancel();
     }
@@ -614,7 +621,57 @@ class BuyerDemo extends ChangeNotifier {
 
   final Map<DemoProduct, int> cart = {};
   final Set<DemoProduct> favorites = {};
-  final Set<String> followedArtisans = {};
+  int get savedPieceCount =>
+      repository == null ? favorites.length : _favoriteIds.length;
+  int get bagItemCount => (repository == null ? cart.values : _cartIds.values)
+      .fold(0, (sum, quantity) => sum + quantity);
+
+  final Set<String> _followedArtisans = {};
+  Set<String> get followedArtisans => Set.unmodifiable(_followedArtisans);
+  bool followsLoading = false;
+  String? followError;
+  final Set<String> followingWrites = {};
+  StreamSubscription<Set<String>>? _followSubscription;
+  String? _followBuyer;
+
+  void _loadFollows() {
+    if (_disposed) return;
+    final buyer = isSignedIn ? repository!.uid : null;
+    if (buyer == _followBuyer && _followSubscription != null) return;
+    _followBuyer = buyer;
+    unawaited(_followSubscription?.cancel());
+    _followSubscription = null;
+    _followedArtisans.clear();
+    followingWrites.clear();
+    followError = null;
+    followsLoading = buyer != null;
+    if (buyer != null) {
+      _followSubscription = repository!.followedArtisans().listen(
+        (ids) {
+          if (_disposed || _followBuyer != buyer) return;
+          _followedArtisans
+            ..clear()
+            ..addAll(ids);
+          followsLoading = false;
+          followError = null;
+          notifyListeners();
+        },
+        onError: (Object e) {
+          if (_disposed || _followBuyer != buyer) return;
+          followsLoading = false;
+          followError = marketplaceError(e);
+          notifyListeners();
+        },
+      );
+    }
+    if (!_disposed) notifyListeners();
+  }
+
+  void retryFollows() {
+    _followBuyer = null;
+    _loadFollows();
+  }
+
   final List<BuyerDemoOrder> orders = [];
   String name = '';
   String address = '';
@@ -703,11 +760,45 @@ class BuyerDemo extends ChangeNotifier {
     selectAddress({...value, 'id': ref.id});
   }
 
-  void followArtisan(BuyerArtisan artisan) {
-    if (!followedArtisans.remove(artisan.name)) {
-      followedArtisans.add(artisan.name);
+  Future<void> followArtisan(
+    BuyerArtisan artisan, {
+    required String artisanId,
+  }) async {
+    if (_disposed) return;
+    if (!isSignedIn) {
+      followError = 'Please sign in to follow artisans.';
+      notifyListeners();
+      return;
     }
+    if (followsLoading ||
+        followError != null ||
+        followingWrites.contains(artisanId)) {
+      return;
+    }
+    final buyer = repository!.uid;
+    followingWrites.add(artisanId);
     notifyListeners();
+    try {
+      final selected = !followedArtisans.contains(artisanId);
+      await repository!.followArtisan(artisanId, selected);
+      if (_disposed || repository!.auth.currentUser?.uid != buyer) return;
+      // The live subscription remains authoritative for subsequent changes.
+      if (selected) {
+        _followedArtisans.add(artisanId);
+      } else {
+        _followedArtisans.remove(artisanId);
+      }
+      followError = null;
+    } catch (e) {
+      if (!_disposed && repository!.auth.currentUser?.uid == buyer) {
+        followError = marketplaceError(e);
+      }
+    } finally {
+      if (!_disposed && repository!.auth.currentUser?.uid == buyer) {
+        followingWrites.remove(artisanId);
+        notifyListeners();
+      }
+    }
   }
 
   void clearCart() {

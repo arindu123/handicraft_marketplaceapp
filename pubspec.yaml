@@ -64,6 +64,8 @@ dev_dependencies:
   firebase_core_platform_interface: any
   fake_cloud_firestore: ^4.3.0
   firebase_auth_mocks: ^0.15.2
+  integration_test:
+    sdk: flutter
 flutter:
 
   # The following line ensures that the Material Icons font is
@@ -77,6 +79,7 @@ flutter:
         - asset: lib/core/theme/cormorant_garamond.ttf
 
   assets:
+    - assets/images/onboarding/
     - assets/images/branding/craftisan_bag_icon.png
     - assets/images/branding/craftisan_marketplace_logo.png
     - assets/images/navigation/handicraft_atlas.png

@@ -125,9 +125,11 @@ class CraftisanConversationScreen extends StatefulWidget {
     required this.viewer,
     this.conversationId,
     this.artisanId,
+    this.repository,
   });
   final String? conversationId, artisanId;
   final DemoMessageAuthor viewer;
+  final CommunityRepository? repository;
 
   @override
   State<CraftisanConversationScreen> createState() =>
@@ -137,6 +139,8 @@ class CraftisanConversationScreen extends StatefulWidget {
 class _CraftisanConversationScreenState
     extends State<CraftisanConversationScreen> {
   final controller = TextEditingController();
+  late final _repository = widget.repository ?? CommunityRepository();
+  bool get _backend => widget.repository != null || MarketplaceBackend.enabled;
   StreamSubscription? subscription;
   String? conversationId;
   String? error;
@@ -145,12 +149,12 @@ class _CraftisanConversationScreenState
   @override
   void initState() {
     super.initState();
-    if (MarketplaceBackend.enabled) _load();
+    if (_backend) _load();
   }
 
   Future<void> _load() async {
     try {
-      final repo = CommunityRepository();
+      final repo = _repository;
       conversationId =
           widget.conversationId ??
           (widget.artisanId == null
@@ -195,11 +199,11 @@ class _CraftisanConversationScreenState
   }
 
   Future<void> _send() async {
-    if (MarketplaceBackend.enabled) {
+    if (_backend) {
       if (sending || conversationId == null) return;
       sending = true;
       try {
-        await CommunityRepository().send(conversationId!, controller.text);
+        await _repository.send(conversationId!, controller.text);
         if (mounted) controller.clear();
       } catch (e) {
         if (mounted) {
@@ -217,12 +221,12 @@ class _CraftisanConversationScreenState
 
   @override
   Widget build(BuildContext context) {
-    final participant = MarketplaceBackend.enabled
+    final participant = _backend
         ? (widget.artisanId ?? 'Conversation')
         : widget.viewer == DemoMessageAuthor.buyer
         ? 'Elena Rostova'
         : 'Clara Lindqvist';
-    final subtitle = MarketplaceBackend.enabled
+    final subtitle = _backend
         ? 'Craftisan'
         : widget.viewer == DemoMessageAuthor.buyer
         ? 'Oaxaca Traditional Atelier'
@@ -249,12 +253,12 @@ class _CraftisanConversationScreenState
               animation: craftisanDemoMessages,
               builder: (context, _) => ListView.separated(
                 padding: const EdgeInsets.all(20),
-                itemCount: MarketplaceBackend.enabled
+                itemCount: _backend
                     ? messages.length
                     : craftisanDemoMessages.messages.length,
                 separatorBuilder: (_, _) => const SizedBox(height: 12),
                 itemBuilder: (context, index) {
-                  final message = MarketplaceBackend.enabled
+                  final message = _backend
                       ? messages[index]
                       : (
                           text: craftisanDemoMessages.messages[index].text,

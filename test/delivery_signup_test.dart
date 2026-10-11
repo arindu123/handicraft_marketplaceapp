@@ -4,9 +4,12 @@ import 'package:artisan_marketplace/features/auth/models/marketplace_role.dart';
 import 'package:artisan_marketplace/features/delivery/screens/delivery_login_screen.dart';
 import 'package:artisan_marketplace/routes/route_names.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' show FieldValue;
+// ignore: depend_on_referenced_packages
 import 'package:cloud_firestore_platform_interface/cloud_firestore_platform_interface.dart';
+// ignore: depend_on_referenced_packages
 import 'package:firebase_auth_platform_interface/firebase_auth_platform_interface.dart';
 import 'package:firebase_core/firebase_core.dart';
+// ignore: depend_on_referenced_packages
 import 'package:firebase_core_platform_interface/test.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -60,6 +63,14 @@ void main() {
       ' potter@example.com ',
     );
     await tester.enterText(find.byType(TextFormField).at(2), ' password123 ');
+    await tester.enterText(find.byType(TextFormField).at(3), '0771234567');
+    await tester.enterText(find.byType(TextFormField).at(4), ' Colombo ');
+    final vehicle = find.byType(DropdownButtonFormField<String>);
+    await tester.ensureVisible(vehicle);
+    await tester.tap(vehicle);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bike').last);
+    await tester.pumpAndSettle();
   }
 
   testWidgets(
@@ -80,6 +91,9 @@ void main() {
         'displayName': 'Courier Name',
         'role': 'courier',
         'courierApproval': 'pending',
+        'phone': '0771234567',
+        'area': 'Colombo',
+        'vehicleType': 'Bike',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });

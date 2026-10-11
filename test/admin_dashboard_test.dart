@@ -10,7 +10,20 @@ import 'package:artisan_marketplace/core/theme/app_theme.dart';
 import 'helpers/admin_test_store.dart';
 
 Future<void> tapText(WidgetTester tester, String text) async {
-  final target = find.text(text).first;
+  final matches = find.text(text);
+  if (matches.evaluate().isEmpty) {
+    await tester.scrollUntilVisible(
+      matches,
+      200,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
+  }
+  final target = matches.first;
   await tester.ensureVisible(target);
   await tester.pumpAndSettle();
   await tester.tap(target);
@@ -98,6 +111,16 @@ void main() {
     await tapText(tester, 'Orders');
     await tester.enterText(find.byType(TextField), 'no-such-order');
     await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('No matching orders. Try another search or status.'),
+      150,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     expect(
       find.text('No matching orders. Try another search or status.'),
       findsOneWidget,

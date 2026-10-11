@@ -12,6 +12,7 @@ import 'craftisan_mark.dart';
 import '../models/marketplace_role.dart';
 import '../services/auth_session.dart';
 import '../../buyer/buyer_login_view.dart';
+import '../../admin/widgets/admin_login_hero.dart';
 
 class AuthForm extends StatefulWidget {
   const AuthForm({super.key, required this.isSignUp});
@@ -292,68 +293,72 @@ class _AuthFormState extends State<AuthForm> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Center(
-                              child: Container(
-                                width: 64,
-                                height: 64,
-                                alignment: Alignment.center,
-                                decoration: const BoxDecoration(
-                                  color: AppColors.surface,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const CraftisanMark(size: 38),
-                              ),
-                            ),
-                            const SizedBox(height: 14),
-                            Text(
-                              _admin
-                                  ? 'MARKETPLACE CURATOR · GUILD EDITION'
-                                  : _artisan
-                                  ? 'ARTISAN POTTER · GUILD EDITION'
-                                  : 'THOUGHTFUL COLLECTOR · GUILD EDITION',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                letterSpacing: 1,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF91620E),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              signUp
-                                  ? 'Begin your Craftisan story'
-                                  : 'Welcome back to Craftisan',
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.headlineLarge
-                                  ?.copyWith(
-                                    fontSize: 32,
-                                    fontWeight: FontWeight.w600,
-                                    letterSpacing: -0.6,
+                            if (_admin)
+                              AdminLoginHero(isSignUp: signUp)
+                            else ...[
+                              Center(
+                                child: Container(
+                                  width: 64,
+                                  height: 64,
+                                  alignment: Alignment.center,
+                                  decoration: const BoxDecoration(
+                                    color: AppColors.surface,
+                                    shape: BoxShape.circle,
                                   ),
-                            ),
-                            const SizedBox(height: 10),
-                            Text(
-                              _admin
-                                  ? (signUp
-                                        ? 'Create your curator profile. Administrative access requires approval.'
-                                        : 'Sign in to your approved marketplace administration account.')
-                                  : signUp
-                                  ? (_artisan
-                                        ? 'Create your studio account and share your craft with thoughtful collectors.'
-                                        : 'Find pieces with a story. Create an account and begin your collection.')
-                                  : (_artisan
-                                        ? 'Continue your studio journey, manage creations, or discover handcrafted pieces.'
-                                        : 'Return to your collection and discover the makers behind your favourite pieces.'),
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodyLarge
-                                  ?.copyWith(fontSize: 14, height: 1.4),
-                            ),
-                            const SizedBox(height: 24),
+                                  child: const CraftisanMark(size: 38),
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              Text(
+                                _admin
+                                    ? 'MARKETPLACE CURATOR · GUILD EDITION'
+                                    : _artisan
+                                    ? 'ARTISAN POTTER · GUILD EDITION'
+                                    : 'THOUGHTFUL COLLECTOR · GUILD EDITION',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  letterSpacing: 1,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF91620E),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                signUp
+                                    ? 'Begin your Craftisan story'
+                                    : 'Welcome back to Craftisan',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.headlineLarge
+                                    ?.copyWith(
+                                      fontSize: 32,
+                                      fontWeight: FontWeight.w600,
+                                      letterSpacing: -0.6,
+                                    ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                _admin
+                                    ? (signUp
+                                          ? 'Create your curator profile. Administrative access requires approval.'
+                                          : 'Sign in to your approved marketplace administration account.')
+                                    : signUp
+                                    ? (_artisan
+                                          ? 'Create your studio account and share your craft with thoughtful collectors.'
+                                          : 'Find pieces with a story. Create an account and begin your collection.')
+                                    : (_artisan
+                                          ? 'Continue your studio journey, manage creations, or discover handcrafted pieces.'
+                                          : 'Return to your collection and discover the makers behind your favourite pieces.'),
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.bodyLarge
+                                    ?.copyWith(fontSize: 14, height: 1.4),
+                              ),
+                            ],
+                            SizedBox(height: _admin ? 16 : 24),
                             Container(
-                              padding: const EdgeInsets.symmetric(
+                              padding: EdgeInsets.symmetric(
                                 horizontal: 18,
-                                vertical: 14,
+                                vertical: _admin ? 10 : 14,
                               ),
                               decoration: BoxDecoration(
                                 color: const Color(0xFFEFEEEB),
@@ -386,9 +391,9 @@ class _AuthFormState extends State<AuthForm> {
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 24),
+                            SizedBox(height: _admin ? 16 : 24),
                             Container(
-                              padding: const EdgeInsets.all(20),
+                              padding: EdgeInsets.all(_admin ? 16 : 20),
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(18),
@@ -477,6 +482,45 @@ class _AuthFormState extends State<AuthForm> {
                                             ? 'Passwords do not match.'
                                             : null;
                                       },
+                                    ),
+                                  ] else if (_admin) ...[
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      alignment: WrapAlignment.spaceBetween,
+                                      crossAxisAlignment:
+                                          WrapCrossAlignment.center,
+                                      children: [
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Checkbox(
+                                              value: _remember,
+                                              onChanged: (value) => setState(
+                                                () =>
+                                                    _remember = value ?? false,
+                                              ),
+                                              activeColor: AppColors.terracotta,
+                                            ),
+                                            const Text(
+                                              'Remember this device',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: AppColors.muted,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        TextButton(
+                                          onPressed: () => Navigator.pushNamed(
+                                            context,
+                                            RouteNames.passwordResetRequest,
+                                          ),
+                                          child: const Text(
+                                            'Forgot password?',
+                                            style: TextStyle(fontSize: 12),
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ] else ...[
                                     Align(
@@ -580,15 +624,22 @@ class _AuthFormState extends State<AuthForm> {
                               ],
                             ),
                             const SizedBox(height: 16),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: _socialButton('Apple', Icons.apple),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(child: _socialButton('Google', null)),
-                              ],
-                            ),
+                            if (_admin) ...[
+                              _adminSocialButton('Google'),
+                              const SizedBox(height: 10),
+                              _adminSocialButton('Apple'),
+                            ] else
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _socialButton('Apple', Icons.apple),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _socialButton('Google', null),
+                                  ),
+                                ],
+                              ),
                             const SizedBox(height: 20),
                             Container(
                               padding: const EdgeInsets.all(16),
@@ -713,6 +764,40 @@ class _AuthFormState extends State<AuthForm> {
         Flexible(
           child: Text(provider == 'Google' ? 'Continue with Google' : provider),
         ),
+      ],
+    ),
+  );
+
+  Widget _adminSocialButton(String provider) => OutlinedButton(
+    onPressed: _submitting ? null : () => _socialSignIn(provider),
+    style: OutlinedButton.styleFrom(
+      backgroundColor: Colors.white,
+      foregroundColor: const Color(0xFF1F1F1F),
+      side: const BorderSide(color: Color(0xFFDADCE0)),
+      minimumSize: const Size(48, 52),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    ),
+    child: Row(
+      children: [
+        ExcludeSemantics(
+          child: provider == 'Google'
+              ? Image.asset(
+                  'lib/features/auth/widgets/google_logo.png',
+                  width: 22,
+                  height: 22,
+                )
+              : const Icon(Icons.apple, color: Colors.black, size: 25),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Text(
+            'Continue with $provider',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          ),
+        ),
+        const SizedBox(width: 22),
       ],
     ),
   );

@@ -78,6 +78,35 @@ void main() {
     expect((await repo.watch().first).containsKey('photoUrl'), isFalse);
   });
 
+  test('Courier phone edits persist to private and public profiles without changing identity', () async {
+    await repo.save(
+      displayName: 'Pasindu',
+      area: 'Colombo',
+      phone: ' +94 77 123 4567 ',
+    );
+    final profile = (await db.doc('users/pasindu').get()).data()!;
+    expect(profile['phone'], '+94 77 123 4567');
+    expect(profile['email'], 'pasindu@example.com');
+    expect(profile['role'], 'courier');
+    expect(
+      (await db.doc('courierPublicProfiles/pasindu').get()).data()?['phone'],
+      '+94 77 123 4567',
+    );
+    await expectLater(
+      repo.save(displayName: 'Pasindu', area: 'Colombo', phone: 'invalid'),
+      throwsA(isA<MarketplaceFailure>()),
+    );
+    expect(
+      (await db.doc('users/pasindu').get()).data()?['phone'],
+      '+94 77 123 4567',
+    );
+    await repo.save(displayName: 'Pasindu', area: 'Kandy');
+    expect(
+      (await db.doc('courierPublicProfiles/pasindu').get()).data()?['phone'],
+      '+94 77 123 4567',
+    );
+  });
+
   test('Courier availability persists and rejects other roles', () async {
     await repo.setDeliveryAvailability(true);
     final online = await repo.watch().firstWhere(
@@ -152,10 +181,23 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('PK'), findsOneWidget);
     expect(find.byTooltip('Choose profile photo'), findsOneWidget);
-    await tester.scrollUntilVisible(find.text('Full name'), 150,
-      scrollable: find.byType(Scrollable).first);
+    await tester.scrollUntilVisible(
+      find.text('Full name'),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Pasindu Kavishka'), findsOneWidget);
     await tester.enterText(find.byType(TextFormField).first, 'Pasindu Updated');
+    final phone = find.descendant(
+      of: find.widgetWithText(DeliveryProfileField, 'Mobile number'),
+      matching: find.byType(TextFormField),
+    );
+    await tester.scrollUntilVisible(
+      find.text('Mobile number'),
+      150,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.enterText(phone, '0771234567');
     await tester.scrollUntilVisible(
       find.text('Delivery area'),
       150,
@@ -175,5 +217,6 @@ void main() {
     final saved = await tester.runAsync(() => repo.watch().first);
     expect(saved!['displayName'], 'Pasindu Updated');
     expect(saved['area'], 'Kandy');
+    expect(saved['phone'], '0771234567');
   });
 }

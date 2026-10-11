@@ -81,6 +81,12 @@ class _DeliveryProfileEditorState extends State<DeliveryProfileEditor> {
   late final _area = TextEditingController(
     text: widget.profile['area'] as String? ?? '',
   );
+  late final _phone = TextEditingController(
+    text:
+        widget.profile['phone'] as String? ??
+        widget.repository.auth.currentUser?.phoneNumber ??
+        '',
+  );
   Uint8List? _photo;
   bool _busy = false;
   String? _error;
@@ -89,6 +95,7 @@ class _DeliveryProfileEditorState extends State<DeliveryProfileEditor> {
   void dispose() {
     _name.dispose();
     _area.dispose();
+    _phone.dispose();
     super.dispose();
   }
 
@@ -128,6 +135,7 @@ class _DeliveryProfileEditorState extends State<DeliveryProfileEditor> {
       await widget.repository.save(
         displayName: _name.text,
         area: _area.text,
+        phone: _phone.text,
         photo: _photo,
       );
       if (mounted) Navigator.pop(context, true);
@@ -200,11 +208,11 @@ class _DeliveryProfileEditorState extends State<DeliveryProfileEditor> {
                     DeliveryProfileField(
                       label: 'Mobile number',
                       icon: Icons.phone_outlined,
-                      value:
-                          widget.profile['phone'] as String? ??
-                          widget.repository.auth.currentUser?.phoneNumber ??
-                          '',
-                      readOnly: true,
+                      controller: _phone,
+                      enabled: !_busy,
+                      keyboardType: TextInputType.phone,
+                      maxLength: 40,
+                      validator: ProfileRepository.validatePhone,
                     ),
                     DeliveryProfileField(
                       label: 'Delivery area',

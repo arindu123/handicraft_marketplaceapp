@@ -10,6 +10,7 @@ import 'auth_screen_test.dart' show TestAuth;
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:artisan_marketplace/core/theme/app_theme.dart';
+import 'package:artisan_marketplace/features/auth/screens/password_reset_screens.dart';
 import 'package:artisan_marketplace/routes/app_routes.dart';
 import 'package:artisan_marketplace/routes/route_names.dart';
 
@@ -48,7 +49,7 @@ void main() {
       find.text('Check your internet connection and try again.'),
       findsOneWidget,
     );
-    expect(find.text('Check Your Email'), findsNothing);
+    expect(find.text('CHECK YOUR EMAIL'), findsNothing);
     expect(auth.resetEmails, isEmpty);
   });
 
@@ -84,10 +85,49 @@ void main() {
       );
       await tap(tester, 'Send Reset Email');
       expect(auth.resetEmails, ['collector@example.com']);
-      expect(find.text('Check Your Email'), findsOneWidget);
+      expect(find.text('CHECK YOUR EMAIL'), findsOneWidget);
       expect(find.text('Password Reset Successful!'), findsNothing);
+      expect(find.text('collector@example.com'), findsOneWidget);
+      expect(find.text('Try Again in 30s'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 30));
+      await tap(tester, 'Try Again');
+      expect(auth.resetEmails, [
+        'collector@example.com',
+        'collector@example.com',
+      ]);
+      expect(find.textContaining('Request accepted.'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 30));
+      auth.errorCode = 'network-request-failed';
+      await tap(tester, 'Try Again');
+      expect(
+        find.text('Check your internet connection and try again.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Request accepted.'), findsNothing);
+      expect(auth.resetEmails, hasLength(2));
       await tap(tester, 'Back to Sign In');
       expect(find.text('Welcome back to Craftisan'), findsOneWidget);
     },
   );
+  testWidgets('Confirmation fits a small phone at 200 percent text size', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: const PasswordResetSuccessScreen(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.ensureVisible(find.text('Back to Sign In'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
 }

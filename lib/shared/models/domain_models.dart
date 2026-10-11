@@ -1,5 +1,6 @@
-// Framework-independent domain objects for a future shared backend.
-// These models are intentionally not connected to the existing UI demo data.
+// Shared domain contracts. Reads accept legacy ISO dates and Firestore timestamps;
+// writes retain existing ISO serialization for products and orders.
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 
 enum UserRole { buyer, artisan, courier, admin }
 
@@ -17,8 +18,16 @@ enum OrderStatus {
   cancelled,
 }
 
+DateTime? documentDate(Object? value) {
+  if (value == null) return null;
+  if (value is DateTime) return value;
+  if (value is Timestamp) return value.toDate().toUtc();
+  if (value is String) return DateTime.parse(value);
+  throw const FormatException('Unsupported document date');
+}
+
 DateTime _date(Map<String, dynamic> map, String key) =>
-    DateTime.parse(map[key] as String);
+    documentDate(map[key]) ?? (throw FormatException('Missing date: $key'));
 double _number(Map<String, dynamic> map, String key) =>
     (map[key] as num).toDouble();
 List<String> _strings(Map<String, dynamic> map, String key) =>
@@ -152,10 +161,15 @@ class Product {
     required this.stock,
     required this.status,
     required this.createdAt,
+    this.rating,
+    this.reviewCount,
+    this.soldCount,
   }) : imageUrls = List.unmodifiable(imageUrls);
 
   final String id, artisanId, name, category, currency, description;
   final double price;
+  final double? rating;
+  final int? reviewCount, soldCount;
   final List<String> imageUrls;
   final int stock;
   final ProductStatus status;
@@ -173,8 +187,18 @@ class Product {
     'stock': stock,
     'status': status.name,
     'createdAt': createdAt.toIso8601String(),
+    if (rating != null) 'rating': rating,
+    if (reviewCount != null) 'reviewCount': reviewCount,
+    if (soldCount != null) 'soldCount': soldCount,
   };
   Map<String, dynamic> toJson() => toMap();
+
+  /// Writable product details exclude values owned by trusted backend writers.
+  Map<String, dynamic> toWriteMap() => toMap()
+    ..remove('rating')
+    ..remove('reviewCount')
+    ..remove('soldCount');
+
   factory Product.fromMap(Map<String, dynamic> map) => Product(
     id: map['id'] as String,
     artisanId: map['artisanId'] as String,
@@ -187,6 +211,9 @@ class Product {
     stock: map['stock'] as int,
     status: ProductStatus.values.byName(map['status'] as String),
     createdAt: _date(map, 'createdAt'),
+    rating: (map['rating'] as num?)?.toDouble(),
+    reviewCount: (map['reviewCount'] as num?)?.toInt(),
+    soldCount: (map['soldCount'] as num?)?.toInt(),
   );
   factory Product.fromJson(Map<String, dynamic> json) => Product.fromMap(json);
 }
@@ -338,9 +365,7 @@ class Order {
     deliveryFee: _number(map, 'deliveryFee'),
     total: _number(map, 'total'),
     createdAt: _date(map, 'createdAt'),
-    updatedAt: map['updatedAt'] == null
-        ? null
-        : DateTime.parse(map['updatedAt'] as String),
+    updatedAt: map['updatedAt'] == null ? null : _date(map, 'updatedAt'),
   );
   factory Order.fromJson(Map<String, dynamic> json) => Order.fromMap(json);
 }

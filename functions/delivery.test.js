@@ -17,10 +17,11 @@ test('only new available requests and changed assignments generate alerts', () =
 test('available alerts honor availability and preferences and remove invalid tokens', async () => {
   const removed = [], sent = [];
   const row = (id, data) => ({ id, data: () => data, ref: { delete: async () => removed.push(id) } });
-  const users = [row('online', { role: 'courier', deliveryOnline: true }),
-    row('offline', { role: 'courier', deliveryOnline: false }),
-    row('muted', { role: 'courier', deliveryOnline: true, deliveryNotifications: false }),
-    row('disabled', { role: 'courier', deliveryOnline: true, active: false })];
+  const users = [row('online', { role: 'courier', courierApproval: 'approved', deliveryOnline: true }),
+    row('offline', { role: 'courier', courierApproval: 'approved', deliveryOnline: false }),
+    row('muted', { role: 'courier', courierApproval: 'approved', deliveryOnline: true, deliveryNotifications: false }),
+    row('pending', {role:'courier', courierApproval:'pending', deliveryOnline:true}),
+    row('disabled', { role: 'courier', courierApproval: 'approved', deliveryOnline: true, active: false })];
   const db = {
     doc: () => ({ get: async () => row('o1', { status: 'confirmed', courierId: null }) }),
     collection: name => ({ where: (field, op, value) => ({ get: async () => ({ docs:

@@ -64,6 +64,11 @@ void main() {
       await db.doc('orders/order').update({'status': 'delivered'});
       await repo.review('order', 'product', 5, 'Lovely');
       expect((await repo.reviews('artisan').first).docs, hasLength(1));
+      final productReviews = (await repo.productReviews('product').first).docs;
+      expect(productReviews, hasLength(1));
+      expect(productReviews.single.data()['comment'], 'Lovely');
+      expect(productReviews.single.data()['rating'], 5);
+      expect((await repo.productReviews('another-product').first).docs, isEmpty);
       await expectLater(
         repo.review('order', 'product', 4, 'Again'),
         throwsA(isA<MarketplaceFailure>()),

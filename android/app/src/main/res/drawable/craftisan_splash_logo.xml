@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android 12 masks splash icons; padding preserves the full wordmark. -->
-<inset xmlns:android="http://schemas.android.com/apk/res/android"
-    android:insetLeft="25%" android:insetRight="25%"
-    android:insetTop="25%" android:insetBottom="25%">
-    <bitmap android:src="@drawable/craftisan_marketplace_logo" android:gravity="fill" android:filter="true" />
-</inset>
+<!-- Android's starting window stays unbranded; Flutter draws the full splash. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@android:color/transparent" />
+    <size android:width="1dp" android:height="1dp" />
+</shape>

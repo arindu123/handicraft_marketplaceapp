@@ -217,7 +217,7 @@ class _CraftisanHomeHeroState extends State<CraftisanHomeHero>
   @override
   Widget build(BuildContext context) => AnimatedContainer(
     duration: _reduceMotion ? Duration.zero : const Duration(milliseconds: 400),
-    color: _stories[_index].background,
+    color: AppColors.heroCream,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

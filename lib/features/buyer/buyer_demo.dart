@@ -2,6 +2,7 @@ import 'dart:async';
 
 import '../../shared/data/marketplace_repository.dart';
 import '../../shared/models/domain_models.dart' as canonical;
+import '../../shared/models/delivery_fee_policy.dart';
 
 import 'dart:convert';
 
@@ -26,6 +27,9 @@ class DemoProduct {
     this.stock,
     this.createdAt,
     this.isVerified = false,
+    this.rating,
+    this.reviewCount,
+    this.soldCount,
   });
   final String id;
   final DateTime? createdAt;
@@ -34,6 +38,8 @@ class DemoProduct {
   final String currency;
   final int? stock;
   final bool isVerified;
+  final double? rating;
+  final int? reviewCount, soldCount;
   String priceLabel([int quantity = 1]) => money(price * quantity, currency);
   factory DemoProduct.fromProduct(
     canonical.Product p, {
@@ -56,6 +62,9 @@ class DemoProduct {
     stock: p.stock,
     createdAt: p.createdAt,
     isVerified: isVerified,
+    rating: p.rating,
+    reviewCount: p.reviewCount,
+    soldCount: p.soldCount,
   );
   @override
   bool operator ==(Object other) =>
@@ -205,10 +214,9 @@ BuyerArtisan artisanFor(String name) => buyerArtisans.firstWhere(
   ),
 );
 
-String money(num value, [String currency = 'LKR']) =>
-    currency == 'USD'
-        ? '\$${value.toStringAsFixed(2)}'
-        : '$currency ${value.toStringAsFixed(2)}';
+String money(num value, [String currency = 'LKR']) => currency == 'USD'
+    ? '\$${value.toStringAsFixed(2)}'
+    : '$currency ${value.toStringAsFixed(2)}';
 
 enum BuyerOrderStatus {
   pending('Pending'),
@@ -249,6 +257,7 @@ class BuyerDemoOrder {
 
 /// Ephemeral UI state, owned and disposed by the Buyer marketplace.
 class BuyerDemo extends ChangeNotifier {
+  DeliveryFeePolicy _deliveryPolicy = const DeliveryFeePolicy();
   bool get isSignedIn =>
       repository?.auth.currentUser != null &&
       repository?.auth.currentUser?.isAnonymous == false;
@@ -269,12 +278,38 @@ class BuyerDemo extends ChangeNotifier {
   String? error;
   bool _disposed = false;
   Map<String, int> _cartIds = {};
+  bool cartLoading = true;
+  String? cartError;
   Set<String> _favoriteIds = {};
+  final List<String> orderAlerts = [];
+  List<Map<String, dynamic>> notifications = [];
+  String? notificationError;
+  int get unreadNotifications =>
+      notifications.where((n) => n['read'] != true).length;
+
+  Future<void> readNotification(String id) async {
+    await repository!.userCollection('notifications').doc(id).update({
+      'read': true,
+    });
+  }
+
+  static String statusMessage(BuyerOrderStatus status) => switch (status) {
+    BuyerOrderStatus.confirmed => 'Your artisan has confirmed your order.',
+    BuyerOrderStatus.courierAssigned =>
+      'A courier has been assigned to your order.',
+    BuyerOrderStatus.pickedUp =>
+      'Your order has been picked up by the courier.',
+    BuyerOrderStatus.onTheWay => 'Your order is on the way to you.',
+    BuyerOrderStatus.delivered => 'Your order has been delivered.',
+    BuyerOrderStatus.cancelled => 'Your order has been cancelled.',
+    BuyerOrderStatus.pending => 'Your order is awaiting confirmation.',
+  };
   BuyerDemo({MarketplaceRepository? backend}) {
     if (!MarketplaceBackend.enabled && backend == null) {
       loading = false;
       addressesLoading = false;
       catalogError = 'The marketplace connection is unavailable.';
+      cartLoading = false;
       return;
     }
     name = '';
@@ -288,6 +323,20 @@ class BuyerDemo extends ChangeNotifier {
     orders.clear();
     try {
       repository = backend ?? MarketplaceRepository();
+      _subscriptions.add(repository!.db.collection('marketplaceSettings')
+          .doc('deliveryLkr').snapshots().listen((snapshot) {
+        if (_disposed) return;
+        try {
+          _deliveryPolicy = DeliveryFeePolicy.fromMap(snapshot.data());
+          notifyListeners();
+        } catch (error) { _failed(error); }
+      }, onError: _failed));
+      _subscriptions.add(
+        repository!.auth.authStateChanges().listen((_) {
+          _loadFollows();
+        }),
+      );
+      _loadFollows();
       _subscriptions.add(
         repository!.products().listen(
           (rows) {
@@ -312,6 +361,7 @@ class BuyerDemo extends ChangeNotifier {
         }, onError: _failed),
       );
       if (!isSignedIn) {
+        cartLoading = false;
         addressesLoading = false;
         return;
       }
@@ -349,12 +399,24 @@ class BuyerDemo extends ChangeNotifier {
             ),
       );
       _subscriptions.add(
-        repository!.userCollection('cart').snapshots().listen((s) {
-          _cartIds = {
-            for (final d in s.docs) d.id: d.data()['quantity'] as int,
-          };
-          _resolve();
-        }, onError: _failed),
+        repository!
+            .userCollection('cart')
+            .snapshots()
+            .listen(
+              (s) {
+                cartLoading = false;
+                cartError = null;
+                _cartIds = {
+                  for (final d in s.docs) d.id: d.data()['quantity'] as int,
+                };
+                _resolve();
+              },
+              onError: (Object e) {
+                cartLoading = false;
+                cartError = marketplaceError(e);
+                _failed(e);
+              },
+            ),
       );
       _subscriptions.add(
         repository!.userCollection('favorites').snapshots().listen((s) {
@@ -363,13 +425,49 @@ class BuyerDemo extends ChangeNotifier {
         }, onError: _failed),
       );
       _subscriptions.add(
+        repository!
+            .userCollection('notifications')
+            .snapshots()
+            .listen(
+              (s) {
+                if (_disposed) return;
+                notificationError = null;
+                notifications =
+                    s.docs
+                        .map((d) => <String, dynamic>{...d.data(), 'id': d.id})
+                        .toList()
+                      ..sort(
+                        (a, b) =>
+                            (canonical.documentDate(b['createdAt']) ??
+                                    DateTime(1970))
+                                .compareTo(
+                                  canonical.documentDate(a['createdAt']) ??
+                                      DateTime(1970),
+                                ),
+                      );
+                notifyListeners();
+              },
+              onError: (Object e) {
+                if (_disposed) return;
+                notificationError = marketplaceError(e);
+                notifyListeners();
+              },
+            ),
+      );
+      _subscriptions.add(
         repository!.orders('buyerId').listen((rows) {
+          if (_disposed) return;
           final previous = {for (final o in orders) o.id: o};
           orders.clear();
           for (final row in rows) {
             final order = fromOrder(row);
             final old = previous[row.id];
             if (old != null) {
+              if (old.status != order.status) {
+                orderAlerts.add(
+                  'Order #${order.id}: ${statusMessage(order.status)}',
+                );
+              }
               old.status = order.status;
               orders.add(old);
             } else {
@@ -497,6 +595,7 @@ class BuyerDemo extends ChangeNotifier {
         recipientName: name,
         recipientPhone: phone,
         deliveryInstructions: instructions,
+        expectedDeliveryFee: delivery,
       );
       _checkoutId = null;
       final receipt =
@@ -513,6 +612,7 @@ class BuyerDemo extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    unawaited(_followSubscription?.cancel());
     for (final subscription in _subscriptions) {
       subscription.cancel();
     }
@@ -521,7 +621,57 @@ class BuyerDemo extends ChangeNotifier {
 
   final Map<DemoProduct, int> cart = {};
   final Set<DemoProduct> favorites = {};
-  final Set<String> followedArtisans = {};
+  int get savedPieceCount =>
+      repository == null ? favorites.length : _favoriteIds.length;
+  int get bagItemCount => (repository == null ? cart.values : _cartIds.values)
+      .fold(0, (sum, quantity) => sum + quantity);
+
+  final Set<String> _followedArtisans = {};
+  Set<String> get followedArtisans => Set.unmodifiable(_followedArtisans);
+  bool followsLoading = false;
+  String? followError;
+  final Set<String> followingWrites = {};
+  StreamSubscription<Set<String>>? _followSubscription;
+  String? _followBuyer;
+
+  void _loadFollows() {
+    if (_disposed) return;
+    final buyer = isSignedIn ? repository!.uid : null;
+    if (buyer == _followBuyer && _followSubscription != null) return;
+    _followBuyer = buyer;
+    unawaited(_followSubscription?.cancel());
+    _followSubscription = null;
+    _followedArtisans.clear();
+    followingWrites.clear();
+    followError = null;
+    followsLoading = buyer != null;
+    if (buyer != null) {
+      _followSubscription = repository!.followedArtisans().listen(
+        (ids) {
+          if (_disposed || _followBuyer != buyer) return;
+          _followedArtisans
+            ..clear()
+            ..addAll(ids);
+          followsLoading = false;
+          followError = null;
+          notifyListeners();
+        },
+        onError: (Object e) {
+          if (_disposed || _followBuyer != buyer) return;
+          followsLoading = false;
+          followError = marketplaceError(e);
+          notifyListeners();
+        },
+      );
+    }
+    if (!_disposed) notifyListeners();
+  }
+
+  void retryFollows() {
+    _followBuyer = null;
+    _loadFollows();
+  }
+
   final List<BuyerDemoOrder> orders = [];
   String name = '';
   String address = '';
@@ -535,7 +685,8 @@ class BuyerDemo extends ChangeNotifier {
   double get subtotal =>
       cart.entries.fold(0, (a, e) => a + e.key.price * e.value);
   double get delivery =>
-      cart.isEmpty ? 0 : MarketplaceRepository.deliveryFeeFor(subtotal);
+      cart.isEmpty ? 0 : MarketplaceRepository.deliveryFeeFor(subtotal,
+          currency: currency, policy: _deliveryPolicy);
   double get total => subtotal + delivery;
   String get currency => cart.keys.firstOrNull?.currency ?? 'LKR';
   String get destination =>
@@ -609,11 +760,45 @@ class BuyerDemo extends ChangeNotifier {
     selectAddress({...value, 'id': ref.id});
   }
 
-  void followArtisan(BuyerArtisan artisan) {
-    if (!followedArtisans.remove(artisan.name)) {
-      followedArtisans.add(artisan.name);
+  Future<void> followArtisan(
+    BuyerArtisan artisan, {
+    required String artisanId,
+  }) async {
+    if (_disposed) return;
+    if (!isSignedIn) {
+      followError = 'Please sign in to follow artisans.';
+      notifyListeners();
+      return;
     }
+    if (followsLoading ||
+        followError != null ||
+        followingWrites.contains(artisanId)) {
+      return;
+    }
+    final buyer = repository!.uid;
+    followingWrites.add(artisanId);
     notifyListeners();
+    try {
+      final selected = !followedArtisans.contains(artisanId);
+      await repository!.followArtisan(artisanId, selected);
+      if (_disposed || repository!.auth.currentUser?.uid != buyer) return;
+      // The live subscription remains authoritative for subsequent changes.
+      if (selected) {
+        _followedArtisans.add(artisanId);
+      } else {
+        _followedArtisans.remove(artisanId);
+      }
+      followError = null;
+    } catch (e) {
+      if (!_disposed && repository!.auth.currentUser?.uid == buyer) {
+        followError = marketplaceError(e);
+      }
+    } finally {
+      if (!_disposed && repository!.auth.currentUser?.uid == buyer) {
+        followingWrites.remove(artisanId);
+        notifyListeners();
+      }
+    }
   }
 
   void clearCart() {

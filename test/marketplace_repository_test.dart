@@ -1,5 +1,7 @@
 import 'dart:typed_data';
 
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:firebase_auth_mocks/firebase_auth_mocks.dart';
@@ -50,17 +52,66 @@ void main() {
     repo = repository('buyer', UserRole.buyer);
     await db.collection('products').doc('p1').set(product().toMap());
   });
+  test(
+    'artisan edits preserve trusted aggregates and timestamp dates',
+    () async {
+      final date = Timestamp.fromDate(DateTime.utc(2026));
+      await db.doc('products/p1').update({
+        'rating': 4.8,
+        'reviewCount': 12,
+        'soldCount': 50,
+        'createdAt': date,
+      });
+      final forged = product().toMap()
+        ..addAll({'rating': 5, 'reviewCount': 999, 'soldCount': 999});
+      final restored = await repository(
+        'artisan',
+        UserRole.artisan,
+      ).saveProduct(Product.fromMap(forged), []);
+      final data = (await db.doc('products/p1').get()).data()!;
+      expect(data['rating'], 4.8);
+      expect(data['reviewCount'], 12);
+      expect(data['soldCount'], 50);
+      expect(data['createdAt'], date);
+      expect(restored.soldCount, 50);
+      expect(restored.createdAt, date.toDate().toUtc());
+      expect(restored.toWriteMap().keys, isNot(contains('rating')));
+    },
+  );
+
+  test('product create ignores untrusted draft aggregate values', () async {
+    final data = product(id: '').toMap()
+      ..addAll({'rating': 5, 'reviewCount': 999, 'soldCount': 999});
+    final saved = await repository(
+      'artisan',
+      UserRole.artisan,
+    ).saveProduct(Product.fromMap(data), []);
+    final stored = (await db.doc('products/${saved.id}').get()).data()!;
+    expect(stored.keys, isNot(contains('rating')));
+    expect(stored.keys, isNot(contains('reviewCount')));
+    expect(stored.keys, isNot(contains('soldCount')));
+  });
+
   test('LKR checkout snapshots currency and rejects mixed-currency carts', () {
     final lkr = product(currency: 'LKR');
     final order = MarketplaceRepository.buildOrder(
-      'lkr-order', 'buyer', [lkr], {'p1': 1}, 'Colombo', 'Cash on delivery',
+      'lkr-order',
+      'buyer',
+      [lkr],
+      {'p1': 1},
+      'Colombo',
+      'Cash on delivery',
     );
     expect(order.currency, 'LKR');
     expect(Order.fromMap(order.toMap()).currency, 'LKR');
     expect(
       () => MarketplaceRepository.buildOrder(
-        'mixed', 'buyer', [lkr, product(id: 'usd')],
-        {'p1': 1, 'usd': 1}, 'Colombo', 'Cash on delivery',
+        'mixed',
+        'buyer',
+        [lkr, product(id: 'usd')],
+        {'p1': 1, 'usd': 1},
+        'Colombo',
+        'Cash on delivery',
       ),
       throwsA(isA<MarketplaceFailure>()),
     );

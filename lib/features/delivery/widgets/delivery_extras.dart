@@ -1,3 +1,5 @@
+import 'package:artisan_marketplace/shared/widgets/craftisan_dialog.dart';
+
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -205,18 +207,22 @@ class _DeliveryExtrasState extends State<DeliveryExtras> {
   Future<void> _photo(String stage) async {
     final source = await showDialog<ImageSource>(
       context: context,
-      builder: (ctx) => SimpleDialog(
+      builder: (ctx) => CraftisanDialog(
+        icon: Icons.add_a_photo_outlined,
         title: const Text('Add proof photo'),
-        children: [
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(ctx, ImageSource.camera),
-            child: const Text('Take photo'),
-          ),
-          SimpleDialogOption(
-            onPressed: () => Navigator.pop(ctx, ImageSource.gallery),
-            child: const Text('Choose from gallery'),
-          ),
-        ],
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, ImageSource.camera),
+              child: const Text('Take photo'),
+            ),
+            SimpleDialogOption(
+              onPressed: () => Navigator.pop(ctx, ImageSource.gallery),
+              child: const Text('Choose from gallery'),
+            ),
+          ],
+        ),
       ),
     );
     if (source == null || !mounted) return;
@@ -484,7 +490,8 @@ class _AttemptDialogState extends State<_AttemptDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => CraftisanDialog(
+    icon: Icons.event_repeat_outlined,
     title: const Text('Failed delivery / reschedule'),
     content: SingleChildScrollView(
       child: Form(

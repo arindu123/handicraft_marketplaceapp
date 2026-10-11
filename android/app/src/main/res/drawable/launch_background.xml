@@ -1,8 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Modify this file to customize your launch splash screen -->
+<!-- Show the same pattern while Flutter prepares its first frame, without a second logo. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:drawable="@color/craftisan_launch_background" />
-    <item android:width="272dp" android:height="272dp" android:gravity="center">
-        <bitmap android:src="@drawable/craftisan_marketplace_logo" android:gravity="fill" android:filter="true" />
-    </item>
+    <item android:drawable="@drawable/craftisan_launch_pattern" />
 </layer-list>

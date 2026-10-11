@@ -2,4 +2,5 @@
 <resources>
     <color name="craftisan_launch_background">#FAF8F5</color>
     <color name="craftisan_logo_color">#A23F23</color>
+    <color name="craftisan_splash_background">#F2E3D5</color>
 </resources>

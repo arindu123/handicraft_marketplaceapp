@@ -3,9 +3,9 @@ import 'package:flutter/material.dart';
 import '../../routes/route_names.dart';
 import '../auth/models/marketplace_role.dart';
 
-const _ink = Color(0xFF10494D);
-const _paper = Color(0xFFFCF9F2);
-const _rust = Color(0xFFC85D3C);
+const _ink = Color(0xFF0B4545);
+const _paper = Color(0xFFF8F5F1);
+const _rust = Color(0xFFB44A2C);
 const _muted = Color(0xFF687571);
 
 /// Buyer presentation; authentication and validation stay in AuthForm.
@@ -120,20 +120,20 @@ class _BuyerLoginViewState extends State<BuyerLoginView> {
                                 ),
                               ],
                             ),
-                            SizedBox(height: wide ? 28 : 18),
+                            SizedBox(height: wide ? 28 : 12),
                             TweenAnimationBuilder<double>(
                               tween: Tween(
-                                begin: reducedMotion ? 1 : 0,
+                                begin: reducedMotion ? 1 : .85,
                                 end: 1,
                               ),
                               duration: Duration(
-                                milliseconds: reducedMotion ? 0 : 850,
+                                milliseconds: reducedMotion ? 0 : 380,
                               ),
                               curve: Curves.easeOutCubic,
                               builder: (context, value, child) => Opacity(
                                 opacity: value,
                                 child: Transform.translate(
-                                  offset: Offset(0, 20 * (1 - value)),
+                                  offset: Offset(0, 12 * (1 - value)),
                                   child: child,
                                 ),
                               ),
@@ -152,7 +152,7 @@ class _BuyerLoginViewState extends State<BuyerLoginView> {
                                   : Column(
                                       children: [
                                         const _CraftStory(wide: false),
-                                        const SizedBox(height: 26),
+                                        const SizedBox(height: 18),
                                         Padding(
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 8,
@@ -193,53 +193,23 @@ class _BuyerLoginViewState extends State<BuyerLoginView> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Row(
-            children: [
-              DecoratedBox(
-                decoration: BoxDecoration(color: _rust, shape: BoxShape.circle),
-                child: SizedBox(width: 6, height: 6),
-              ),
-              SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  'YOUR NEXT FAVOURITE AWAITS',
-                  style: TextStyle(
-                    fontSize: 9,
-                    letterSpacing: 1.8,
-                    color: _rust,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
           const Text(
-            'Good to see\nyou again.',
+            'Welcome to Craftisan',
             style: TextStyle(
               fontFamily: 'CormorantGaramond',
-              fontSize: 48,
-              height: .98,
-              letterSpacing: -1.4,
+              fontSize: 36,
+              height: 1.08,
+              letterSpacing: -.8,
               fontWeight: FontWeight.w600,
               color: _ink,
-            ),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Sign in for lovely finds and the makers behind them.',
-            style: TextStyle(fontSize: 13, height: 1.6, color: _muted),
-          ),
-          const SizedBox(height: 24),
-          const Text(
-            'Email address',
-            style: TextStyle(
-              color: _ink,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
             ),
           ),
           const SizedBox(height: 8),
+          const Text(
+            'Discover unique handmade products and support local artisans.',
+            style: TextStyle(fontSize: 13, height: 1.5, color: _muted),
+          ),
+          const SizedBox(height: 18),
           TextFormField(
             controller: widget.email,
             enabled: !widget.submitting,
@@ -248,18 +218,13 @@ class _BuyerLoginViewState extends State<BuyerLoginView> {
             textInputAction: TextInputAction.next,
             autocorrect: false,
             validator: widget.validateEmail,
-            decoration: _decoration('you@example.com', Icons.alternate_email),
-          ),
-          const SizedBox(height: 18),
-          const Text(
-            'Password',
-            style: TextStyle(
-              color: _ink,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+            decoration: _decoration(
+              'Email address',
+              'you@example.com',
+              Icons.mail_outline,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 14),
           TextFormField(
             controller: widget.password,
             enabled: !widget.submitting,
@@ -268,14 +233,22 @@ class _BuyerLoginViewState extends State<BuyerLoginView> {
             enableSuggestions: false,
             autofillHints: const [AutofillHints.password],
             textInputAction: TextInputAction.done,
-            onFieldSubmitted: (_) => widget.onSubmit(),
+            onFieldSubmitted: (_) {
+              if (!widget.submitting) widget.onSubmit();
+            },
             validator: (value) =>
                 value == null || value.isEmpty ? 'Enter your password.' : null,
-            decoration: _decoration('Enter your password', Icons.lock_outline)
-                .copyWith(
+            decoration:
+                _decoration(
+                  'Password',
+                  'Enter your password',
+                  Icons.lock_outline,
+                ).copyWith(
                   suffixIcon: IconButton(
                     tooltip: _hidden ? 'Show password' : 'Hide password',
-                    onPressed: () => setState(() => _hidden = !_hidden),
+                    onPressed: widget.submitting
+                        ? null
+                        : () => setState(() => _hidden = !_hidden),
                     icon: Icon(
                       _hidden
                           ? Icons.visibility_outlined
@@ -297,7 +270,7 @@ class _BuyerLoginViewState extends State<BuyerLoginView> {
                     ),
               child: const Text(
                 'Forgot password?',
-                style: TextStyle(fontSize: 12, color: _ink),
+                style: TextStyle(fontSize: 13, color: _rust),
               ),
             ),
           ),
@@ -324,7 +297,8 @@ class _BuyerLoginViewState extends State<BuyerLoginView> {
               backgroundColor: _rust,
               foregroundColor: Colors.white,
               disabledBackgroundColor: _rust.withValues(alpha: .7),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+              minimumSize: const Size(48, 54),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(15),
               ),
@@ -345,9 +319,7 @@ class _BuyerLoginViewState extends State<BuyerLoginView> {
                 ],
                 Flexible(
                   child: Text(
-                    widget.submitting
-                        ? 'Signing you in…'
-                        : 'Sign In to Collection',
+                    widget.submitting ? 'Signing in…' : 'Sign In',
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -358,18 +330,22 @@ class _BuyerLoginViewState extends State<BuyerLoginView> {
               ],
             ),
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 16),
           const Row(
             children: [
               Expanded(child: Divider(color: Color(0xFFE1DFD5))),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 14),
-                child: Text(
-                  'OR CONTINUE WITH',
-                  style: TextStyle(
-                    fontSize: 9,
-                    letterSpacing: 1.2,
-                    color: _muted,
+              Flexible(
+                flex: 4,
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 14),
+                  child: Text(
+                    'OR CONTINUE WITH',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 9,
+                      letterSpacing: 1.2,
+                      color: _muted,
+                    ),
                   ),
                 ),
               ),
@@ -378,15 +354,13 @@ class _BuyerLoginViewState extends State<BuyerLoginView> {
           ),
           const SizedBox(height: 16),
           _socialButton('Google'),
-          const SizedBox(height: 12),
-          _socialButton('Apple'),
           const SizedBox(height: 16),
           Wrap(
             alignment: WrapAlignment.center,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               const Text(
-                'New to Artisan?',
+                'New here?',
                 style: TextStyle(fontSize: 12, color: _muted),
               ),
               TextButton(
@@ -398,31 +372,12 @@ class _BuyerLoginViewState extends State<BuyerLoginView> {
                         arguments: MarketplaceRole.buyer,
                       ),
                 child: const Text(
-                  'Sign Up',
+                  'Create an account',
                   style: TextStyle(color: _rust, fontWeight: FontWeight.w700),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          const Row(
-            children: [
-              Expanded(child: Divider(color: Color(0xFFE1DFD5))),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 12),
-                child: Text(
-                  'JUST LOOKING?',
-                  style: TextStyle(
-                    fontSize: 9,
-                    letterSpacing: 1.3,
-                    color: _muted,
-                  ),
-                ),
-              ),
-              Expanded(child: Divider(color: Color(0xFFE1DFD5))),
-            ],
-          ),
-          const SizedBox(height: 10),
           TextButton.icon(
             onPressed: widget.submitting
                 ? null
@@ -448,7 +403,8 @@ class _BuyerLoginViewState extends State<BuyerLoginView> {
       backgroundColor: Colors.white,
       foregroundColor: const Color(0xFF1F1F1F),
       side: const BorderSide(color: Color(0xFFDADCE0)),
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+      minimumSize: const Size(48, 52),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
     ),
     child: Row(
@@ -475,24 +431,30 @@ class _BuyerLoginViewState extends State<BuyerLoginView> {
     ),
   );
 
-  InputDecoration _decoration(String hint, IconData icon) => InputDecoration(
-    hintText: hint,
-    hintStyle: const TextStyle(fontSize: 13, color: _muted),
-    prefixIcon: Icon(icon, size: 19, color: _muted),
-    filled: true,
-    fillColor: Colors.white,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-    errorMaxLines: 3,
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: Color(0xFFDDDCD2)),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: _ink, width: 1.5),
-    ),
-  );
+  InputDecoration _decoration(String label, String hint, IconData icon) =>
+      InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: _muted, fontSize: 14),
+        hintText: hint,
+        hintStyle: const TextStyle(fontSize: 13, color: _muted),
+        prefixIcon: Icon(icon, size: 19, color: _muted),
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 18,
+        ),
+        errorMaxLines: 3,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFFDDDCD2)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: _ink, width: 1.5),
+        ),
+      );
 }
 
 class _CraftStory extends StatelessWidget {
@@ -503,100 +465,44 @@ class _CraftStory extends StatelessWidget {
   Widget build(BuildContext context) => ClipRRect(
     borderRadius: BorderRadius.circular(wide ? 32 : 24),
     child: SizedBox(
-      height: wide ? 650 : 205,
+      height: wide ? 460 : 132,
       width: double.infinity,
       child: Stack(
         fit: StackFit.expand,
         children: [
           Image.asset(
-            'lib/features/auth/widgets/pottery_vase.png',
+            'assets/images/onboarding/discover.jpeg',
             fit: BoxFit.cover,
-            alignment: wide ? Alignment.center : const Alignment(0, .28),
-            excludeFromSemantics: true,
+            alignment: const Alignment(0, .65),
+            semanticLabel:
+                'Handcrafted ceramics, woven baskets and handmade decorations',
           ),
-          DecoratedBox(
+          const DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [
-                  Colors.black.withValues(alpha: .05),
-                  _ink.withValues(alpha: .82),
-                ],
-                stops: const [.25, 1],
+                colors: [Colors.transparent, Color(0x660B4545)],
+                stops: [.3, 1],
               ),
             ),
           ),
           Positioned(
-            top: 20,
-            left: 20,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: _paper,
-                borderRadius: BorderRadius.circular(30),
+            bottom: 16,
+            left: 18,
+            right: 18,
+            child: Text(
+              wide
+                  ? 'Bring handmade\nhappiness home.'
+                  : 'HANDCRAFTED MARKETPLACE',
+              style: TextStyle(
+                fontFamily: wide ? 'CormorantGaramond' : null,
+                fontSize: wide ? 40 : 10,
+                letterSpacing: wide ? -.6 : 1.5,
+                height: 1.1,
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
               ),
-              child: const Text(
-                'THE ART OF EVERYDAY',
-                style: TextStyle(
-                  fontSize: 8,
-                  letterSpacing: 1.3,
-                  color: _ink,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-          Positioned(
-            bottom: wide ? 36 : 20,
-            left: wide ? 32 : 20,
-            right: 20,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  wide
-                      ? 'Not just a piece.\nA little piece\nof someone’s heart.'
-                      : 'Objects with soul.\nStories worth keeping.',
-                  style: TextStyle(
-                    fontFamily: 'CormorantGaramond',
-                    fontSize: wide ? 45 : 29,
-                    height: 1.04,
-                    color: _paper,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                if (wide) ...[
-                  const SizedBox(height: 18),
-                  const Text(
-                    'Meet independent makers. Discover the beauty\nin things made slowly, thoughtfully, by hand.',
-                    style: TextStyle(
-                      color: Color(0xFFE2E6DD),
-                      fontSize: 13,
-                      height: 1.7,
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  Container(height: 1, color: Colors.white24),
-                  const SizedBox(height: 18),
-                  const Row(
-                    children: [
-                      Icon(
-                        Icons.spa_outlined,
-                        size: 17,
-                        color: Color(0xFFE9BD79),
-                      ),
-                      SizedBox(width: 9),
-                      Expanded(
-                        child: Text(
-                          'Small studios. Beautiful possibilities.',
-                          style: TextStyle(color: _paper, fontSize: 11),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
             ),
           ),
         ],

@@ -67,7 +67,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('2 saved pieces'), findsOneWidget);
-      await tester.tap(find.text('Ceramics'));
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Ceramics'));
       await tester.pumpAndSettle();
       expect(find.text('1 saved piece'), findsOneWidget);
       expect(find.text('Woven bag'), findsNothing);

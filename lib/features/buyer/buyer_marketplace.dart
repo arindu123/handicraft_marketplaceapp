@@ -1,4 +1,11 @@
+import 'package:artisan_marketplace/shared/widgets/craftisan_dialog.dart';
+
 import 'craftisan_home_hero.dart';
+
+import 'dart:async';
+
+import 'package:firebase_messaging/firebase_messaging.dart';
+
 import 'home/craftisan_preview_home.dart';
 import 'handicraft_navigation_bar.dart';
 import '../auth/models/marketplace_role.dart';
@@ -15,9 +22,15 @@ import '../../shared/models/craftisan_demo_messages.dart';
 import '../../shared/widgets/custom_button.dart';
 import '../../shared/widgets/craftisan_messaging.dart';
 import 'buyer_demo.dart';
+import 'buyer_order_problems.dart';
+import 'buyer_orders_screens.dart';
 import 'collector_profile_header.dart';
+import 'collector_profile_sections.dart';
+import '../auth/services/auth_session.dart';
 import '../../shared/data/profile_repository.dart';
 import 'rotating_product_banner.dart';
+import 'services/buyer_notifications.dart';
+import 'product_reviews.dart';
 
 void _signIn(BuildContext context) => Navigator.pushNamed(
   context,
@@ -38,18 +51,68 @@ class BuyerMarketplace extends StatefulWidget {
 
 class _BuyerMarketplaceState extends State<BuyerMarketplace> {
   late final demo = BuyerDemo(backend: widget.backend);
+  StreamSubscription<RemoteMessage>? _notificationTap;
   @override
   void initState() {
     super.initState();
     if (!widget.preview || widget.backend != null) demo.addListener(_refresh);
+    if (!widget.preview &&
+        MarketplaceBackend.enabled &&
+        demo.isSignedIn &&
+        BuyerNotifications.supported) {
+      unawaited(BuyerNotifications.instance.enable().catchError((Object _) {}));
+      _notificationTap = FirebaseMessaging.onMessageOpenedApp.listen(
+        _openAlert,
+      );
+      unawaited(
+        FirebaseMessaging.instance
+            .getInitialMessage()
+            .then((message) {
+              if (message != null) _openAlert(message);
+            })
+            .catchError((Object _) {}),
+      );
+    }
+  }
+
+  void _openAlert(RemoteMessage message) {
+    if (message.data['type'] != 'buyerOrder') return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && demo.isSignedIn) _notifications(context);
+    });
   }
 
   void _refresh() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    if (demo.orderAlerts.isNotEmpty) {
+      final alerts = [...demo.orderAlerts];
+      demo.orderAlerts.clear();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        for (final alert in alerts) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(alert),
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      });
+    }
+  }
+
+  void _notifications(BuildContext context) {
+    if (!demo.isSignedIn) {
+      _signIn(context);
+      return;
+    }
+    _open(context, _BuyerNotificationsScreen(demo: demo));
   }
 
   @override
   void dispose() {
+    _notificationTap?.cancel();
     if (!widget.preview || widget.backend != null) demo.dispose();
     super.dispose();
   }
@@ -110,7 +173,10 @@ class _BuyerMarketplaceState extends State<BuyerMarketplace> {
                         );
                     final textScale =
                         MediaQuery.textScalerOf(context).scale(14) / 14;
-                    final cardHeight = cardWidth / 1.06 + 112 * textScale + 20;
+                    final detailsHeight =
+                        148 * textScale +
+                        80 * (textScale - 1).clamp(0, double.infinity);
+                    final cardHeight = cardWidth / 1.06 + detailsHeight;
                     Widget section(String title, {String? subtitle}) =>
                         SliverToBoxAdapter(
                           child: Padding(
@@ -232,6 +298,23 @@ class _BuyerMarketplaceState extends State<BuyerMarketplace> {
                                                     fontWeight: FontWeight.w700,
                                                     letterSpacing: -1,
                                                     color: _charcoal,
+                                                  ),
+                                                ),
+                                              ),
+                                              IconButton(
+                                                tooltip: 'Order notifications',
+                                                onPressed: () =>
+                                                    _notifications(context),
+                                                icon: Badge(
+                                                  isLabelVisible:
+                                                      demo.unreadNotifications >
+                                                      0,
+                                                  label: Text(
+                                                    '${demo.unreadNotifications}',
+                                                  ),
+                                                  child: const Icon(
+                                                    Icons
+                                                        .notifications_outlined,
                                                   ),
                                                 ),
                                               ),
@@ -601,9 +684,7 @@ class _BuyerMarketplaceState extends State<BuyerMarketplace> {
                                               crossAxisSpacing: 12,
                                               mainAxisSpacing: 14,
                                               mainAxisExtent:
-                                                  width / 1.06 +
-                                                  112 * textScale +
-                                                  20,
+                                                  width / 1.06 + detailsHeight,
                                             ),
                                         delegate: SliverChildBuilderDelegate(
                                           (_, index) => _ProductCard(
@@ -641,9 +722,7 @@ class _BuyerMarketplaceState extends State<BuyerMarketplace> {
                                               crossAxisSpacing: 12,
                                               mainAxisSpacing: 14,
                                               mainAxisExtent:
-                                                  width / 1.06 +
-                                                  112 * textScale +
-                                                  20,
+                                                  width / 1.06 + detailsHeight,
                                             ),
                                         delegate: SliverChildBuilderDelegate(
                                           (_, index) => _ProductCard(
@@ -688,6 +767,127 @@ class _BuyerMarketplaceState extends State<BuyerMarketplace> {
       ),
     );
   }
+}
+
+class _BuyerNotificationsScreen extends StatefulWidget {
+  const _BuyerNotificationsScreen({required this.demo});
+  final BuyerDemo demo;
+
+  @override
+  State<_BuyerNotificationsScreen> createState() =>
+      _BuyerNotificationsScreenState();
+}
+
+class _BuyerNotificationsScreenState extends State<_BuyerNotificationsScreen> {
+  bool _enabling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.demo.addListener(_refresh);
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    widget.demo.removeListener(_refresh);
+    super.dispose();
+  }
+
+  Future<void> _enable() async {
+    setState(() => _enabling = true);
+    try {
+      await BuyerNotifications.instance.enable();
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Order alerts enabled.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(marketplaceError(e))));
+      }
+    } finally {
+      if (mounted) setState(() => _enabling = false);
+    }
+  }
+
+  Future<void> _select(Map<String, dynamic> notification) async {
+    try {
+      await widget.demo.readNotification(notification['id'] as String);
+      if (!mounted) return;
+      _open(
+        context,
+        BuyerOrderDetailsScreen(
+          demo: widget.demo,
+          orderId: notification['orderId'] as String,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(marketplaceError(e))));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Order notifications')),
+    body: Column(
+      children: [
+        if (BuyerNotifications.supported)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: OutlinedButton.icon(
+              onPressed: _enabling ? null : _enable,
+              icon: const Icon(Icons.notifications_active_outlined),
+              label: Text(
+                _enabling ? 'Enabling alerts…' : 'Enable phone alerts',
+              ),
+            ),
+          ),
+        if (widget.demo.notificationError != null)
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Text(widget.demo.notificationError!),
+          ),
+        Expanded(
+          child: widget.demo.notifications.isEmpty
+              ? const Center(child: Text('Order updates will appear here.'))
+              : ListView.separated(
+                  itemCount: widget.demo.notifications.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final notification = widget.demo.notifications[index];
+                    return ListTile(
+                      leading: Icon(
+                        notification['read'] == true
+                            ? Icons.notifications_none
+                            : Icons.notifications_active,
+                        color: AppColors.warmBrown,
+                      ),
+                      title: Text(
+                        notification['body'] as String? ?? 'Order updated',
+                        style: TextStyle(
+                          fontWeight: notification['read'] == true
+                              ? FontWeight.normal
+                              : FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: Text('Order #${notification['orderId']}'),
+                      onTap: () => _select(notification),
+                    );
+                  },
+                ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _HomeSectionState extends StatelessWidget {
@@ -881,23 +1081,44 @@ class _BuyerPage extends StatelessWidget {
     data: _buyerTheme(context),
     child: Builder(
       builder: (context) => Scaffold(
-        backgroundColor: _cream,
+        backgroundColor: tab == 4 ? const Color(0xFFF8F5F1) : _cream,
         appBar: AppBar(
-          backgroundColor: _cream,
+          backgroundColor: tab == 4 ? const Color(0xFFF8F5F1) : _cream,
           surfaceTintColor: Colors.transparent,
           automaticallyImplyLeading: tab != 0,
           leading: tab == 0
               ? null
               : BackButton(onPressed: () => Navigator.maybePop(context)),
           centerTitle: tab != 0,
-          title: Text(
-            title,
-            style: TextStyle(
-              fontSize: tab == 0 ? 30 : 20,
-              fontWeight: FontWeight.w700,
-              letterSpacing: -.6,
-            ),
-          ),
+          title: tab == 4
+              ? Column(
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      'CRAFTISAN',
+                      style: TextStyle(
+                        fontSize: 9,
+                        letterSpacing: 3,
+                        color: collectorClay,
+                      ),
+                    ),
+                  ],
+                )
+              : Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: tab == 0 ? 30 : 20,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -.6,
+                  ),
+                ),
           actions: [
             IconButton(
               tooltip: 'Cart',
@@ -1190,44 +1411,6 @@ class _ProductCard extends StatelessWidget {
                 child: _ProductCardPhotos(product),
               ),
               Positioned(
-                bottom: 8,
-                right: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF9F1E7),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: product.isVerified
-                      ? const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.verified, size: 12, color: Color(0xFF47745C)),
-                            SizedBox(width: 4),
-                            Text(
-                              'Verified maker',
-                              style: TextStyle(
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF47745C),
-                              ),
-                            ),
-                          ],
-                        )
-                      : const Text(
-                          'Handmade',
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFF70452F),
-                          ),
-                        ),
-                ),
-              ),
-              Positioned(
                 top: 6,
                 right: 6,
                 child: _FavoriteButton(demo: demo, product: product),
@@ -1235,13 +1418,15 @@ class _ProductCard extends StatelessWidget {
             ],
           ),
           Padding(
-            padding: const EdgeInsets.all(10),
+            padding: const EdgeInsets.all(8),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                _ProductTrustBadge(verified: product.isVerified),
+                const SizedBox(height: 4),
                 Text(
                   product.name,
-                  maxLines: 2,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontWeight: FontWeight.w600,
@@ -1255,20 +1440,156 @@ class _ProductCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(color: Colors.grey),
                   ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   product.priceLabel(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 18,
+                    color: AppColors.terracotta,
                   ),
                 ),
+                const SizedBox(height: 4),
+                _ProductCardStats(demo: demo, product: product),
               ],
             ),
           ),
         ],
       ),
     ),
+  );
+}
+
+class _ProductTrustBadge extends StatelessWidget {
+  const _ProductTrustBadge({required this.verified});
+  final bool verified;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+    decoration: BoxDecoration(
+      color: verified ? const Color(0xFFEDF5EF) : const Color(0xFFF9F1E7),
+      borderRadius: BorderRadius.circular(6),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          verified ? Icons.verified_rounded : Icons.handyman_outlined,
+          size: 12,
+          color: verified ? const Color(0xFF47745C) : AppColors.terracotta,
+        ),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            verified ? 'Verified maker' : 'Handmade',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              color: verified ? const Color(0xFF47745C) : AppColors.terracotta,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ProductCardStats extends StatefulWidget {
+  const _ProductCardStats({required this.demo, required this.product});
+  final BuyerDemo demo;
+  final DemoProduct product;
+
+  @override
+  State<_ProductCardStats> createState() => _ProductCardStatsState();
+}
+
+class _ProductCardStatsState extends State<_ProductCardStats> {
+  Stream<List<double>>? _ratings;
+
+  @override
+  void initState() {
+    super.initState();
+    _subscribe();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ProductCardStats oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.product.id != widget.product.id ||
+        oldWidget.demo != widget.demo) {
+      _subscribe();
+    }
+  }
+
+  void _subscribe() {
+    final repository = widget.demo.repository;
+    _ratings =
+        repository == null ||
+            !widget.demo.isSignedIn ||
+            widget.product.id.isEmpty
+        ? null
+        : CommunityRepository(firestore: repository.db, auth: repository.auth)
+              .productReviews(widget.product.id)
+              .map(
+                (snapshot) => snapshot.docs
+                    .map((doc) => doc.data()['rating'])
+                    .whereType<num>()
+                    .map((rating) => rating.toDouble())
+                    .toList(),
+              );
+  }
+
+  @override
+  Widget build(BuildContext context) => StreamBuilder<List<double>>(
+    stream: _ratings,
+    builder: (context, snapshot) {
+      final product = widget.product;
+      final ratings = snapshot.hasError ? null : snapshot.data;
+      final count = ratings?.length ?? product.reviewCount;
+      final rating = ratings == null || ratings.isEmpty
+          ? product.rating
+          : ratings.reduce((a, b) => a + b) / ratings.length;
+      return Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.star_rounded,
+                size: 15,
+                color: Color(0xFFE8AD39),
+              ),
+              const SizedBox(width: 3),
+              Flexible(
+                child: Text(
+                  count == null
+                      ? 'Reviews \u2014'
+                      : count == 0
+                      ? 'No reviews'
+                      : '${rating?.toStringAsFixed(1) ?? '\u2014'} ($count)',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF68645F),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Text(
+            '${product.soldCount ?? '\u2014'} sold',
+            style: const TextStyle(fontSize: 11, color: Color(0xFF68645F)),
+          ),
+        ],
+      );
+    },
   );
 }
 
@@ -1759,7 +2080,11 @@ class _BuyerProductDetailsState extends State<BuyerProductDetails> {
                 ),
                 if (p.isVerified) ...[
                   const SizedBox(width: 6),
-                  const Icon(Icons.verified, size: 16, color: Color(0xFF47745C)),
+                  const Icon(
+                    Icons.verified,
+                    size: 16,
+                    color: Color(0xFF47745C),
+                  ),
                 ],
               ],
             ),
@@ -1782,6 +2107,16 @@ class _BuyerProductDetailsState extends State<BuyerProductDetails> {
             ),
           ),
         ),
+        if (widget.demo.repository != null && widget.demo.isSignedIn)
+          _Panel(
+            child: ProductReviews(
+              repository: CommunityRepository(
+                firestore: widget.demo.repository!.db,
+                auth: widget.demo.repository!.auth,
+              ),
+              productId: p.id,
+            ),
+          ),
         if (p.description.isNotEmpty)
           _Panel(
             child: ExpansionTile(
@@ -1832,9 +2167,12 @@ class BuyerArtisanProfile extends StatelessWidget {
   final DemoProduct avatarProduct;
 
   @override
-  Widget build(BuildContext context) => MarketplaceBackend.enabled
+  Widget build(BuildContext context) => demo.repository != null
       ? StreamBuilder(
-          stream: CommunityRepository().reviews(avatarProduct.artisan),
+          stream: CommunityRepository(
+            firestore: demo.repository!.db,
+            auth: demo.repository!.auth,
+          ).reviews(avatarProduct.artisan),
           builder: (context, snapshot) {
             if (snapshot.hasError) {
               return _BuyerPage(
@@ -1855,8 +2193,18 @@ class BuyerArtisanProfile extends StatelessWidget {
                 )
                 .toList();
             return StreamBuilder(
-              stream: CommunityRepository().profile(avatarProduct.artisan),
+              stream: CommunityRepository(
+                firestore: demo.repository!.db,
+                auth: demo.repository!.auth,
+              ).profile(avatarProduct.artisan),
               builder: (context, profile) {
+                if (profile.hasError) {
+                  return _BuyerPage(
+                    demo: demo,
+                    title: 'Artisan Profile',
+                    children: [Text(marketplaceError(profile.error!))],
+                  );
+                }
                 final data = profile.data?.data() ?? {};
                 return _content(
                   context,
@@ -1887,7 +2235,10 @@ class BuyerArtisanProfile extends StatelessWidget {
   ) => ListenableBuilder(
     listenable: demo,
     builder: (context, _) {
-      final following = demo.followedArtisans.contains(artisan.name);
+      final artisanId = avatarProduct.artisan;
+      final following = demo.followedArtisans.contains(artisanId);
+      final followBusy =
+          demo.followsLoading || demo.followingWrites.contains(artisanId);
       final products = demo.products
           .where((product) => product.artisan == artisan.name)
           .toList();
@@ -1913,7 +2264,10 @@ class BuyerArtisanProfile extends StatelessWidget {
           if (avatarProduct.isVerified)
             Center(
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFEAF4ED),
                   borderRadius: BorderRadius.circular(20),
@@ -1944,7 +2298,16 @@ class BuyerArtisanProfile extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: () => demo.followArtisan(artisan),
+            onPressed:
+                followBusy || (demo.isSignedIn && demo.followError != null)
+                ? null
+                : () {
+                    if (!demo.isSignedIn) {
+                      _signIn(context);
+                      return;
+                    }
+                    demo.followArtisan(artisan, artisanId: artisanId);
+                  },
             style: FilledButton.styleFrom(
               backgroundColor: following
                   ? AppColors.surface
@@ -1952,14 +2315,42 @@ class BuyerArtisanProfile extends StatelessWidget {
               foregroundColor: following ? AppColors.terracotta : Colors.white,
               minimumSize: const Size(180, 48),
             ),
-            icon: Icon(following ? Icons.check : Icons.add),
-            label: Text(following ? 'Following' : 'Follow Artisan'),
+            icon: followBusy
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(following ? Icons.check : Icons.add),
+            label: Text(
+              followBusy
+                  ? 'Please wait...'
+                  : following
+                  ? 'Following'
+                  : 'Follow Artisan',
+            ),
           ),
+          if (demo.followError != null) ...[
+            Text(
+              demo.followError!,
+              style: const TextStyle(color: AppColors.terracotta),
+            ),
+            TextButton(
+              onPressed: demo.retryFollows,
+              child: const Text('Retry follow status'),
+            ),
+          ],
           TextButton.icon(
             onPressed: () => _open(
               context,
               CraftisanConversationScreen(
                 artisanId: avatarProduct.artisan,
+                repository: demo.repository == null
+                    ? null
+                    : CommunityRepository(
+                        firestore: demo.repository!.db,
+                        auth: demo.repository!.auth,
+                      ),
                 viewer: DemoMessageAuthor.buyer,
               ),
             ),
@@ -2084,30 +2475,20 @@ class BuyerCart extends StatelessWidget {
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: demo,
-    builder: (context, _) => _BuyerPage(
+    builder: (context, _) => _ShoppingCartPage(
       demo: demo,
-      title: 'Atelier Bag (${demo.count} pieces)',
+      title: 'Cart (${demo.count})',
       requiresLogin: true,
-      footer: demo.cart.isEmpty
-          ? null
-          : CustomButton(
-              label: 'Proceed to Checkout · ${money(demo.total, demo.currency)}',
-              onPressed: () => _open(context, BuyerCheckout(demo: demo)),
-            ),
       children: [
-        const _Eyebrow('STUDIO SELECTIONS'),
-        if (demo.cart.isEmpty) ...[
-          const _Heading('Your bag is waiting for a story'),
-          const Text('Discover a handmade piece to begin your collection.'),
-          const SizedBox(height: 20),
-          CustomButton(
-            label: 'Explore pieces',
-            onPressed: () => Navigator.popUntil(
-              context,
-              (r) => r.settings.name == RouteNames.marketplace || r.isFirst,
-            ),
-          ),
-        ],
+        if (demo.loading || demo.cartLoading)
+          const Padding(
+            padding: EdgeInsets.all(48),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (demo.cartError != null)
+          Text(demo.cartError!)
+        else if (demo.cart.isEmpty && demo.unavailableCartIds.isEmpty)
+          _EmptyShoppingCart(demo: demo),
         for (final id in demo.unavailableCartIds)
           _Panel(
             child: ListTile(
@@ -2180,7 +2561,302 @@ class BuyerCart extends StatelessWidget {
           ),
           _Totals(demo),
         ],
+        const Divider(height: 40),
+        const ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(Icons.local_shipping_outlined),
+          title: Text(
+            'Cash on delivery',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          subtitle: Text('Track your order from confirmation to delivery.'),
+        ),
+        const SizedBox(height: 24),
+        const _Heading('More to love'),
+        const SizedBox(height: 16),
+        if (demo.catalogError != null)
+          Text(demo.catalogError!)
+        else if (!demo.loading && demo.products.isEmpty)
+          const Text('No products available right now.')
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final products = demo.products
+                  .where((p) => (p.stock ?? 0) > 0)
+                  .take(12)
+                  .toList();
+              return Wrap(
+                spacing: 12,
+                runSpacing: 16,
+                children: [
+                  for (final product in products)
+                    SizedBox(
+                      width: (constraints.maxWidth - 12) / 2,
+                      child: _ProductCard(demo: demo, product: product),
+                    ),
+                ],
+              );
+            },
+          ),
       ],
+    ),
+  );
+}
+
+class _EmptyShoppingCart extends StatelessWidget {
+  const _EmptyShoppingCart({required this.demo});
+  final BuyerDemo demo;
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 42),
+    child: Column(
+      children: [
+        Container(
+          width: 124,
+          height: 124,
+          decoration: const BoxDecoration(
+            color: Color(0xFFFFEEE8),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(
+            Icons.shopping_cart_outlined,
+            size: 68,
+            color: Color(0xFFE63246),
+          ),
+        ),
+        const SizedBox(height: 24),
+        const Text(
+          'Your cart is empty.',
+          style: TextStyle(fontSize: 23, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 10),
+        const Text(
+          'Continue shopping to explore more.',
+          style: TextStyle(color: Colors.grey, fontSize: 15),
+        ),
+        const SizedBox(height: 24),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFFF1F3F5),
+            foregroundColor: Colors.black,
+            padding: const EdgeInsets.symmetric(horizontal: 34, vertical: 16),
+          ),
+          onPressed: () => _open(context, BuyerSearch(demo: demo)),
+          child: const Text(
+            'Explore items',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _ShoppingCartPage extends StatelessWidget {
+  const _ShoppingCartPage({
+    required this.demo,
+    required this.title,
+    required this.children,
+    this.requiresLogin = true,
+  });
+  final BuyerDemo demo;
+  final String title;
+  final List<Widget> children;
+  final bool requiresLogin;
+
+  Future<void> _clear(BuildContext context) async {
+    final repository = demo.repository;
+    if (repository == null) return;
+    try {
+      final snapshot = await repository.userCollection('cart').get();
+      final batch = repository.db.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(marketplaceError(e))));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Theme(
+    data: _buyerTheme(context),
+    child: Scaffold(
+      backgroundColor: _cream,
+      appBar: AppBar(
+        backgroundColor: _cream,
+        surfaceTintColor: Colors.transparent,
+        centerTitle: false,
+        titleSpacing: 0,
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 22),
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Search products',
+            onPressed: () => _open(context, BuyerSearch(demo: demo)),
+            icon: const Icon(Icons.search),
+          ),
+          IconButton(
+            tooltip: 'Saved products',
+            onPressed: () => _open(context, BuyerFavorites(demo: demo)),
+            icon: const Icon(Icons.favorite_border),
+          ),
+          IconButton(
+            tooltip: 'Clear cart',
+            onPressed: demo.cart.isEmpty && demo.unavailableCartIds.isEmpty
+                ? null
+                : () => _clear(context),
+            icon: const Icon(Icons.delete_outline),
+          ),
+        ],
+      ),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680),
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: const BoxDecoration(
+                  border: Border(bottom: BorderSide(color: Color(0xFFF0F0F0))),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.location_on_outlined, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        demo.country.isEmpty
+                            ? 'Choose delivery address'
+                            : demo.country,
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: demo.isSignedIn
+                          ? () => _open(context, BuyerCheckout(demo: demo))
+                          : () => _signIn(context),
+                      child: const Text('Change'),
+                    ),
+                  ],
+                ),
+              ),
+              if (demo.error != null)
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Text(demo.error!),
+                ),
+              if (requiresLogin && !demo.isSignedIn) ...[
+                const SizedBox(height: 40),
+                const Center(child: Text('Sign in to continue')),
+                TextButton(
+                  onPressed: () => _signIn(context),
+                  child: const Text('Sign in'),
+                ),
+              ] else
+                ...children,
+            ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            decoration: const BoxDecoration(
+              color: _cream,
+              border: Border(top: BorderSide(color: Color(0xFFEDEDED))),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${demo.count} items',
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
+                      ),
+                      Text(
+                        money(demo.total, demo.currency),
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFFE60023),
+                    disabledBackgroundColor: const Color(0xFFFFDDE3),
+                    disabledForegroundColor: const Color(0xFFA96570),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 22,
+                      vertical: 15,
+                    ),
+                  ),
+                  onPressed:
+                      demo.cart.isEmpty ||
+                          demo.cartLoading ||
+                          demo.cartError != null ||
+                          !demo.isSignedIn
+                      ? null
+                      : () => _open(context, BuyerCheckout(demo: demo)),
+                  child: Text(
+                    'Checkout (${demo.count})',
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          NavigationBar(
+            backgroundColor: _cream,
+            indicatorColor: const Color(0xFFFFE4E8),
+            selectedIndex: 2,
+            height: 66,
+            onDestinationSelected: (index) {
+              if (index == 0) {
+                Navigator.popUntil(
+                  context,
+                  (route) =>
+                      route.isFirst ||
+                      route.settings.name == RouteNames.marketplace,
+                );
+              }
+              if (index == 1) _open(context, BuyerSearch(demo: demo));
+              if (index == 3) _open(context, BuyerProfile(demo: demo));
+            },
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.home_outlined),
+                label: 'Home',
+              ),
+              NavigationDestination(icon: Icon(Icons.search), label: 'Shop'),
+              NavigationDestination(
+                icon: Icon(Icons.shopping_cart, color: Color(0xFFE60023)),
+                label: 'Cart',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.person_outline),
+                label: 'Account',
+              ),
+            ],
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -2192,8 +2868,14 @@ class _Totals extends StatelessWidget {
   Widget build(BuildContext context) => _Panel(
     child: Column(
       children: [
-        _Amount('Items subtotal (${demo.count})', money(demo.subtotal, demo.currency)),
-        _Amount('Delivery', demo.delivery == 0 ? 'Free' : money(demo.delivery, demo.currency)),
+        _Amount(
+          'Items subtotal (${demo.count})',
+          money(demo.subtotal, demo.currency),
+        ),
+        _Amount(
+          'Delivery',
+          demo.delivery == 0 ? 'Free' : money(demo.delivery, demo.currency),
+        ),
         const Divider(),
         _Amount('Total', money(demo.total, demo.currency)),
       ],
@@ -2387,7 +3069,12 @@ class _BuyerFavoritesState extends State<BuyerFavorites> {
               ),
               const SizedBox(height: 12),
             ],
-            _Catalog(demo: demo, products: pieces),
+            for (final product in pieces)
+              _SavedProductRow(
+                key: ValueKey(product.id),
+                demo: demo,
+                product: product,
+              ),
             const SizedBox(height: 22),
             TextButton.icon(
               onPressed: () => _open(context, BuyerSearch(demo: demo)),
@@ -2401,69 +3088,326 @@ class _BuyerFavoritesState extends State<BuyerFavorites> {
   );
 }
 
-class BuyerProfile extends StatelessWidget {
-  const BuyerProfile({super.key, required this.demo});
+class _SavedProductRow extends StatefulWidget {
+  const _SavedProductRow({
+    super.key,
+    required this.demo,
+    required this.product,
+  });
   final BuyerDemo demo;
+  final DemoProduct product;
   @override
-  Widget build(BuildContext context) => _BuyerPage(
-    demo: demo,
-    title: 'Collector Profile',
-    requiresLogin: true,
-    tab: 4,
-    children: [
-      CollectorProfileHeader(
-        repository: demo.repository == null
-            ? null
-            : ProfileRepository(
-                firestore: demo.repository!.db,
-                auth: demo.repository!.auth,
-              ),
-      ),
-      const SizedBox(height: 20),
-      const _Heading('Collector Hub'),
-      _Panel(
-        child: Column(
+  State<_SavedProductRow> createState() => _SavedProductRowState();
+}
+
+class _SavedProductRowState extends State<_SavedProductRow> {
+  bool _adding = false;
+  Future<void> _add() async {
+    if (!widget.demo.isSignedIn) {
+      _signIn(context);
+      return;
+    }
+    setState(() => _adding = true);
+    try {
+      await widget.demo.add(widget.product);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${widget.product.name} added to cart'),
+            action: SnackBarAction(
+              label: 'View cart',
+              onPressed: () => _open(context, BuyerCart(demo: widget.demo)),
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(marketplaceError(e))));
+      }
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final product = widget.product;
+    final unavailable = product.stock != null && product.stock! <= 0;
+    void details() => _open(
+      context,
+      BuyerProductDetails(demo: widget.demo, product: product),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: LayoutBuilder(
+        builder: (context, constraints) => Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            ListTile(
-              leading: const Icon(Icons.favorite_outline),
-              title: const Text('Saved pieces'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _open(context, BuyerFavorites(demo: demo)),
+            InkWell(
+              onTap: details,
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: (constraints.maxWidth * .36).clamp(90.0, 190.0),
+                child: AspectRatio(
+                  aspectRatio: .85,
+                  child: _ProductCardPhotos(product),
+                ),
+              ),
             ),
-            ListTile(
-              leading: const Icon(Icons.shopping_bag_outlined),
-              title: const Text('My bag'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _open(context, BuyerCart(demo: demo)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.receipt_long_outlined),
-              title: const Text('My Orders'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _open(context, BuyerOrders(demo: demo)),
-            ),
-            ListTile(
-              leading: const Icon(Icons.explore_outlined),
-              title: const Text('Discover makers and pieces'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _open(context, BuyerSearch(demo: demo)),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  InkWell(
+                    onTap: details,
+                    child: Text(
+                      product.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  if (product.studio.isNotEmpty)
+                    Text(
+                      product.studio,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  if (product.category.isNotEmpty)
+                    Text(
+                      product.category,
+                      style: const TextStyle(
+                        color: AppColors.muted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  Text(
+                    product.priceLabel(),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFF222222),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 10,
+                        ),
+                      ),
+                      onPressed: _adding || unavailable ? null : _add,
+                      child: Text(
+                        _adding
+                            ? 'Adding…'
+                            : unavailable
+                            ? 'Out of stock'
+                            : 'Add to cart',
+                      ),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: IconButton(
+                      tooltip: 'Remove ${product.name} from saved',
+                      onPressed: () => widget.demo.favorite(product),
+                      icon: const Icon(Icons.favorite, color: _clay),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
       ),
-      const _Panel(
-        child: Text(
-          'A collection with meaning\nSupport independent makers and discover the story behind every piece.',
+    );
+  }
+}
+
+class BuyerProfile extends StatelessWidget {
+  const BuyerProfile({super.key, required this.demo});
+  final BuyerDemo demo;
+
+  void _orders(BuildContext context) => _open(
+    context,
+    BuyerOrdersScreen(
+      demo: demo,
+      onDestinationSelected: (index) {
+        switch (index) {
+          case 0:
+            Navigator.of(context).popUntil(
+              (route) =>
+                  route.settings.name == RouteNames.marketplace ||
+                  route.isFirst,
+            );
+          case 1:
+            _open(context, BuyerSearch(demo: demo));
+          case 2:
+            _open(context, BuyerFavorites(demo: demo));
+          case 3:
+            _open(context, BuyerCart(demo: demo));
+          case 4:
+            Navigator.maybePop(context);
+        }
+      },
+    ),
+  );
+
+  Future<void> _logout(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => CraftisanDialog(
+        icon: Icons.logout_rounded,
+        title: const Text('Log out of Craftisan?'),
+        content: const Text(
+          'Your saved pieces and orders will be here when you return.',
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Log Out'),
+          ),
+        ],
       ),
-    ],
+    );
+    if (confirmed == true && context.mounted) await AuthSession.logout(context);
+  }
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: demo,
+    builder: (context, _) {
+      final repository = demo.repository == null
+          ? null
+          : ProfileRepository(
+              firestore: demo.repository!.db,
+              auth: demo.repository!.auth,
+            );
+      final actions = [
+        CollectorAction(
+          'Saved Pieces',
+          Icons.favorite_border,
+          () => _open(context, BuyerFavorites(demo: demo)),
+        ),
+        CollectorAction(
+          'My Bag',
+          Icons.shopping_bag_outlined,
+          () => _open(context, BuyerCart(demo: demo)),
+          color: collectorTeal,
+        ),
+        CollectorAction(
+          'My Orders',
+          Icons.inventory_2_outlined,
+          () => _orders(context),
+        ),
+        CollectorAction(
+          'Addresses',
+          Icons.location_on_outlined,
+          () => _open(context, BuyerCheckout(demo: demo, addressesOnly: true)),
+          color: const Color(0xFF8B611E),
+        ),
+      ];
+      return _BuyerPage(
+        demo: demo,
+        title: 'Collector Profile',
+        requiresLogin: true,
+        tab: 4,
+        children: [
+          CollectorProfileHeader(repository: repository),
+          const SizedBox(height: 16),
+          CollectorStatistics(
+            saved: demo.savedPieceCount,
+            bag: demo.bagItemCount,
+            orders: demo.orders.length,
+            bagLoading: demo.cartLoading,
+            actions: actions,
+          ),
+          const SizedBox(height: 24),
+          const _Heading('Quick Actions'),
+          const SizedBox(height: 12),
+          CollectorQuickActions(actions: actions),
+          const SizedBox(height: 24),
+          const _Heading('Account Settings'),
+          const SizedBox(height: 12),
+          CollectorSettings(
+            actions: [
+              if (repository != null)
+                CollectorAction(
+                  'Profile Information',
+                  Icons.person_outline,
+                  () => openCollectorProfileEditor(context, repository),
+                  color: collectorTeal,
+                  showProgress: true,
+                ),
+              CollectorAction(
+                'Manage Addresses',
+                Icons.location_on_outlined,
+                actions[3].onTap,
+              ),
+              CollectorAction(
+                'Notifications',
+                Icons.notifications_outlined,
+                () => _open(context, _BuyerNotificationsScreen(demo: demo)),
+              ),
+              CollectorAction(
+                'Discover makers and pieces',
+                Icons.explore_outlined,
+                () => _open(context, BuyerSearch(demo: demo)),
+                color: collectorTeal,
+              ),
+              if (demo.isSignedIn)
+                CollectorAction(
+                  'Log Out',
+                  Icons.logout,
+                  () => _logout(context),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'A collection with meaning. Support independent makers and discover the story behind every piece.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              height: 1.6,
+              color: Color(0xFF676760),
+            ),
+          ),
+        ],
+      );
+    },
   );
 }
 
 class BuyerCheckout extends StatefulWidget {
-  const BuyerCheckout({super.key, required this.demo, this.step = 0});
+  const BuyerCheckout({
+    super.key,
+    required this.demo,
+    this.step = 0,
+    this.addressesOnly = false,
+  });
   final BuyerDemo demo;
   final int step;
+  final bool addressesOnly;
   @override
   State<BuyerCheckout> createState() => _BuyerCheckoutState();
 }
@@ -2623,12 +3567,86 @@ class _BuyerCheckoutState extends State<BuyerCheckout> {
     }
   }
 
+  List<Widget> _savedAddresses(BuyerDemo d) => [
+    if (d.addressesLoading) const Center(child: CircularProgressIndicator()),
+    if (d.addressError != null) _Panel(child: Text(d.addressError!)),
+    if (!d.addressesLoading && d.addressError == null && d.addresses.isEmpty)
+      const _Panel(child: Text('No saved addresses yet.')),
+    for (final address in d.addresses)
+      _SelectionPanel(
+        selected: address['id'] == d.selectedAddressId,
+        onTap: () => d.selectAddress(address),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  address['id'] == d.selectedAddressId
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
+                  color: _clay,
+                ),
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: () => editAddress(address),
+                  icon: const Icon(Icons.edit_outlined, size: 18),
+                  label: const Text('Edit'),
+                ),
+              ],
+            ),
+            Text(
+              address['name'] as String,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${address['address']}\n${address['city']}, ${address['postalCode']}\n${address['country']}',
+              style: const TextStyle(fontSize: 16, height: 1.4),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.phone_outlined, size: 20),
+                const SizedBox(width: 8),
+                Expanded(child: Text(address['phone'] as String)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    _Panel(
+      child: ListTile(
+        contentPadding: EdgeInsets.zero,
+        leading: const Icon(Icons.add),
+        title: const Text('Add a new address'),
+        onTap: d.repository == null ? null : () => editAddress(),
+      ),
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: widget.demo,
     builder: (context, _) {
       final d = widget.demo;
       final step = widget.step;
+      if (widget.addressesOnly) {
+        return _BuyerPage(
+          demo: d,
+          title: 'Delivery Addresses',
+          requiresLogin: true,
+          children: [
+            const Text(
+              'A special piece deserves the right destination.',
+              style: TextStyle(color: Color(0xFF676760)),
+            ),
+            const SizedBox(height: 16),
+            ..._savedAddresses(d),
+          ],
+        );
+      }
+
       return _BuyerPage(
         demo: d,
         title: 'Checkout',
@@ -2737,67 +3755,7 @@ class _BuyerCheckoutState extends State<BuyerCheckout> {
               child: Text('Your bag is empty. Add a piece before continuing.'),
             ),
           if (step == 0) ...[
-            if (d.addressesLoading)
-              const Center(child: CircularProgressIndicator()),
-            if (d.addressError != null) _Panel(child: Text(d.addressError!)),
-            if (!d.addressesLoading &&
-                d.addressError == null &&
-                d.addresses.isEmpty)
-              const _Panel(child: Text('No saved addresses yet.')),
-            for (final address in d.addresses)
-              _SelectionPanel(
-                selected: address['id'] == d.selectedAddressId,
-                onTap: () => d.selectAddress(address),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          address['id'] == d.selectedAddressId
-                              ? Icons.radio_button_checked
-                              : Icons.radio_button_off,
-                          color: _clay,
-                        ),
-                        const Spacer(),
-                        TextButton.icon(
-                          onPressed: () => editAddress(address),
-                          icon: const Icon(Icons.edit_outlined, size: 18),
-                          label: const Text('Edit'),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      address['name'] as String,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${address['address']}\n${address['city']}, ${address['postalCode']}\n${address['country']}',
-                      style: const TextStyle(fontSize: 16, height: 1.4),
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        const Icon(Icons.phone_outlined, size: 20),
-                        const SizedBox(width: 8),
-                        Expanded(child: Text(address['phone'] as String)),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            _Panel(
-              child: ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.add),
-                title: const Text('Add a new address'),
-                onTap: d.repository == null ? null : () => editAddress(),
-              ),
-            ),
+            ..._savedAddresses(d),
             const SizedBox(height: 8),
             const _Heading('Delivery method'),
             _SelectionPanel(
@@ -3005,7 +3963,8 @@ class _BuyerCheckoutState extends State<BuyerCheckout> {
                       ),
                     ),
                   const Divider(),
-                  if (step >= 1) _Amount('Subtotal', money(d.subtotal, d.currency)),
+                  if (step >= 1)
+                    _Amount('Subtotal', money(d.subtotal, d.currency)),
                   _Amount('Standard delivery', money(d.delivery, d.currency)),
                 ],
               ),
@@ -3196,16 +4155,27 @@ class BuyerOrderDetails extends StatelessWidget {
         _Panel(
           child: Column(
             children: [
-              _Amount('Items subtotal (${order.count})', money(order.subtotal, order.currency)),
+              _Amount(
+                'Items subtotal (${order.count})',
+                money(order.subtotal, order.currency),
+              ),
               _Amount(
                 'Delivery fee',
-                order.deliveryFee == 0 ? 'Free' : money(order.deliveryFee, order.currency),
+                order.deliveryFee == 0
+                    ? 'Free'
+                    : money(order.deliveryFee, order.currency),
               ),
               const Divider(),
               _Amount('Total', money(order.total, order.currency)),
             ],
           ),
         ),
+        if (demo.repository != null)
+          BuyerOrderProblems(
+            key: ValueKey('problems-${order.id}'),
+            repository: BuyerProblemsRepository(demo.repository!),
+            orderId: order.id,
+          ),
       ],
     ),
   );
@@ -3380,7 +4350,10 @@ class BuyerOrderSuccess extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _Amount('Total · delivery included', money(order.total, order.currency)),
+            _Amount(
+              'Total · delivery included',
+              money(order.total, order.currency),
+            ),
             const Divider(),
             const _Eyebrow('DELIVERY LOCATION'),
             Text(demo.destination),
@@ -3391,8 +4364,10 @@ class BuyerOrderSuccess extends StatelessWidget {
       ),
       CustomButton(
         label: 'Track Order',
-        onPressed: () =>
-            _open(context, BuyerOrderTracking(demo: demo, order: order)),
+        onPressed: () => _open(
+          context,
+          BuyerOrderDetailsScreen(demo: demo, orderId: order.id),
+        ),
       ),
       TextButton(
         child: const Text('Back to dashboard'),

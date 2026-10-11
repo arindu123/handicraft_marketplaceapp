@@ -19,7 +19,7 @@ async function sendDeliveryAlerts(db, messaging, orderId, audience) {
     : [await db.doc(`users/${audience}`).get()];
   for (const user of users) {
     const profile = user.data();
-    if (!profile || profile.role !== 'courier' || profile.active === false ||
+    if (!profile || profile.role !== 'courier' || profile.courierApproval !== 'approved' || profile.active === false ||
         profile.deliveryNotifications === false ||
         (audience === 'available' && profile.deliveryOnline !== true)) continue;
     const devices = (await db.collection('deliveryDevices').where('courierId', '==', user.id).get()).docs;

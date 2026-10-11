@@ -8,6 +8,7 @@ import 'package:cloud_firestore_platform_interface/cloud_firestore_platform_inte
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:artisan_marketplace/app.dart';
+import 'package:artisan_marketplace/shared/widgets/brand_splash_screen.dart';
 import 'package:artisan_marketplace/features/auth/services/auth_session.dart';
 import 'package:artisan_marketplace/features/auth/widgets/auth_form.dart';
 import 'package:artisan_marketplace/shared/models/domain_models.dart'
@@ -43,6 +44,71 @@ void main() {
     },
   );
 
+  test(
+    'role checks require the server and recognize an updated admin role',
+    () async {
+      store.profile = {'role': 'buyer'};
+      expect(await AuthSession.loadRole(), UserRole.buyer);
+      store.profile = {'role': 'admin'};
+      expect(await AuthSession.loadRole(), UserRole.admin);
+      expect(store.lastReadSource, Source.server);
+      store.readError = 'unavailable';
+      await expectLater(
+        AuthSession.loadRole(),
+        throwsA(isA<FirebaseException>()),
+      );
+    },
+  );
+
+  testWidgets('Signed-in session keeps its screen after backgrounding', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const MyApp());
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pump();
+    expect(find.byType(BrandSplashScreen), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 2900));
+    expect(find.byType(BrandSplashScreen), findsOneWidget);
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pumpAndSettle();
+    expect(find.byType(BrandSplashScreen), findsNothing);
+    expect(find.text('Explore the marketplace'), findsOneWidget);
+    expect(find.text('Roles Selection'), findsNothing);
+    expect(store.reads, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  test(
+    'Courier approval blocks pending login and signs out the session',
+    () async {
+      store.profile = {'role': 'courier', 'courierApproval': 'pending'};
+      await expectLater(
+        AuthSession.signIn('courier@example.com', 'sample-password'),
+        throwsA(isA<CourierApprovalException>()),
+      );
+      expect(auth.signedInUser, isNull);
+      expect(store.lastReadSource, Source.server);
+    },
+  );
+  test(
+    'Courier approval permits approved login and rejects legacy restore',
+    () async {
+      store.profile = {'role': 'courier', 'courierApproval': 'approved'};
+      expect(
+        await AuthSession.signIn('courier@example.com', 'sample-password'),
+        UserRole.courier,
+      );
+      store.profile = {'role': 'courier'};
+      await expectLater(
+        AuthSession.restore(),
+        throwsA(isA<CourierApprovalException>()),
+      );
+    },
+  );
+
   for (final role in [
     UserRole.buyer,
     UserRole.artisan,
@@ -52,11 +118,16 @@ void main() {
     testWidgets('Saved $role session does not skip the welcome screen', (
       tester,
     ) async {
-      store.profile = {'role': role.name};
+      store.profile = {
+        'role': role.name,
+        if (role == UserRole.courier) 'courierApproval': 'approved',
+      };
       final restored = await AuthSession.restore();
       expect(restored, role);
       expect(store.reads, ['users/new-user-uid']);
       await tester.pumpWidget(const MyApp());
+      await tester.pump(const Duration(seconds: 4));
+      await tester.pumpAndSettle();
       await tester.pumpAndSettle();
       final navigator = tester.state<NavigatorState>(
         find.byType(Navigator).first,
@@ -67,7 +138,7 @@ void main() {
         return true;
       });
       expect(name, '/');
-      expect(find.text('Get Started'), findsOneWidget);
+      expect(find.text('Explore the marketplace'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
@@ -146,8 +217,10 @@ void main() {
     store.reads.clear();
     store.readError = 'unavailable';
     await tester.pumpWidget(const MyApp());
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
     await tester.pumpAndSettle();
     expect(store.reads, isEmpty);
-    expect(find.text('Sign In'), findsOneWidget);
+    expect(find.text('Sign in'), findsOneWidget);
   });
 }

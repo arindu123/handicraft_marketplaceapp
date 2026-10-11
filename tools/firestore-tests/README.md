@@ -23,3 +23,23 @@ These isolated tests do not create production users or orders.
 The tested firestore.rules must be deployed to the configured Firebase project before using this updated app against production. A hot reload alone does not deploy rules. No production deployment was completed by this change.
 
 Available confirmed orders are visible to courier accounts; assigned orders are private to their buyer, artisan, assigned courier and admins. Card payments and geographic courier matching are not implemented.
+
+
+## Complete architecture/integration rule checks
+
+Use Node.js and Java 21. The Firestore and Storage emulator ports are configured
+in the root firebase.json; no production deployment is involved.
+
+Run from the repository root:
+
+```powershell
+firebase emulators:exec --only firestore,storage --project demo-craftisan "npm --prefix tools/firestore-tests run test:all"
+```
+
+The test:all script runs all four existing rule suites sequentially so their
+shared demo project and clearFirestore calls do not interfere. Coverage includes
+checkout and the order lifecycle, trusted product aggregate protection, buyer
+notifications, follow ownership, and delivery proof Storage access.
+
+See docs/architecture-api-integration-review.md for the final validation evidence
+and the production deployment/device checks that still require approval or access.

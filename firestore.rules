@@ -4,15 +4,144 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function isAdmin() { return signedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'; }
     function owner(uid) { return signedIn() && request.auth.uid == uid; }
-    function role(value) { return signedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == value; }
+    function accountRole(value) { return signedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == value; }
+    function approvedCourier(uid) {
+      let profile = get(/databases/$(database)/documents/users/$(uid)).data;
+      return profile.role == 'courier' && profile.get('courierApproval', 'pending') == 'approved' && profile.get('active', true) != false;
+    }
+    function role(value) { return accountRole(value) && (value != 'courier' || approvedCourier(request.auth.uid)); }
+    function emailWorker() {
+      return signedIn() && exists(/databases/$(database)/documents/emailWorkers/$(request.auth.uid))
+        && get(/databases/$(database)/documents/emailWorkers/$(request.auth.uid)).data.enabled == true;
+    }
+    match /emailWorkers/{uid} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    match /adminPreferences/{uid} {
+      allow read: if owner(uid) && isAdmin();
+      allow create, update: if owner(uid) && isAdmin()
+        && request.resource.data.keys().hasOnly(['applications','orders','reports','updatedAt'])
+        && request.resource.data.applications is bool && request.resource.data.orders is bool
+        && request.resource.data.reports is bool && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+    match /adminNotificationReads/{uid}/events/{eventId} {
+      allow read: if owner(uid) && isAdmin();
+      allow create, update: if owner(uid) && isAdmin()
+        && eventId.size() <= 1500 && request.resource.data.keys().hasOnly(['readAt'])
+        && request.resource.data.readAt == request.time;
+      allow delete: if false;
+    }
+    match /adminDevices/{token} {
+      allow read: if false;
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['adminId','token','updatedAt'])
+        && request.resource.data.adminId == request.auth.uid && request.resource.data.token == token
+        && token.size() <= 1500 && request.resource.data.updatedAt == request.time;
+      allow delete: if signedIn() && resource.data.adminId == request.auth.uid;
+    }
+    match /marketplaceSettings/{id} {
+      allow read: if signedIn() && id == 'deliveryLkr';
+      allow create, update: if isAdmin() && id == 'deliveryLkr'
+        && request.resource.data.keys().hasAll(['currency','fee','freeDeliveryThreshold','updatedBy','updatedAt'])
+        && request.resource.data.keys().hasOnly(['currency','fee','freeDeliveryThreshold','updatedBy','updatedAt'])
+        && request.resource.data.currency == 'LKR'
+        && request.resource.data.fee is number && request.resource.data.fee >= 0 && request.resource.data.fee <= 100000
+        && request.resource.data.freeDeliveryThreshold is number
+        && request.resource.data.freeDeliveryThreshold >= 0 && request.resource.data.freeDeliveryThreshold <= 10000000
+        && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+    match /marketplaceReports/{id} {
+      allow read: if isAdmin() || (signedIn()
+        && resource.data.submittedBy == request.auth.uid
+        && resource.data.reporterId == request.auth.uid);
+      allow get: if role('buyer') && !exists(/databases/$(database)/documents/marketplaceReports/$(id));
+      allow create: if (isAdmin() || (role('buyer')
+          && request.resource.data.kind == 'Order'
+          && request.resource.data.reporterId == request.auth.uid
+          && request.resource.data.reason in ['Wrong item','Damaged item','Delivery delay']
+          && request.resource.data.notes.size() > 0
+          && get(/databases/$(database)/documents/orders/$(request.resource.data.targetId)).data.buyerId == request.auth.uid))
+        && request.resource.data.keys().hasOnly(['kind','targetId','reporterId','reason','notes','submittedBy','createdAt'])
+        && request.resource.data.kind in ['Product','Delivery','Order']
+        && request.resource.data.targetId is string && request.resource.data.targetId.size() <= 128
+        && (request.resource.data.kind == 'Product'
+          ? exists(/databases/$(database)/documents/products/$(request.resource.data.targetId))
+          : exists(/databases/$(database)/documents/orders/$(request.resource.data.targetId)))
+        && request.resource.data.reporterId is string && request.resource.data.reporterId.size() > 0 && request.resource.data.reporterId.size() <= 200
+        && request.resource.data.reason is string && request.resource.data.reason.size() > 0 && request.resource.data.reason.size() <= 200
+        && request.resource.data.notes is string && request.resource.data.notes.size() <= 2000
+        && request.resource.data.submittedBy == request.auth.uid && request.resource.data.createdAt == request.time;
+      allow update, delete: if false;
+    }
+    // Collection-group access is reserved for the admin reports inbox.
+    match /{path=**}/deliveryIssues/{reportId} {
+      allow list: if isAdmin();
+    }
+    match /reportResolutions/{id} {
+      function ownBuyerResolution() {
+        let source = get(path('/databases/' + database + '/documents/' + resource.data.sourcePath)).data;
+        return signedIn() && resource.data.sourcePath.matches('marketplaceReports/[^/]+')
+          && source.submittedBy == request.auth.uid && source.reporterId == request.auth.uid;
+      }
+      allow read: if isAdmin() || ownBuyerResolution();
+      allow get: if role('buyer') && !exists(/databases/$(database)/documents/reportResolutions/$(id));
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['sourcePath','status','notes','resolvedBy','updatedAt'])
+        && request.resource.data.sourcePath is string
+        && request.resource.data.sourcePath.matches('(marketplaceReports/[^/]+|orders/[^/]+/deliveryIssues/[^/]+)')
+        && exists(path('/databases/' + database + '/documents/' + request.resource.data.sourcePath))
+        && request.resource.data.status == 'Resolved'
+        && request.resource.data.notes is string && request.resource.data.notes.size() > 0 && request.resource.data.notes.size() <= 2000
+        && request.resource.data.resolvedBy == request.auth.uid && request.resource.data.updatedAt == request.time;
+      allow delete: if false;
+    }
+    match /adminActivity/{id} {
+      allow read: if isAdmin();
+      function validActivity() {
+        let d = request.resource.data;
+        let target = /databases/$(database)/documents/$(d.collection)/$(d.targetId);
+        let previous = exists(target) ? get(target).data : {};
+        let updated = getAfter(target).data;
+        return d.keys().hasOnly(['actorId','action','collection','targetId','before','after','createdAt'])
+          && d.actorId == request.auth.uid && d.createdAt == request.time
+          && d.collection in ['users','products','orders','artisanProfiles','marketplaceSettings','marketplaceReports','reportResolutions']
+          && d.targetId is string && d.targetId.size() > 0 && d.targetId.size() <= 1500
+          && d.before == previous && d.after == updated && previous != updated
+          && ((d.collection == 'users' && d.action in ['Account availability updated','Courier approved','Courier rejected'])
+            || (d.collection == 'products' && d.action == 'Product visibility updated')
+            || (d.collection == 'orders' && (d.action == 'Order status updated'
+              || (d.action == 'Courier assigned' && updated.status == 'courierAssigned')))
+            || (d.collection == 'artisanProfiles' &&
+              ((d.action == 'Artisan approved' && updated.verificationStatus == 'verified')
+                || (d.action == 'Artisan rejected' && updated.verificationStatus == 'rejected')))
+            || (d.collection == 'marketplaceSettings' && d.targetId == 'deliveryLkr' && d.action == 'Delivery fees updated')
+            || (d.collection == 'marketplaceReports' && d.action == 'Complaint recorded' && previous == {})
+            || (d.collection == 'reportResolutions' && d.action == 'Complaint resolved'));
+      }
+      allow create: if isAdmin() && validActivity();
+      allow update, delete: if false;
+    }
     match /users/{uid} {
       allow read: if owner(uid) || isAdmin();
       allow create: if owner(uid)
-        && request.resource.data.keys().hasOnly(['uid', 'email', 'displayName', 'role', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'displayName', 'role', 'createdAt', 'updatedAt','courierApproval','phone','area','vehicleType'])
         && request.resource.data.uid == uid
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.displayName is string
         && request.resource.data.role in ['buyer', 'artisan', 'courier']
+        && (request.resource.data.role == 'courier' ? request.resource.data.courierApproval == 'pending' : !('courierApproval' in request.resource.data))
+        && (!request.resource.data.keys().hasAny(['phone','area','vehicleType'])
+          || (request.resource.data.role == 'courier'
+            && request.resource.data.keys().hasAll(['phone','area','vehicleType'])
+            && request.resource.data.phone is string
+            && request.resource.data.phone.size() >= 7 && request.resource.data.phone.size() <= 40
+            && request.resource.data.phone.matches('\\+?[0-9 ()-]+')
+            && request.resource.data.area is string
+            && request.resource.data.area.size() > 0 && request.resource.data.area.size() <= 100
+            && request.resource.data.vehicleType in ['Bike','Three-wheeler','Van']))
         && request.resource.data.createdAt == request.time && request.resource.data.updatedAt == request.time;
       // Role and ownership are immutable from the client.
       allow update: if owner(uid)
@@ -25,6 +154,13 @@ service cloud.firestore {
         && (request.resource.data.get('photoUrl', '') == '' || request.resource.data.photoUrl.matches('https://.*'))
         && request.resource.data.updatedAt == request.time;
       allow update: if isAdmin() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['active']) && request.resource.data.active is bool;
+      allow update: if isAdmin() && resource.data.role == 'courier'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['courierApproval','courierReviewedBy','courierReviewedAt'])
+        && resource.data.get('courierApproval','pending') == 'pending'
+        && request.resource.data.courierApproval in ['approved','rejected']
+        && request.resource.data.courierReviewedBy == request.auth.uid
+        && request.resource.data.courierReviewedAt == request.time
+        && existsAfter(/databases/$(database)/documents/courierApprovalEmails/$(uid));
       allow update: if owner(uid) && role('courier')
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveryOnline', 'updatedAt'])
         && request.resource.data.deliveryOnline is bool
@@ -34,6 +170,13 @@ service cloud.firestore {
         && request.resource.data.deliveryNotifications is bool
         && request.resource.data.updatedAt == request.time;
       allow delete: if false;
+      match /notifications/{notificationId} {
+        allow read: if owner(uid);
+        allow update: if owner(uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+          && request.resource.data.read == true;
+        allow create, delete: if false;
+      }
       match /cart/{productId} {
         allow read, delete: if owner(uid);
         allow create, update: if owner(uid) && role('buyer')
@@ -56,6 +199,18 @@ service cloud.firestore {
           && request.resource.data.country is string && request.resource.data.country.size() > 0 && request.resource.data.country.size() <= 100
           && request.resource.data.phone is string && request.resource.data.phone.size() > 0 && request.resource.data.phone.size() <= 40;
       }
+      match /followedArtisans/{artisanId} {
+        allow read, delete: if owner(uid) && role('buyer')
+          && request.auth.token.firebase.sign_in_provider != 'anonymous';
+        allow create, update: if owner(uid) && role('buyer')
+          && request.auth.token.firebase.sign_in_provider != 'anonymous'
+          && artisanId != uid
+          && exists(/databases/$(database)/documents/artisanProfiles/$(artisanId))
+          && request.resource.data.keys().hasAll(['artisanId', 'addedAt'])
+          && request.resource.data.keys().hasOnly(['artisanId', 'addedAt'])
+          && request.resource.data.artisanId == artisanId
+          && request.resource.data.addedAt == request.time;
+      }
       match /favorites/{productId} {
         allow read, delete: if owner(uid);
         allow create, update: if owner(uid) && role('buyer')
@@ -67,13 +222,16 @@ service cloud.firestore {
     }
     function validProduct(id) {
       let p = request.resource.data;
-      return p.keys().hasOnly(['id','artisanId','name','category','price','currency','description','imageUrls','stock','status','createdAt','lastOrderId'])
+      return p.keys().hasOnly(['id','artisanId','name','category','price','currency','description','imageUrls','stock','status','createdAt','lastOrderId','rating','reviewCount','soldCount'])
         && p.id == id && p.artisanId == request.auth.uid
         && p.name is string && p.name.size() > 0 && p.category is string && p.description is string
         && p.price is number && p.price >= 0 && p.price < 1000000
         && p.currency in ['LKR','USD'] && p.stock is int && p.stock >= 0
         && p.imageUrls is list && p.imageUrls.size() <= 4
-        && p.status in ['draft','active','hidden'] && p.createdAt is string;
+        && p.status in ['draft','active','hidden'] && (p.createdAt is string || p.createdAt is timestamp)
+        && (exists(/databases/$(database)/documents/products/$(id))
+          ? !p.diff(resource.data).affectedKeys().hasAny(['rating','reviewCount','soldCount'])
+          : !p.keys().hasAny(['rating','reviewCount','soldCount']));
     }
     match /products/{id} {
       function orderedQuantity(items, index) {
@@ -114,6 +272,12 @@ service cloud.firestore {
         && i.imageUrl == (p.imageUrls.size() > 0 ? p.imageUrls[0] : null);
     }
     function amount(items, index) { return index < items.size() ? items[index].unitPrice * items[index].quantity : 0; }
+    function currentDeliveryFee(currency, subtotal) {
+      let configured = currency == 'LKR' && exists(/databases/$(database)/documents/marketplaceSettings/deliveryLkr);
+      let fee = configured ? get(/databases/$(database)/documents/marketplaceSettings/deliveryLkr).data.fee : 14;
+      let threshold = configured ? get(/databases/$(database)/documents/marketplaceSettings/deliveryLkr).data.freeDeliveryThreshold : 250;
+      return subtotal >= threshold ? 0 : fee;
+    }
     function validOrder(id) {
       let o = request.resource.data;
       let subtotal = amount(o.items,0) + amount(o.items,1) + amount(o.items,2) + amount(o.items,3);
@@ -128,7 +292,7 @@ service cloud.firestore {
         && o.status == 'pending' && o.items is list && o.items.size() > 0 && o.items.size() <= 4
         && validItem(o.items,0,o.artisanId) && validItem(o.items,1,o.artisanId)
         && validItem(o.items,2,o.artisanId) && validItem(o.items,3,o.artisanId)
-        && o.subtotal == subtotal && o.deliveryFee == (subtotal >= 250 ? 0 : 14)
+        && o.subtotal == subtotal && o.deliveryFee == currentDeliveryFee(o.get('currency', 'USD'), subtotal)
         && o.total == subtotal + o.deliveryFee
         && o.deliveryAddress is string && o.deliveryAddress.size() > 0
         && o.paymentMethod == 'Cash on delivery' && o.createdAt is string && o.updatedAt == null;
@@ -154,8 +318,8 @@ service cloud.firestore {
         return role('courier') && resource.data.status == 'confirmed' && resource.data.courierId == null;
       }
       allow get: if availableDelivery() || isAdmin() || signedIn() && (!exists(/databases/$(database)/documents/orders/$(id))
-        || resource.data.buyerId == request.auth.uid || resource.data.artisanId == request.auth.uid || resource.data.courierId == request.auth.uid);
-      allow list: if availableDelivery() || isAdmin() || signedIn() && (resource.data.buyerId == request.auth.uid || resource.data.artisanId == request.auth.uid || resource.data.courierId == request.auth.uid);
+        || resource.data.buyerId == request.auth.uid || resource.data.artisanId == request.auth.uid || (resource.data.courierId == request.auth.uid && role('courier')));
+      allow list: if availableDelivery() || isAdmin() || signedIn() && (resource.data.buyerId == request.auth.uid || resource.data.artisanId == request.auth.uid || (resource.data.courierId == request.auth.uid && role('courier')));
       allow create: if role('buyer') && validOrder(id);
       allow update: if availableDelivery()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','courierId','updatedAt'])
@@ -166,7 +330,9 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status','updatedAt','courierId'])
         && request.resource.data.updatedAt is string
         && ((request.resource.data.status == 'courierAssigned' && resource.data.status in ['confirmed','courierAssigned']
-            && get(/databases/$(database)/documents/users/$(request.resource.data.courierId)).data.role == 'courier')
+            && deliveryActive()
+            && approvedCourier(request.resource.data.courierId)
+            && get(/databases/$(database)/documents/users/$(request.resource.data.courierId)).data.get('active', true) != false)
           || (request.resource.data.courierId == resource.data.courierId
             && ((resource.data.status == 'pending' && request.resource.data.status == 'confirmed')
               || (resource.data.status == 'pickedUp' && request.resource.data.status == 'onTheWay')
@@ -182,7 +348,7 @@ service cloud.firestore {
       function deliveryOrder() { return get(/databases/$(database)/documents/orders/$(id)).data; }
       function deliveryReader() {
         return isAdmin() || signedIn() && (deliveryOrder().buyerId == request.auth.uid
-          || deliveryOrder().artisanId == request.auth.uid || deliveryOrder().courierId == request.auth.uid);
+          || deliveryOrder().artisanId == request.auth.uid || (deliveryOrder().courierId == request.auth.uid && role('courier')));
       }
       function assignedActive() {
         return role('courier') && deliveryOrder().courierId == request.auth.uid
@@ -232,7 +398,7 @@ service cloud.firestore {
       match /deliveryIssues/{reportId} {
         function order() { return get(/databases/$(database)/documents/orders/$(id)).data; }
         allow read: if isAdmin() || signedIn() && (order().buyerId == request.auth.uid
-          || order().artisanId == request.auth.uid || order().courierId == request.auth.uid);
+          || order().artisanId == request.auth.uid || (order().courierId == request.auth.uid && role('courier')));
         allow create: if role('courier') && order().courierId == request.auth.uid
           && order().status in ['courierAssigned','pickedUp','onTheWay']
           && request.resource.data.keys().hasOnly(['courierId','reason','notes','createdAt'])
@@ -264,6 +430,66 @@ service cloud.firestore {
         && request.resource.data.token == token && token.size() <= 2048
         && request.resource.data.updatedAt == request.time;
       allow delete: if signedIn() && resource.data.courierId == request.auth.uid;
+    }
+
+    match /buyerDevices/{token} {
+      allow read: if false;
+      allow create, update: if role('buyer')
+        && request.resource.data.keys().hasOnly(['buyerId','token','updatedAt'])
+        && request.resource.data.buyerId == request.auth.uid
+        && request.resource.data.token == token && token.size() <= 2048
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if signedIn() && resource.data.buyerId == request.auth.uid;
+    }
+
+    match /courierPublicProfiles/{uid} {
+      allow read: if signedIn();
+      allow create, update: if owner(uid) && accountRole('courier')
+        && request.resource.data.keys().hasOnly(['displayName', 'area', 'photoUrl', 'phone'])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 100
+        && request.resource.data.area is string
+        && request.resource.data.area.size() <= 100
+        && request.resource.data.photoUrl is string
+        && request.resource.data.photoUrl.size() <= 2048
+        && (request.resource.data.photoUrl == '' || request.resource.data.photoUrl.matches('https://.*'))
+        && request.resource.data.phone is string
+        && request.resource.data.phone.size() <= 40;
+      allow delete: if false;
+    }
+
+    // Compatible with Firebase Trigger Email; delivery requires configured SMTP.
+    match /courierApprovalEmails/{uid} {
+      allow read: if emailWorker() || isAdmin();
+      allow create: if isAdmin()
+        && getAfter(/databases/$(database)/documents/users/$(uid)).data.role == 'courier'
+        && getAfter(/databases/$(database)/documents/users/$(uid)).data.courierApproval in ['approved','rejected']
+        && request.resource.data.keys().hasOnly(['to','message','createdAt'])
+        && request.resource.data.to == getAfter(/databases/$(database)/documents/users/$(uid)).data.email
+        && request.resource.data.message.keys().hasOnly(['subject','text'])
+        && (getAfter(/databases/$(database)/documents/users/$(uid)).data.courierApproval == 'approved'
+          ? request.resource.data.message.subject == 'Your Craftisan courier account is verified'
+            && request.resource.data.message.text == 'Your courier account has been verified and approved by admin. You can now log in to Craftisan Delivery.'
+          : request.resource.data.message.subject == 'Your Craftisan courier application was not approved'
+            && request.resource.data.message.text == 'Your courier application was reviewed and rejected by admin. Delivery access is not enabled. Please contact the Craftisan admin team for more information.')
+        && request.resource.data.createdAt == request.time;
+      allow update: if emailWorker()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['delivery'])
+        && request.resource.data.delivery.keys().hasOnly(['state','workerId','attemptedAt','completedAt','error'])
+        && request.resource.data.delivery.workerId == request.auth.uid
+        && ((resource.data.get('delivery', {}).get('state', '') == ''
+          && request.resource.data.delivery.state == 'PROCESSING'
+          && request.resource.data.delivery.keys().hasOnly(['state','workerId','attemptedAt'])
+          && request.resource.data.delivery.attemptedAt == request.time)
+        || (resource.data.get('delivery', {}).get('state', '') == 'PROCESSING'
+          && resource.data.delivery.workerId == request.auth.uid
+          && request.resource.data.delivery.state in ['SENT','FAILED']
+          && request.resource.data.delivery.attemptedAt == resource.data.delivery.attemptedAt
+          && request.resource.data.delivery.completedAt == request.time
+          && request.resource.data.delivery.get('error', '') is string
+          && request.resource.data.delivery.get('error', '').size() <= 200));
+      allow delete: if false;
     }
 
     match /artisanProfiles/{id} {

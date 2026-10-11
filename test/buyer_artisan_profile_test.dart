@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:artisan_marketplace/core/theme/app_theme.dart';
+import 'package:artisan_marketplace/routes/route_names.dart';
 import 'package:artisan_marketplace/features/buyer/buyer_demo.dart';
 import 'package:artisan_marketplace/features/buyer/buyer_marketplace.dart';
 
 void main() {
-  testWidgets('Buyer can view, follow, and browse a verified artisan', (
+  testWidgets('Guest can browse an artisan but must sign in to follow', (
     tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
@@ -18,6 +19,10 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: AppTheme.light,
+        routes: {
+          RouteNames.signIn: (_) =>
+              Scaffold(appBar: AppBar(), body: const Text('Sign in required')),
+        },
         home: BuyerArtisanProfile(
           demo: demo,
           artisan: buyerArtisans.first,
@@ -37,9 +42,11 @@ void main() {
     }
 
     expect(find.text('Artisan Profile'), findsOneWidget);
-    expect(find.text('Verified Guild Artisan'), findsOneWidget);
     await tap('Follow Artisan');
-    expect(find.text('Following'), findsOneWidget);
+    expect(find.text('Sign in required'), findsOneWidget);
+    expect(demo.followedArtisans, isEmpty);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.text('Reviews'), 250);
     await tester.pumpAndSettle();
     expect(find.text('Reviews'), findsOneWidget);

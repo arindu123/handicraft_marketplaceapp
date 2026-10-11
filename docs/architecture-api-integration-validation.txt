@@ -1,0 +1,97 @@
+Craftisan architecture/API integration validation
+Date: 2026-10-11
+Local validation only; no deployment, commit or push performed.
+HEAD: d633c0e1cd7be0ea08f7911a9632b9bbe6008b3a
+
+Flutter
+Command: flutter test --no-pub
+Exit code: 0
+01:08 +169: All tests passed!
+
+Dart analysis
+Command: dart analyze lib test
+Exit code: 0
+Analyzing lib, test...
+No issues found!
+
+Backend logic
+Command: node --test functions/buyer.test.js functions/delivery.test.js
+Exit code: 0
+# Subtest: each confirmation and delivery milestone targets the buyer
+ok 1 - each confirmation and delivery milestone targets the buyer
+# Subtest: creation, deletion and unrelated edits do not notify
+ok 2 - creation, deletion and unrelated edits do not notify
+# Subtest: retried trigger preserves read inbox entry and removes invalid token
+ok 3 - retried trigger preserves read inbox entry and removes invalid token
+# Subtest: only new available requests and changed assignments generate alerts
+ok 4 - only new available requests and changed assignments generate alerts
+# Subtest: available alerts honor availability and preferences and remove invalid tokens
+ok 5 - available alerts honor availability and preferences and remove invalid tokens
+# Subtest: stale assignments are ignored before any token lookup
+ok 6 - stale assignments are ignored before any token lookup
+# tests 6
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+
+Firestore and Storage emulators
+Command: firebase emulators:exec --only firestore,storage --project demo-craftisan "npm --prefix tools/firestore-tests run test:all"
+Exit code: 0
+# Subtest: buyer persists and deletes their own follow; other buyers cannot access it
+ok 1 - buyer persists and deletes their own follow; other buyers cannot access it
+# Subtest: unauthenticated, anonymous and non-buyer accounts cannot follow
+ok 2 - unauthenticated, anonymous and non-buyer accounts cannot follow
+# Subtest: follow payload and artisan target must be valid
+ok 3 - follow payload and artisan target must be valid
+# Subtest: buyer owns inbox but cannot forge or edit update content
+ok 4 - buyer owns inbox but cannot forge or edit update content
+# Subtest: only buyers register devices for themselves
+ok 5 - only buyers register devices for themselves
+# Subtest: couriers publish limited contact details for assigned buyers
+ok 6 - couriers publish limited contact details for assigned buyers
+# Subtest: checkout persists contact details, reserves stock, clears cart and retries once
+ok 7 - checkout persists contact details, reserves stock, clears cart and retries once
+# Subtest: LKR orders preserve currency and cannot buy USD products
+ok 8 - LKR orders preserve currency and cannot buy USD products
+# Subtest: four-product checkout stays within rules access limits
+ok 9 - four-product checkout stays within rules access limits
+# Subtest: order without inventory reservation is rejected
+ok 10 - order without inventory reservation is rejected
+# Subtest: forged total and insufficient stock are rejected atomically
+ok 11 - forged total and insufficient stock are rejected atomically
+# Subtest: another buyer cannot read the order or reserve stock using an old order
+ok 12 - another buyer cannot read the order or reserve stock using an old order
+# Subtest: buyer to artisan to courier to delivery code is a persisted lifecycle
+ok 13 - buyer to artisan to courier to delivery code is a persisted lifecycle
+# Subtest: saved addresses are owner-only, validated and editable
+ok 14 - saved addresses are owner-only, validated and editable
+# Subtest: delivery holds block advancement and only assigned couriers can resume
+ok 15 - delivery holds block advancement and only assigned couriers can resume
+# Subtest: scheduled retries cannot resume early and returns remain on hold
+ok 16 - scheduled retries cannot resume early and returns remain on hold
+# Subtest: a hold cannot be bypassed by advancing the order in the same transaction
+ok 17 - a hold cannot be bypassed by advancing the order in the same transaction
+# Subtest: photo metadata enforces assignment, stage, private paths and participant access
+ok 18 - photo metadata enforces assignment, stage, private paths and participant access
+# Subtest: device registration and notification preferences are courier-only
+ok 19 - device registration and notification preferences are courier-only
+# Subtest: product aggregates are immutable to clients and preserved by artisan edits
+ok 20 - product aggregates are immutable to clients and preserved by artisan edits
+# Subtest: proof files are private to order participants and admins
+ok 21 - proof files are private to order participants and admins
+# Subtest: uploads reject other couriers, invalid stages and non-JPEG content
+ok 22 - uploads reject other couriers, invalid stages and non-JPEG content
+# Subtest: dropoff proof is allowed after completion while pickup is locked
+ok 23 - dropoff proof is allowed after completion while pickup is locked
+# tests 23
+# pass 23
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
++  Script exited successfully (code 0) 
+
+Production deployment and Android device verification remain pending.
+See architecture-api-integration-review.md for per-issue findings and Jira comments.

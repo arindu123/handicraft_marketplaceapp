@@ -177,8 +177,22 @@ class MarketplaceRepository {
     );
     // Uploads complete before any document is written. Do not delete uploaded images
     // after an ambiguous write error: the document may already reference them.
-    await ref.set(product.toMap());
-    return product;
+    return db.runTransaction((tx) async {
+      final current = await tx.get(ref);
+      if (auth.currentUser?.uid != owner ||
+          (current.exists && current.data()!['artisanId'] != owner)) {
+        throw const MarketplaceFailure('You can edit only your own products.');
+      }
+      final details = product.toWriteMap();
+      if (current.exists) {
+        // Preserve the original date representation and concurrent server totals.
+        details['createdAt'] = current.data()!['createdAt'];
+        tx.update(ref, details);
+      } else {
+        tx.set(ref, details);
+      }
+      return model.Product.fromMap({...?current.data(), ...details});
+    });
   }
 
   Future<void> cartQuantity(
@@ -226,6 +240,34 @@ class MarketplaceRepository {
     }
   }
 
+  Stream<Set<String>> followedArtisans() =>
+      userCollection('followedArtisans')
+          .snapshots()
+          .map((snapshot) => snapshot.docs.map((doc) => doc.id).toSet());
+
+  Future<void> followArtisan(String artisanId, bool selected) async {
+    final buyer = uid;
+    if (auth.currentUser!.isAnonymous) {
+      throw const MarketplaceFailure('Please sign in to follow artisans.');
+    }
+    if (artisanId.isEmpty || artisanId.contains('/') || artisanId == buyer) {
+      throw const MarketplaceFailure('This artisan cannot be followed.');
+    }
+    await requireRole(model.UserRole.buyer);
+    if (auth.currentUser?.uid != buyer) {
+      throw const MarketplaceFailure('Your session changed. Please try again.');
+    }
+    final ref = userCollection('followedArtisans').doc(artisanId);
+    if (selected) {
+      await ref.set({
+        'artisanId': artisanId,
+        'addedAt': FieldValue.serverTimestamp(),
+      });
+    } else {
+      await ref.delete();
+    }
+  }
+
   // Keep the existing numeric fee policy; orders retain their own currency.
   static double deliveryFeeFor(double subtotal) => subtotal >= 250 ? 0 : 14;
 
@@ -251,7 +293,10 @@ class MarketplaceRepository {
         products.map((p) => p.currency).toSet().length != 1 ||
         address.trim().isEmpty ||
         products.any(
-          (p) => !['LKR', 'USD'].contains(p.currency) || !p.price.isFinite || p.price < 0,
+          (p) =>
+              !['LKR', 'USD'].contains(p.currency) ||
+              !p.price.isFinite ||
+              p.price < 0,
         )) {
       throw const MarketplaceFailure(
         'Please check your products and delivery address.',

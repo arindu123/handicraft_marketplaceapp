@@ -83,7 +83,7 @@ void main() {
         return true;
       });
       expect(name, '/');
-      expect(find.text('Get Started'), findsOneWidget);
+      expect(find.text('Explore the marketplace'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   }
@@ -164,6 +164,6 @@ void main() {
     await tester.pumpWidget(const MyApp());
     await tester.pumpAndSettle();
     expect(store.reads, isEmpty);
-    expect(find.text('Sign In'), findsOneWidget);
+    expect(find.text('Sign in'), findsOneWidget);
   });
 }

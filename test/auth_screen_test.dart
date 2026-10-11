@@ -178,8 +178,8 @@ Future<void> openSignIn(
   String role = 'Artisan / Studio Maker',
 }) async {
   await tester.pumpWidget(const MyApp());
-  await tester.ensureVisible(find.text('Sign In'));
-  await tester.tap(find.text('Sign In'));
+  await tester.ensureVisible(find.text('Sign in'));
+  await tester.tap(find.text('Sign in'));
   await tester.pumpAndSettle();
   expect(find.text('Roles Selection'), findsOneWidget);
   await tapVisible(tester, role);

@@ -7,7 +7,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(const MyApp());
-    await tester.tap(find.text('Get Started'));
+    await tester.tap(find.text('Explore the marketplace'));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
@@ -38,8 +38,8 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(const MyApp());
-    expect(find.text('Craftisan'), findsOneWidget);
-    await tester.tap(find.text('Get Started'));
+    expect(find.bySemanticsLabel('Craftisan Marketplace logo'), findsOneWidget);
+    await tester.tap(find.text('Explore the marketplace'));
     await tester.pumpAndSettle();
     expect(find.text('Handmade.\nMade for you.'), findsOneWidget);
     await tester.tap(find.text('Continue'));
@@ -57,7 +57,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Roles Selection'), findsOneWidget);
     expect(find.text('Full name'), findsNothing);
-    expect(find.text('Get Started'), findsNothing);
+    expect(find.text('Explore the marketplace'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -65,7 +65,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(const MyApp());
-    await tester.tap(find.text('Get Started'));
+    await tester.tap(find.text('Explore the marketplace'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Skip'));
     await tester.pumpAndSettle();
@@ -82,8 +82,8 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     await tester.pumpWidget(const MyApp());
-    await tester.ensureVisible(find.text('Get Started'));
-    await tester.tap(find.text('Get Started'));
+    await tester.ensureVisible(find.text('Explore the marketplace'));
+    await tester.tap(find.text('Explore the marketplace'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     await tester.tap(find.text('Continue'));

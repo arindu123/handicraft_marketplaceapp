@@ -34,10 +34,10 @@ void main() {
     expect(find.text('Nimal'), findsOneWidget);
     await tester.tap(find.text('Edit profile & photo'));
     await tester.pumpAndSettle();
-    expect(find.text('Choose profile photo'), findsOneWidget);
+    expect(find.byTooltip('Choose profile photo'), findsOneWidget);
     await tester.enterText(find.byType(TextFormField).first, 'Nimal Perera');
-    await tester.ensureVisible(find.text('Save profile'));
-    await tester.tap(find.text('Save profile'));
+    await tester.ensureVisible(find.text('Save changes'));
+    await tester.tap(find.text('Save changes'));
     await tester.pumpAndSettle();
     expect(find.text('Nimal Perera'), findsOneWidget);
     expect(

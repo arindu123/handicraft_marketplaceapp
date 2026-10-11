@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, setDoc, getDoc, getDocs, collection, query, where, runTransaction, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocs, collection, query, where, runTransaction, updateDoc, deleteField, Timestamp, serverTimestamp } from 'firebase/firestore';
 
 let env;
 const now = '2026-10-05T00:00:00.000Z';
@@ -223,4 +223,26 @@ test('device registration and notification preferences are courier-only', async 
   await assertFails(setDoc(device, { courierId: 'courier', token: 'wrong-token', updatedAt: serverTimestamp() }));
   await assertSucceeds(updateDoc(doc(courier, 'users/courier'), { deliveryNotifications: false, updatedAt: serverTimestamp() }));
   await assertFails(updateDoc(doc(dbFor('other'), 'users/courier'), { deliveryNotifications: true, updatedAt: serverTimestamp() }));
+});
+
+
+test('product aggregates are immutable to clients and preserved by artisan edits', async () => {
+  await env.withSecurityRulesDisabled(async ctx => {
+    await updateDoc(doc(ctx.firestore(), 'products/p0'), { rating: 4.8, reviewCount: 12, soldCount: 50,
+      createdAt: Timestamp.fromDate(new Date(now)) });
+  });
+  const artisan = doc(dbFor('artisan'), 'products/p0');
+  await assertSucceeds(updateDoc(artisan, { name: 'Updated mug' }));
+  for (const role of ['buyer', 'artisan']) {
+    const ref = doc(dbFor(role), 'products/p0');
+    for (const field of ['rating', 'reviewCount', 'soldCount']) {
+      await assertFails(updateDoc(ref, { [field]: 999 }));
+      await assertFails(updateDoc(ref, { [field]: deleteField() }));
+    }
+  }
+  const base = (await getDoc(artisan)).data();
+  await assertFails(setDoc(doc(dbFor('artisan'), 'products/forged'), { ...base, id: 'forged' }));
+  const clean = { ...base, id: 'clean', createdAt: now };
+  delete clean.rating; delete clean.reviewCount; delete clean.soldCount;
+  await assertSucceeds(setDoc(doc(dbFor('artisan'), 'products/clean'), clean));
 });

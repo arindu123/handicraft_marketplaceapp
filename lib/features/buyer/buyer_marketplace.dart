@@ -1417,6 +1417,8 @@ class _ProductCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   product.priceLabel(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 18,
@@ -2139,9 +2141,12 @@ class BuyerArtisanProfile extends StatelessWidget {
   final DemoProduct avatarProduct;
 
   @override
-  Widget build(BuildContext context) => MarketplaceBackend.enabled
+  Widget build(BuildContext context) => demo.repository != null
       ? StreamBuilder(
-          stream: CommunityRepository().reviews(avatarProduct.artisan),
+          stream: CommunityRepository(
+            firestore: demo.repository!.db,
+            auth: demo.repository!.auth,
+          ).reviews(avatarProduct.artisan),
           builder: (context, snapshot) {
             if (snapshot.hasError) {
               return _BuyerPage(
@@ -2162,8 +2167,18 @@ class BuyerArtisanProfile extends StatelessWidget {
                 )
                 .toList();
             return StreamBuilder(
-              stream: CommunityRepository().profile(avatarProduct.artisan),
+              stream: CommunityRepository(
+                firestore: demo.repository!.db,
+                auth: demo.repository!.auth,
+              ).profile(avatarProduct.artisan),
               builder: (context, profile) {
+                if (profile.hasError) {
+                  return _BuyerPage(
+                    demo: demo,
+                    title: 'Artisan Profile',
+                    children: [Text(marketplaceError(profile.error!))],
+                  );
+                }
                 final data = profile.data?.data() ?? {};
                 return _content(
                   context,
@@ -2194,7 +2209,10 @@ class BuyerArtisanProfile extends StatelessWidget {
   ) => ListenableBuilder(
     listenable: demo,
     builder: (context, _) {
-      final following = demo.followedArtisans.contains(artisan.name);
+      final artisanId = avatarProduct.artisan;
+      final following = demo.followedArtisans.contains(artisanId);
+      final followBusy =
+          demo.followsLoading || demo.followingWrites.contains(artisanId);
       final products = demo.products
           .where((product) => product.artisan == artisan.name)
           .toList();
@@ -2254,7 +2272,16 @@ class BuyerArtisanProfile extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: () => demo.followArtisan(artisan),
+            onPressed:
+                followBusy || (demo.isSignedIn && demo.followError != null)
+                ? null
+                : () {
+                    if (!demo.isSignedIn) {
+                      _signIn(context);
+                      return;
+                    }
+                    demo.followArtisan(artisan, artisanId: artisanId);
+                  },
             style: FilledButton.styleFrom(
               backgroundColor: following
                   ? AppColors.surface
@@ -2262,14 +2289,42 @@ class BuyerArtisanProfile extends StatelessWidget {
               foregroundColor: following ? AppColors.terracotta : Colors.white,
               minimumSize: const Size(180, 48),
             ),
-            icon: Icon(following ? Icons.check : Icons.add),
-            label: Text(following ? 'Following' : 'Follow Artisan'),
+            icon: followBusy
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(following ? Icons.check : Icons.add),
+            label: Text(
+              followBusy
+                  ? 'Please wait...'
+                  : following
+                  ? 'Following'
+                  : 'Follow Artisan',
+            ),
           ),
+          if (demo.followError != null) ...[
+            Text(
+              demo.followError!,
+              style: const TextStyle(color: AppColors.terracotta),
+            ),
+            TextButton(
+              onPressed: demo.retryFollows,
+              child: const Text('Retry follow status'),
+            ),
+          ],
           TextButton.icon(
             onPressed: () => _open(
               context,
               CraftisanConversationScreen(
                 artisanId: avatarProduct.artisan,
+                repository: demo.repository == null
+                    ? null
+                    : CommunityRepository(
+                        firestore: demo.repository!.db,
+                        auth: demo.repository!.auth,
+                      ),
                 viewer: DemoMessageAuthor.buyer,
               ),
             ),

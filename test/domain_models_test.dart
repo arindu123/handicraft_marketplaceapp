@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
 
 import 'package:artisan_marketplace/shared/models/domain_models.dart';
 
@@ -31,6 +32,27 @@ void main() {
     expect(restored.courierId, isNull);
     expect(restored.items.single.productId, 'product-1');
     expect(restored.createdAt, DateTime.utc(2026, 1, 2));
+    final timestampMap = order.toMap()
+      ..['createdAt'] = Timestamp.fromDate(order.createdAt)
+      ..['updatedAt'] = Timestamp.fromDate(order.createdAt);
+    final timestampOrder = Order.fromMap(timestampMap);
+    expect(timestampOrder.createdAt, order.createdAt);
+    expect(timestampOrder.updatedAt, order.createdAt);
+    expect(timestampOrder.toMap()['createdAt'], isA<String>());
+  });
+
+  test('document dates accept ISO, Timestamp and DateTime; invalid values fail clearly', () {
+    final date = DateTime.utc(2026, 10, 11);
+    for (final value in [
+      date,
+      date.toIso8601String(),
+      Timestamp.fromDate(date),
+    ]) {
+      expect(documentDate(value), date);
+    }
+    expect(documentDate(null), isNull);
+    expect(() => documentDate(42), throwsFormatException);
+    expect(() => documentDate('invalid'), throwsFormatException);
   });
 
   test('User and Product maps round-trip', () {

@@ -63,6 +63,18 @@ service cloud.firestore {
           && request.resource.data.country is string && request.resource.data.country.size() > 0 && request.resource.data.country.size() <= 100
           && request.resource.data.phone is string && request.resource.data.phone.size() > 0 && request.resource.data.phone.size() <= 40;
       }
+      match /followedArtisans/{artisanId} {
+        allow read, delete: if owner(uid) && role('buyer')
+          && request.auth.token.firebase.sign_in_provider != 'anonymous';
+        allow create, update: if owner(uid) && role('buyer')
+          && request.auth.token.firebase.sign_in_provider != 'anonymous'
+          && artisanId != uid
+          && exists(/databases/$(database)/documents/artisanProfiles/$(artisanId))
+          && request.resource.data.keys().hasAll(['artisanId', 'addedAt'])
+          && request.resource.data.keys().hasOnly(['artisanId', 'addedAt'])
+          && request.resource.data.artisanId == artisanId
+          && request.resource.data.addedAt == request.time;
+      }
       match /favorites/{productId} {
         allow read, delete: if owner(uid);
         allow create, update: if owner(uid) && role('buyer')
@@ -74,13 +86,16 @@ service cloud.firestore {
     }
     function validProduct(id) {
       let p = request.resource.data;
-      return p.keys().hasOnly(['id','artisanId','name','category','price','currency','description','imageUrls','stock','status','createdAt','lastOrderId'])
+      return p.keys().hasOnly(['id','artisanId','name','category','price','currency','description','imageUrls','stock','status','createdAt','lastOrderId','rating','reviewCount','soldCount'])
         && p.id == id && p.artisanId == request.auth.uid
         && p.name is string && p.name.size() > 0 && p.category is string && p.description is string
         && p.price is number && p.price >= 0 && p.price < 1000000
         && p.currency in ['LKR','USD'] && p.stock is int && p.stock >= 0
         && p.imageUrls is list && p.imageUrls.size() <= 4
-        && p.status in ['draft','active','hidden'] && p.createdAt is string;
+        && p.status in ['draft','active','hidden'] && (p.createdAt is string || p.createdAt is timestamp)
+        && (exists(/databases/$(database)/documents/products/$(id))
+          ? !p.diff(resource.data).affectedKeys().hasAny(['rating','reviewCount','soldCount'])
+          : !p.keys().hasAny(['rating','reviewCount','soldCount']));
     }
     match /products/{id} {
       function orderedQuantity(items, index) {

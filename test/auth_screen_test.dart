@@ -266,12 +266,16 @@ void main() {
             ),
           );
           await fillForm(tester, signUp);
-          final label = signUp ? role.signUpLabel : role.signInLabel;
+          final label = !signUp && role == MarketplaceRole.buyer
+              ? 'Sign In'
+              : signUp
+              ? role.signUpLabel
+              : role.signInLabel;
           if (!signUp && role == MarketplaceRole.buyer) {
             await tester.ensureVisible(find.text(label));
             await tester.tap(find.text(label));
             await tester.pump();
-            expect(find.text('Signing you in…'), findsOneWidget);
+            expect(find.text('Signing in…'), findsOneWidget);
             expect(
               tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
               isNull,
@@ -471,14 +475,14 @@ void main() {
     'Sign in validates, toggles password visibility, and keeps role when switching pages',
     (tester) async {
       await openSignIn(tester, role: 'Buyer / Patron');
-      expect(find.text('Good to see\nyou again.'), findsOneWidget);
+      expect(find.text('Welcome to Craftisan'), findsOneWidget);
       expect(find.text('Email address'), findsOneWidget);
-      await tapVisible(tester, 'Sign In to Collection');
+      await tapVisible(tester, 'Sign In');
       expect(find.text('Enter your email address.'), findsOneWidget);
       expect(find.text('Enter your password.'), findsOneWidget);
       await tester.enterText(find.byType(TextFormField).at(0), 'not-an-email');
       await tester.enterText(find.byType(TextFormField).at(1), 'mypassword');
-      await tapVisible(tester, 'Sign In to Collection');
+      await tapVisible(tester, 'Sign In');
       expect(find.text('Enter a valid email address.'), findsOneWidget);
       await tester.ensureVisible(find.byTooltip('Show password'));
       await tester.tap(find.byTooltip('Show password'));
@@ -491,17 +495,17 @@ void main() {
         find.byType(TextFormField).at(0),
         'collector@example.com',
       );
-      await tapVisible(tester, 'Sign In to Collection');
+      await tapVisible(tester, 'Sign In');
       expect(
         find.text('Check your internet connection and try again.'),
         findsOneWidget,
       );
       expect(find.text('Artisan Dashboard'), findsNothing);
-      await tapVisible(tester, 'Sign Up');
+      await tapVisible(tester, 'Create an account');
       expect(find.text('Create Collector Account'), findsOneWidget);
       expect(find.text('Full name'), findsOneWidget);
       await tapVisible(tester, 'Sign In');
-      expect(find.text('Sign In to Collection'), findsOneWidget);
+      expect(find.text('Sign In'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

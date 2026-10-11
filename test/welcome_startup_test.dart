@@ -22,7 +22,7 @@ void main() {
       expect(find.byType(WelcomeScreen), findsOneWidget);
       ready.complete();
       await tester.pumpAndSettle();
-      expect(find.text('Handmade.\nMade for you.'), findsOneWidget);
+      expect(find.text('Discover Handmade Products'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

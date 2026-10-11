@@ -8,9 +8,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/app_colors.dart';
 import '../../../routes/route_names.dart';
-import '../../../shared/widgets/custom_button.dart';
 import '../../../shared/widgets/custom_text_field.dart';
-import '../widgets/craftisan_mark.dart';
 
 class _ResetFrame extends StatelessWidget {
   const _ResetFrame({required this.child});
@@ -18,14 +16,34 @@ class _ResetFrame extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
+    backgroundColor: _resetIvory,
     body: SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
-            child: child,
+      child: LayoutBuilder(
+        builder: (context, constraints) => SingleChildScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 520),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                      child: child,
+                    ),
+                  ),
+                ),
+                const ExcludeSemantics(
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 120,
+                    child: CustomPaint(painter: _ResetFooterPainter()),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -34,53 +52,73 @@ class _ResetFrame extends StatelessWidget {
 }
 
 class _ResetHeader extends StatelessWidget {
-  const _ResetHeader({required this.step, this.backToSignIn = false});
-  final String step;
-  final bool backToSignIn;
+  const _ResetHeader();
 
   @override
   Widget build(BuildContext context) => Column(
     children: [
       Row(
         children: [
-          IconButton(
-            tooltip: backToSignIn ? 'Back to Sign In' : 'Back',
-            onPressed: () => backToSignIn
-                ? Navigator.pushNamedAndRemoveUntil(
-                    context,
-                    RouteNames.signIn,
-                    (route) => route.isFirst,
-                  )
-                : Navigator.pop(context),
-            icon: const Icon(Icons.arrow_back),
+          IconButton.filledTonal(
+            tooltip: 'Back',
+            onPressed: () => Navigator.pushNamedAndRemoveUntil(
+              context,
+              RouteNames.signIn,
+              (route) => route.isFirst,
+            ),
+            style: IconButton.styleFrom(
+              backgroundColor: const Color(0xFFF3E9E1),
+              foregroundColor: _resetClay,
+            ),
+            icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
           ),
-          const Spacer(),
-          const Text(
-            'CRAFTISAN GUILD',
-            style: TextStyle(
-              fontSize: 10,
-              letterSpacing: 1,
-              color: AppColors.sage,
+          const Expanded(
+            child: Column(
+              children: [
+                Text(
+                  'CRAFTISAN',
+                  style: TextStyle(
+                    fontFamily: 'CormorantGaramond',
+                    fontSize: 29,
+                    letterSpacing: 1.5,
+                    color: _resetTeal,
+                  ),
+                ),
+                Text(
+                  'MARKETPLACE',
+                  style: TextStyle(
+                    fontSize: 10,
+                    letterSpacing: 3.5,
+                    color: _resetClay,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
+          const SizedBox(width: 48),
         ],
       ),
-      const SizedBox(height: 18),
-      const CircleAvatar(
-        radius: 32,
-        backgroundColor: AppColors.surface,
-        child: CraftisanMark(size: 38),
+      const SizedBox(height: 32),
+      const ExcludeSemantics(
+        child: SizedBox(
+          height: 155,
+          width: double.infinity,
+          child: CustomPaint(painter: _ResetEnvelopePainter(sent: false)),
+        ),
       ),
-      const SizedBox(height: 18),
-      Text(
-        step,
-        style: const TextStyle(
-          fontSize: 10,
-          letterSpacing: 1.1,
-          color: AppColors.terracotta,
+      const SizedBox(height: 14),
+      const Text(
+        'RESET YOUR PASSWORD',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 11,
+          letterSpacing: 2.2,
+          color: _resetClay,
           fontWeight: FontWeight.w600,
         ),
       ),
+      const SizedBox(height: 10),
     ],
   );
 }
@@ -94,7 +132,15 @@ class _ResetCard extends StatelessWidget {
     padding: const EdgeInsets.all(20),
     decoration: BoxDecoration(
       color: Colors.white,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: const Color(0xFFEEDFD5)),
+      boxShadow: const [
+        BoxShadow(
+          color: Color(0x06634B3A),
+          blurRadius: 20,
+          offset: Offset(0, 6),
+        ),
+      ],
     ),
     child: child,
   );
@@ -147,12 +193,16 @@ class _PasswordResetRequestScreenState
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const _ResetHeader(step: 'SECURITY PROTOCOL', backToSignIn: true),
+        const _ResetHeader(),
         Text(
           'Recover Your Passcode',
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.headlineLarge
-              ?.copyWith(fontSize: 32, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            fontFamily: 'CormorantGaramond',
+            fontSize: 38,
+            height: 1.1,
+            color: _resetTeal,
+          ),
         ),
         const SizedBox(height: 10),
         const Text(
@@ -161,14 +211,6 @@ class _PasswordResetRequestScreenState
           style: TextStyle(color: AppColors.muted, height: 1.5),
         ),
         const SizedBox(height: 18),
-        const Wrap(
-          alignment: WrapAlignment.center,
-          spacing: 8,
-          children: [
-            Chip(label: Text('Collector Vault')),
-            Chip(label: Text('Artisan Studio')),
-          ],
-        ),
         _ResetCard(
           child: Form(
             key: _form,
@@ -199,14 +241,55 @@ class _PasswordResetRequestScreenState
                 if (_error != null)
                   Text(
                     _error!,
+                    semanticsLabel: _error,
                     style: const TextStyle(color: AppColors.terracotta),
                   ),
-                CustomButton(label: 'Send Reset Email', onPressed: _next),
+                FilledButton(
+                  onPressed: _sending ? null : _next,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: _resetClay,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(54),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 18,
+                      vertical: 16,
+                    ),
+                    shape: const StadiumBorder(),
+                  ),
+                  child: _sending
+                      ? Semantics(
+                          label: 'Sending reset email',
+                          child: const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: _resetClay,
+                            ),
+                          ),
+                        )
+                      : const Wrap(
+                          alignment: WrapAlignment.center,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 10,
+                          children: [
+                            Text(
+                              'Send Reset Email',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            Icon(Icons.arrow_forward_rounded, size: 21),
+                          ],
+                        ),
+                ),
               ],
             ),
           ),
         ),
         TextButton(
+          style: TextButton.styleFrom(
+            foregroundColor: _resetClay,
+            padding: const EdgeInsets.symmetric(vertical: 18),
+          ),
           onPressed: () => Navigator.pushNamedAndRemoveUntil(
             context,
             RouteNames.signIn,
@@ -789,7 +872,8 @@ class _ResetFooterPainter extends CustomPainter {
 }
 
 class _ResetEnvelopePainter extends CustomPainter {
-  const _ResetEnvelopePainter();
+  const _ResetEnvelopePainter({this.sent = true});
+  final bool sent;
   @override
   void paint(Canvas canvas, Size size) {
     canvas.save();
@@ -877,23 +961,51 @@ class _ResetEnvelopePainter extends CustomPainter {
         ..close(),
       paint..color = const Color(0xFFD98750),
     );
-    canvas.drawCircle(
-      const Offset(160, 88),
-      24,
-      paint..color = const Color(0xFF718765),
-    );
-    canvas.drawPath(
-      Path()
-        ..moveTo(149, 88)
-        ..lineTo(157, 96)
-        ..lineTo(173, 79),
-      paint
-        ..color = Colors.white
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 5
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round,
-    );
+    if (sent) {
+      canvas.drawCircle(
+        const Offset(160, 88),
+        24,
+        paint..color = const Color(0xFF718765),
+      );
+      canvas.drawPath(
+        Path()
+          ..moveTo(149, 88)
+          ..lineTo(157, 96)
+          ..lineTo(173, 79),
+        paint
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 5
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
+    } else {
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          const Rect.fromLTWH(146, 82, 28, 24),
+          const Radius.circular(5),
+        ),
+        paint
+          ..color = _resetClay
+          ..style = PaintingStyle.fill,
+      );
+      canvas.drawArc(
+        const Rect.fromLTWH(151, 68, 18, 25),
+        3.14,
+        3.14,
+        false,
+        paint
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3,
+      );
+      canvas.drawCircle(
+        const Offset(160, 93),
+        2,
+        paint
+          ..color = Colors.white
+          ..style = PaintingStyle.fill,
+      );
+    }
     paint
       ..color = const Color(0xFFB96540)
       ..strokeWidth = 3;
@@ -909,5 +1021,6 @@ class _ResetEnvelopePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_ResetEnvelopePainter oldDelegate) => false;
+  bool shouldRepaint(_ResetEnvelopePainter oldDelegate) =>
+      oldDelegate.sent != sent;
 }

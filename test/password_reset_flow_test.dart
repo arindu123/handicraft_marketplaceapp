@@ -130,4 +130,34 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
+  testWidgets('Request fits a small phone with enlarged text and keyboard', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    tester.view.viewInsets = const FakeViewPadding(bottom: 220);
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.view.reset);
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: AppTheme.light,
+        home: const PasswordResetRequestScreen(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.enterText(find.byType(TextFormField), 'collector@example.com');
+    await tester.pumpAndSettle();
+    await Scrollable.ensureVisible(
+      tester.element(find.widgetWithText(FilledButton, 'Send Reset Email')),
+      alignment: .5,
+    );
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(
+      find.widgetWithText(FilledButton, 'Send Reset Email').hitTestable(),
+      findsOneWidget,
+    );
+  });
 }

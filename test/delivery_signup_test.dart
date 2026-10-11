@@ -60,6 +60,14 @@ void main() {
       ' potter@example.com ',
     );
     await tester.enterText(find.byType(TextFormField).at(2), ' password123 ');
+    await tester.enterText(find.byType(TextFormField).at(3), '0771234567');
+    await tester.enterText(find.byType(TextFormField).at(4), 'Colombo');
+    final vehicle = find.byType(DropdownButtonFormField<String>);
+    await tester.ensureVisible(vehicle);
+    await tester.tap(vehicle);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Bike').last);
+    await tester.pumpAndSettle();
   }
 
   testWidgets(
@@ -80,6 +88,9 @@ void main() {
         'displayName': 'Courier Name',
         'role': 'courier',
         'courierApproval': 'pending',
+        'phone': '0771234567',
+        'area': 'Colombo',
+        'vehicleType': 'Bike',
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
       });

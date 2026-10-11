@@ -1,3 +1,6 @@
+import '../../../core/theme/app_theme.dart';
+
+import 'package:artisan_marketplace/shared/widgets/craftisan_dialog.dart';
 import 'package:flutter/material.dart';
 
 class DeliveryStyle {
@@ -11,6 +14,9 @@ class DeliveryStyle {
   static const assets = 'lib/features/delivery/widgets/';
   static ThemeData get theme => ThemeData(
     useMaterial3: true,
+    dialogTheme: AppTheme.popupDialogTheme,
+    snackBarTheme: AppTheme.popupSnackBarTheme,
+    bottomSheetTheme: AppTheme.popupBottomSheetTheme,
     colorScheme: ColorScheme.fromSeed(
       seedColor: orange,
       primary: orange,
@@ -153,7 +159,7 @@ Future<void> showDeliveryNotice(
   String message,
 ) => showDialog<void>(
   context: context,
-  builder: (context) => AlertDialog(
+  builder: (context) => CraftisanDialog(
     title: Text(title),
     content: Text(message),
     actions: [

@@ -32,7 +32,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Nimal'), findsOneWidget);
-    await tester.tap(find.text('Edit profile & photo'));
+    await tester.tap(find.text('Edit Profile'));
     await tester.pumpAndSettle();
     expect(find.byTooltip('Choose profile photo'), findsOneWidget);
     await tester.enterText(find.byType(TextFormField).first, 'Nimal Perera');

@@ -179,6 +179,8 @@ Future<void> openSignIn(
   String role = 'Artisan / Studio Maker',
 }) async {
   await tester.pumpWidget(const MyApp());
+  await tester.pump(const Duration(seconds: 4));
+  await tester.pumpAndSettle();
   await tester.ensureVisible(find.text('Sign in'));
   await tester.tap(find.text('Sign in'));
   await tester.pumpAndSettle();

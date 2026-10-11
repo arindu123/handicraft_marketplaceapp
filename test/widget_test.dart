@@ -7,6 +7,8 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(const MyApp());
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Explore the marketplace'));
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 15));
@@ -25,6 +27,8 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(const MyApp());
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
     expect(find.bySemanticsLabel('Craftisan Marketplace logo'), findsOneWidget);
     await tester.tap(find.text('Explore the marketplace'));
     await tester.pumpAndSettle();
@@ -52,6 +56,8 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(const MyApp());
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Explore the marketplace'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Skip'));
@@ -69,6 +75,8 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     await tester.pumpWidget(const MyApp());
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Explore the marketplace'));
     await tester.tap(find.text('Explore the marketplace'));
     await tester.pumpAndSettle();

@@ -1,3 +1,4 @@
+import 'package:artisan_marketplace/shared/widgets/craftisan_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -29,7 +30,7 @@ class _CodeDialogState extends State<_CodeDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
+  Widget build(BuildContext context) => CraftisanDialog(
     title: const Text('Confirm delivery'),
     content: SingleChildScrollView(
       child: Form(
@@ -134,7 +135,8 @@ class _IssueDialogState extends State<_IssueDialog> {
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !_saving,
-    child: AlertDialog(
+    child: CraftisanDialog(
+      icon: Icons.report_outlined,
       title: const Text('Report delivery issue'),
       content: SingleChildScrollView(
         child: Form(

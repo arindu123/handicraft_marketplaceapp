@@ -13,6 +13,6 @@ void main() {
           .then<void>((_) {
             MarketplaceBackend.enabled = true;
           });
-  // Welcome paints immediately while Firebase initializes in the background.
+  // Brand splash paints immediately while Firebase initializes in the background.
   runApp(MyApp(initialization: initialization));
 }

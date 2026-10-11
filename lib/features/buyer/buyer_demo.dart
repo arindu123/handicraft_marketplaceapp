@@ -610,6 +610,11 @@ class BuyerDemo extends ChangeNotifier {
 
   final Map<DemoProduct, int> cart = {};
   final Set<DemoProduct> favorites = {};
+  int get savedPieceCount =>
+      repository == null ? favorites.length : _favoriteIds.length;
+  int get bagItemCount => (repository == null ? cart.values : _cartIds.values)
+      .fold(0, (sum, quantity) => sum + quantity);
+
   final Set<String> _followedArtisans = {};
   Set<String> get followedArtisans => Set.unmodifiable(_followedArtisans);
   bool followsLoading = false;

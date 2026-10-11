@@ -18,6 +18,10 @@ class HandicraftNavigationBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Material(
     color: Colors.white,
+    borderRadius: selectedIndex == 4
+        ? const BorderRadius.vertical(top: Radius.circular(24))
+        : null,
+    clipBehavior: Clip.antiAlias,
     child: DecoratedBox(
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: Color(0xFFEDE7DF))),
@@ -44,7 +48,9 @@ class HandicraftNavigationBar extends StatelessWidget {
                         width: 72,
                         height: 48,
                         child: Material(
-                          color: const Color(0xFFFFE68A),
+                          color: selectedIndex == 4
+                              ? const Color(0xFFB44A2C)
+                              : const Color(0xFFFFE68A),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(18),
                             side: BorderSide(

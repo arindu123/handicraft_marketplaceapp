@@ -1,3 +1,4 @@
+import 'package:artisan_marketplace/shared/widgets/craftisan_dialog.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -163,7 +164,7 @@ class _AuthFormState extends State<AuthForm> {
   void _unavailable(String feature) {
     showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => CraftisanDialog(
         title: Text(feature),
         content: Text('$feature is not available yet. Please try again later.'),
         actions: [
@@ -196,7 +197,9 @@ class _AuthFormState extends State<AuthForm> {
           MarketplaceRole.admin => UserRole.admin,
         },
       );
-      if (role == null || !mounted || ModalRoute.of(context)?.isCurrent != true) {
+      if (role == null ||
+          !mounted ||
+          ModalRoute.of(context)?.isCurrent != true) {
         return;
       }
       Navigator.pushNamedAndRemoveUntil(

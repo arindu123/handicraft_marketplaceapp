@@ -18,7 +18,7 @@ const _stories = [
     eyebrow: 'BEHIND EVERY PIECE',
     title: 'Empower Artisans',
     description: 'Meet independent makers, celebrate their skills, and support the craft they love.',
-    image: 'assets/images/onboarding/artisans.jpeg',
+    image: 'assets/images/onboarding/artisans.png',
     imageLabel: 'An artisan shaping a clay pot on a pottery wheel',
     badge: 'Support local makers',
     detail: 'Crafted with purpose',

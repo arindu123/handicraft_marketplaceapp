@@ -3,13 +3,19 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:artisan_marketplace/core/theme/app_theme.dart';
 import 'package:artisan_marketplace/routes/app_routes.dart';
 import 'package:artisan_marketplace/routes/route_names.dart';
+import 'package:artisan_marketplace/features/delivery/screens/delivery_home_screen.dart';
+
+Map<String, WidgetBuilder> get previewRoutes => {
+  ...AppRoutes.routes,
+  RouteNames.deliveryHome: (_) => const DeliveryHomeScreen(),
+};
 
 Future<void> openRoute(WidgetTester tester, String route) async {
   await tester.pumpWidget(
     MaterialApp(
       theme: AppTheme.light,
       initialRoute: route,
-      routes: AppRoutes.routes,
+      routes: previewRoutes,
     ),
   );
   await tester.pumpAndSettle();
@@ -44,11 +50,11 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        routes: AppRoutes.routes,
+        routes: previewRoutes,
         onGenerateInitialRoutes: (_) => [
           MaterialPageRoute<void>(
             settings: const RouteSettings(name: RouteNames.deliveryHome),
-            builder: AppRoutes.routes[RouteNames.deliveryHome]!,
+            builder: previewRoutes[RouteNames.deliveryHome]!,
           ),
         ],
       ),
@@ -73,11 +79,11 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        routes: AppRoutes.routes,
+        routes: previewRoutes,
         onGenerateInitialRoutes: (_) => [
           MaterialPageRoute<void>(
             settings: const RouteSettings(name: RouteNames.deliveryHome),
-            builder: AppRoutes.routes[RouteNames.deliveryHome]!,
+            builder: previewRoutes[RouteNames.deliveryHome]!,
           ),
         ],
       ),
@@ -117,22 +123,11 @@ void main() {
     expect(find.text('Welcome Back'), findsOneWidget);
     await tapText(tester, 'Log In');
     expect(find.text('Enter your email address.'), findsOneWidget);
-    await tapText(tester, 'Quick Track as Guest  →');
-    expect(find.text('Kasun Perera'), findsOneWidget);
-    expect(find.text("Today's orders"), findsOneWidget);
-    await tapText(tester, 'Profile');
-    await tester.scrollUntilVisible(
-      find.text('Back to role selection'),
-      200,
-      scrollable: find
-          .descendant(
-            of: find.byType(ListView),
-            matching: find.byType(Scrollable),
-          )
-          .last,
-    );
-    await tapText(tester, 'Back to role selection');
-    expect(find.text('Roles Selection'), findsOneWidget);
+    expect(find.textContaining('Quick Track as Guest'), findsNothing);
+    expect(find.textContaining('No account required'), findsNothing);
+    expect(find.text('Continue with Google'), findsOneWidget);
+    expect(find.text('Continue with Apple'), findsOneWidget);
+    expect(find.text("Today's orders"), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -162,10 +157,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('LKR 1500.00'), findsNWidgets(2));
     await tapText(tester, 'Cash out');
-    expect(
-      find.text('Cash out · Test mode'),
-      findsOneWidget,
-    );
+    expect(find.text('Account holder name'), findsOneWidget);
     await tapText(tester, 'Close');
     await tester.tap(find.widgetWithText(NavigationDestination, 'Home'));
     await tester.pumpAndSettle();
@@ -221,7 +213,12 @@ void main() {
     expect(tester.takeException(), isNull);
     await tapText(tester, 'Sign Up');
     expect(tester.takeException(), isNull);
-    await tapText(tester, 'Quick Track as Guest  →');
+    expect(find.textContaining('Quick Track as Guest'), findsNothing);
+    await tester.ensureVisible(find.text('Continue with Apple'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    await openRoute(tester, RouteNames.deliveryHome);
     expect(tester.takeException(), isNull);
     for (final tab in ['Orders', 'Earnings', 'Profile', 'Home']) {
       await tester.tap(find.widgetWithText(NavigationDestination, tab));

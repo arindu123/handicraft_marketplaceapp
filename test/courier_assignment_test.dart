@@ -26,6 +26,7 @@ void main() {
     for (final id in ['courier', 'courier2']) {
       await db.doc('users/$id').set({
         'role': 'courier',
+        'courierApproval': 'approved',
         'active': true,
         'displayName': id,
       });
@@ -160,6 +161,7 @@ void main() {
                   'order',
                   'buyer',
                   'Mug',
+                  null,
                   'Studio',
                   114,
                   'confirmed',

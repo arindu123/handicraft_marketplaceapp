@@ -12,7 +12,20 @@
           "package_name": "com.example.artisan_marketplace"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "471804613144-barpoqvb2v67e18sr3fueamrmq7nds6c.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.artisan_marketplace",
+            "certificate_hash": "49d2adc836539a60153c14b3b8b2f9f273414847"
+          }
+        },
+        {
+          "client_id": "471804613144-3pg0goiahhdi95op7ea30n756pbq53ar.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyDebAZ9jk20J0GnmgxuyFz8Ff-f0OMpRPI"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "471804613144-3pg0goiahhdi95op7ea30n756pbq53ar.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "471804613144-usvqrvvkfh2hpaeq95v9qa5bhfa7oeu8.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.artisanMarketplace"
+              }
+            }
+          ]
         }
       }
     }

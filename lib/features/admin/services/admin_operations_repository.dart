@@ -9,8 +9,11 @@ class AdminOperationsRepository {
   AdminOperationsRepository(this.marketplace);
   final MarketplaceRepository marketplace;
 
-  Future<void> assignCourier(String orderId, String courierId, {
-    required String expectedStatus, required String? expectedCourierId,
+  Future<void> assignCourier(
+    String orderId,
+    String courierId, {
+    required String expectedStatus,
+    required String? expectedCourierId,
   }) async {
     await marketplace.requireRole(domain.UserRole.admin);
     final actor = marketplace.uid;
@@ -20,29 +23,104 @@ class AdminOperationsRepository {
     await marketplace.db.runTransaction((transaction) async {
       final order = await transaction.get(orderRef);
       final courier = await transaction.get(courierRef);
-      final plan = await transaction.get(orderRef.collection('deliveryPlan').doc('current'));
+      final plan = await transaction.get(
+        orderRef.collection('deliveryPlan').doc('current'),
+      );
       final before = order.data();
-      if (before == null || !['confirmed', 'courierAssigned'].contains(before['status'])) {
-        throw const MarketplaceFailure('Assign couriers after packing and before pickup.');
+      if (before == null ||
+          !['confirmed', 'courierAssigned'].contains(before['status'])) {
+        throw const MarketplaceFailure(
+          'Assign couriers after packing and before pickup.',
+        );
       }
-      if (before['status'] != expectedStatus || before['courierId'] != expectedCourierId) {
-        throw const MarketplaceFailure('This assignment changed. Review the order and try again.');
+      if (before['status'] != expectedStatus ||
+          before['courierId'] != expectedCourierId) {
+        throw const MarketplaceFailure(
+          'This assignment changed. Review the order and try again.',
+        );
       }
       if (plan.exists && plan.data()?['outcome'] != 'active') {
-        throw const MarketplaceFailure('Resolve the delivery hold before reassigning this order.');
+        throw const MarketplaceFailure(
+          'Resolve the delivery hold before reassigning this order.',
+        );
       }
-      if (!courier.exists || courier.data()?['role'] != 'courier' || courier.data()?['active'] == false) {
+      if (!courier.exists ||
+          courier.data()?['role'] != 'courier' ||
+          courier.data()?['active'] == false ||
+          courier.data()?['courierApproval'] != 'approved') {
         throw const MarketplaceFailure('Choose an active courier account.');
       }
       if (before['courierId'] == courierId) return;
-      final after = {...before, 'courierId': courierId, 'status': 'courierAssigned',
-        'updatedAt': DateTime.now().toUtc().toIso8601String()};
+      final after = {
+        ...before,
+        'courierId': courierId,
+        'status': 'courierAssigned',
+        'updatedAt': DateTime.now().toUtc().toIso8601String(),
+      };
       transaction.set(orderRef, after);
       transaction.set(activity, {
-        'actorId': actor, 'action': 'Courier assigned', 'collection': 'orders',
-        'targetId': orderId, 'before': before, 'after': after,
+        'actorId': actor,
+        'action': 'Courier assigned',
+        'collection': 'orders',
+        'targetId': orderId,
+        'before': before,
+        'after': after,
         'createdAt': FieldValue.serverTimestamp(),
       });
+    });
+  }
+
+  Future<void> reviewCourier(String uid, bool approved) async {
+    await marketplace.requireRole(domain.UserRole.admin);
+    final ref = marketplace.db.collection('users').doc(uid);
+    final emailRef = marketplace.db
+        .collection('courierApprovalEmails')
+        .doc(uid);
+    final activity = marketplace.db.collection('adminActivity').doc();
+    await marketplace.db.runTransaction((transaction) async {
+      final snapshot = await transaction.get(ref);
+      final queued = await transaction.get(emailRef);
+      final before = snapshot.data();
+      if (before == null || before['role'] != 'courier') {
+        throw const MarketplaceFailure(
+          'This courier application no longer exists.',
+        );
+      }
+      if ((before['courierApproval'] ?? 'pending') != 'pending') {
+        throw const MarketplaceFailure(
+          'This application has already been reviewed.',
+        );
+      }
+      final after = {
+        ...before,
+        'courierApproval': approved ? 'approved' : 'rejected',
+        'courierReviewedBy': marketplace.uid,
+        'courierReviewedAt': FieldValue.serverTimestamp(),
+      };
+      transaction.set(ref, after);
+      transaction.set(activity, {
+        'actorId': marketplace.uid,
+        'action': approved ? 'Courier approved' : 'Courier rejected',
+        'collection': 'users',
+        'targetId': uid,
+        'before': before,
+        'after': after,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      if (!queued.exists) {
+        transaction.set(emailRef, {
+          'to': before['email'],
+          'message': {
+            'subject': approved
+                ? 'Your Craftisan courier account is verified'
+                : 'Your Craftisan courier application was not approved',
+            'text': approved
+                ? 'Your courier account has been verified and approved by admin. You can now log in to Craftisan Delivery.'
+                : 'Your courier application was reviewed and rejected by admin. Delivery access is not enabled. Please contact the Craftisan admin team for more information.',
+          },
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
     });
   }
 

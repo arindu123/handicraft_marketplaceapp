@@ -7,7 +7,15 @@ import '../widgets/admin_notification_panel.dart';
 import '../../../shared/data/marketplace_repository.dart';
 import 'admin_artisan_review_screen.dart';
 
-enum AdminSection { users, products, couriers, reports, settings, activity, notifications }
+enum AdminSection {
+  users,
+  products,
+  couriers,
+  reports,
+  settings,
+  activity,
+  notifications,
+}
 
 class AdminManagementScreen extends StatefulWidget {
   const AdminManagementScreen({
@@ -172,6 +180,7 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     AdminStatus(item.active ? 'Active' : 'Paused'),
+                    if (item.isCourier) AdminStatus(item.verification),
                     if (widget.section == AdminSection.users && item.isArtisan)
                       TextButton(
                         onPressed: () {
@@ -275,7 +284,9 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
       subtitle: const Text('Alerts for applications awaiting review.'),
       activeThumbColor: AdminStyle.sage,
       value: widget.store.applicationNotifications,
-      onChanged: widget.store.noticePreferencesLoaded ? (value) => _setNotifications(applications: value) : null,
+      onChanged: widget.store.noticePreferencesLoaded
+          ? (value) => _setNotifications(applications: value)
+          : null,
     ),
     const Divider(color: AdminStyle.border),
     SwitchListTile(
@@ -284,13 +295,21 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
       subtitle: const Text('Alerts for new orders and status changes.'),
       activeThumbColor: AdminStyle.sage,
       value: widget.store.orderNotifications,
-      onChanged: widget.store.noticePreferencesLoaded ? (value) => _setNotifications(orders: value) : null,
+      onChanged: widget.store.noticePreferencesLoaded
+          ? (value) => _setNotifications(orders: value)
+          : null,
     ),
     SwitchListTile(
-      contentPadding: EdgeInsets.zero, title: const Text('Complaint notifications'),
-      subtitle: const Text('Alerts for unresolved product and delivery complaints.'),
-      activeThumbColor: AdminStyle.sage, value: widget.store.reportNotifications,
-      onChanged: widget.store.noticePreferencesLoaded ? (value) => _setNotifications(reports: value) : null,
+      contentPadding: EdgeInsets.zero,
+      title: const Text('Complaint notifications'),
+      subtitle: const Text(
+        'Alerts for unresolved product and delivery complaints.',
+      ),
+      activeThumbColor: AdminStyle.sage,
+      value: widget.store.reportNotifications,
+      onChanged: widget.store.noticePreferencesLoaded
+          ? (value) => _setNotifications(reports: value)
+          : null,
     ),
     const SizedBox(height: 24),
     const AdminPanel(
@@ -316,10 +335,22 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
     ),
   ];
 
-  Future<void> _setNotifications({bool? applications, bool? orders, bool? reports}) async {
-    try { await widget.store.setNotifications(applications: applications, orders: orders, reports: reports); }
-    catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(marketplaceError(error))));
+  Future<void> _setNotifications({
+    bool? applications,
+    bool? orders,
+    bool? reports,
+  }) async {
+    try {
+      await widget.store.setNotifications(
+        applications: applications,
+        orders: orders,
+        reports: reports,
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(marketplaceError(error))));
+      }
     }
   }
 }

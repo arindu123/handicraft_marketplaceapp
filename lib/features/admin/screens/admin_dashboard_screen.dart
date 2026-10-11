@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+
 import 'dart:async';
+
 import 'package:firebase_messaging/firebase_messaging.dart';
+
 import '../../../shared/data/marketplace_repository.dart';
 import '../services/admin_notifications.dart';
 
@@ -25,11 +28,7 @@ class _MissingProductImage extends StatelessWidget {
   Widget build(BuildContext context) => const ColoredBox(
     color: AdminStyle.cream,
     child: Center(
-      child: Icon(
-        Icons.image_outlined,
-        size: 40,
-        color: AdminStyle.muted,
-      ),
+      child: Icon(Icons.image_outlined, size: 40, color: AdminStyle.muted),
     ),
   );
 }
@@ -54,18 +53,29 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       if (!mounted) return;
       _foregroundPush = FirebaseMessaging.onMessage.listen((message) {
         if (mounted && message.data['type'] == 'admin') {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(message.notification?.body ?? 'New admin notification.'),
-          ));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                message.notification?.body ?? 'New admin notification.',
+              ),
+            ),
+          );
         }
       });
       _pushOpens = FirebaseMessaging.onMessageOpenedApp.listen((message) {
-        if (mounted && message.data['type'] == 'admin') _manage(AdminSection.notifications);
+        if (mounted && message.data['type'] == 'admin') {
+          _manage(AdminSection.notifications);
+        }
       });
       final message = await FirebaseMessaging.instance.getInitialMessage();
-      if (mounted && message?.data['type'] == 'admin') _manage(AdminSection.notifications);
+      if (mounted && message?.data['type'] == 'admin') {
+        _manage(AdminSection.notifications);
+      }
     } catch (error) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(marketplaceError(error))));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(marketplaceError(error))));
+      }
     }
   }
 
@@ -568,7 +578,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Recorded completed-order value', style: TextStyle(color: AdminStyle.muted)),
+          const Text(
+            'Recorded completed-order value',
+            style: TextStyle(color: AdminStyle.muted),
+          ),
           Text(
             adminMoney(values.fold<int>(0, (a, b) => a + b)),
             style: const TextStyle(
@@ -654,7 +667,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             Text(item.description, style: const TextStyle(height: 1.6)),
             _space(),
             const Text(
-        'Review the submitted application before making a decision.',
+              'Review the submitted application before making a decision.',
               style: TextStyle(fontSize: 12, color: AdminStyle.muted),
             ),
             _space(),
@@ -681,8 +694,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         if (!mounted || !sheetContext.mounted || !confirmed) {
                           return;
                         }
-                        _store.decide(item, approved);
-                        Navigator.pop(sheetContext);
+                        try {
+                          await _store.decide(item, approved);
+                          if (sheetContext.mounted) Navigator.pop(sheetContext);
+                        } catch (error) {
+                          if (sheetContext.mounted) {
+                            ScaffoldMessenger.of(sheetContext).showSnackBar(
+                              SnackBar(content: Text(marketplaceError(error))),
+                            );
+                          }
+                        }
                       },
                       child: Text(approved ? 'Approve' : 'Reject'),
                     ),
@@ -945,8 +966,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             'Approvals, updates and resolutions',
             () => _manage(AdminSection.activity),
           ),
-          _action(Icons.notifications_none, 'Notifications',
-            '${_store.unreadNotifications} unread', () => _manage(AdminSection.notifications)),
+          _action(
+            Icons.notifications_none,
+            'Notifications',
+            '${_store.unreadNotifications} unread',
+            () => _manage(AdminSection.notifications),
+          ),
         ],
       ),
     ),

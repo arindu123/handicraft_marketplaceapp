@@ -54,7 +54,12 @@ class _AdminCourierAssignmentState extends State<AdminCourierAssignment> {
       );
       final order = orders.isEmpty ? widget.order : orders.first;
       final couriers = widget.store.couriers
-          .where((courier) => courier.active && courier.id.isNotEmpty)
+          .where(
+            (courier) =>
+                courier.active &&
+                courier.verification == 'Approved' &&
+                courier.id.isNotEmpty,
+          )
           .toList();
       final selected = couriers.any((courier) => courier.id == _selected)
           ? _selected

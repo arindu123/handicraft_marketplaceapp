@@ -176,6 +176,42 @@ class _AuthFormState extends State<AuthForm> {
     );
   }
 
+  Future<void> _socialSignIn(String provider) async {
+    if (_submitting) return;
+    if (provider != 'Google') {
+      _unavailable('$provider sign in');
+      return;
+    }
+    FocusScope.of(context).unfocus();
+    setState(() {
+      _submitting = true;
+      _message = null;
+    });
+    try {
+      final role = await AuthSession.signInWithGoogle(
+        newAccountRole: switch (_role) {
+          MarketplaceRole.buyer => UserRole.buyer,
+          MarketplaceRole.artisan => UserRole.artisan,
+          MarketplaceRole.courier => UserRole.courier,
+          MarketplaceRole.admin => UserRole.admin,
+        },
+      );
+      if (role == null || !mounted || ModalRoute.of(context)?.isCurrent != true) {
+        return;
+      }
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AuthSession.route(role),
+        (_) => false,
+        arguments: AuthSession.selection(role),
+      );
+    } catch (error) {
+      if (mounted) setState(() => _message = AuthSession.message(error));
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
   String? _validateEmail(String? value) {
     final email = value?.trim() ?? '';
     if (email.isEmpty) return 'Enter your email address.';
@@ -196,7 +232,7 @@ class _AuthFormState extends State<AuthForm> {
         submitting: _submitting,
         message: _message,
         onSubmit: _submit,
-        onSocialSignIn: (provider) => _unavailable('$provider sign in'),
+        onSocialSignIn: _socialSignIn,
       );
     }
     final signUp = widget.isSignUp;
@@ -648,7 +684,7 @@ class _AuthFormState extends State<AuthForm> {
   }
 
   Widget _socialButton(String provider, IconData? icon) => OutlinedButton(
-    onPressed: () => _unavailable('$provider sign in'),
+    onPressed: _submitting ? null : () => _socialSignIn(provider),
     style: OutlinedButton.styleFrom(
       backgroundColor: Colors.white,
       foregroundColor: AppColors.ink,
@@ -671,7 +707,9 @@ class _AuthFormState extends State<AuthForm> {
             ),
           ),
         const SizedBox(width: 8),
-        Flexible(child: Text(provider)),
+        Flexible(
+          child: Text(provider == 'Google' ? 'Continue with Google' : provider),
+        ),
       ],
     ),
   );

@@ -10,6 +10,7 @@ import 'package:firebase_auth_platform_interface/firebase_auth_platform_interfac
 // ignore: depend_on_referenced_packages
 import 'package:firebase_core_platform_interface/test.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:artisan_marketplace/app.dart';
 import 'package:artisan_marketplace/features/auth/models/marketplace_role.dart';
@@ -555,14 +556,14 @@ void main() {
       await tapVisible(tester, 'Sign Up');
       await tapVisible(tester, 'Create Studio Account');
       expect(tester.takeException(), isNull);
-      await tapVisible(tester, 'Google');
+      debugDefaultTargetPlatformOverride = TargetPlatform.linux;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      await tapVisible(tester, 'Continue with Google');
+      debugDefaultTargetPlatformOverride = null;
       expect(
-        find.text(
-          'Google sign in is not available yet. Please try again later.',
-        ),
+        find.text('Google sign-in is currently available on Android.'),
         findsOneWidget,
       );
-      await tapVisible(tester, 'OK');
       expect(tester.takeException(), isNull);
     },
   );

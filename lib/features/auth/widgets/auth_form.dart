@@ -12,6 +12,7 @@ import 'craftisan_mark.dart';
 import '../models/marketplace_role.dart';
 import '../services/auth_session.dart';
 import '../../buyer/buyer_login_view.dart';
+import '../../buyer/buyer_validators.dart';
 import '../../admin/widgets/admin_login_hero.dart';
 
 class AuthForm extends StatefulWidget {
@@ -31,6 +32,8 @@ class _AuthFormState extends State<AuthForm> {
   MarketplaceRole _role = MarketplaceRole.artisan;
   bool get _artisan => _role == MarketplaceRole.artisan;
   bool get _admin => _role == MarketplaceRole.admin;
+  // Use separate checks only for buyer signup.
+  bool get _buyerSignUp => _role == MarketplaceRole.buyer && widget.isSignUp;
   bool _remember = false;
   bool _roleInitialized = false;
   bool _submitting = false;
@@ -216,6 +219,7 @@ class _AuthFormState extends State<AuthForm> {
     }
   }
 
+  //Shared email validator
   String? _validateEmail(String? value) {
     final email = value?.trim() ?? '';
     if (email.isEmpty) return 'Enter your email address.';
@@ -408,10 +412,13 @@ class _AuthFormState extends State<AuthForm> {
                                       icon: Icons.person_outline,
                                       keyboardType: TextInputType.name,
                                       autofillHints: const [AutofillHints.name],
-                                      validator: (value) =>
-                                          (value?.trim().isEmpty ?? true)
-                                          ? 'Enter your full name.'
-                                          : null,
+                                      // Use the buyer name check for buyer signup.
+                                      validator: _buyerSignUp
+                                          ? BuyerValidators.name
+                                          : (value) =>
+                                                (value?.trim().isEmpty ?? true)
+                                                ? 'Enter your full name.'
+                                                : null,
                                     ),
                                     const SizedBox(height: 18),
                                   ],
@@ -423,7 +430,10 @@ class _AuthFormState extends State<AuthForm> {
                                     icon: Icons.mail_outline,
                                     keyboardType: TextInputType.emailAddress,
                                     autofillHints: const [AutofillHints.email],
-                                    validator: _validateEmail,
+                                    // Buyer signup has its own email check.
+                                    validator: _buyerSignUp
+                                        ? BuyerValidators.email
+                                        : _validateEmail,
                                   ),
                                   const SizedBox(height: 18),
                                   CustomTextField(
@@ -442,7 +452,11 @@ class _AuthFormState extends State<AuthForm> {
                                     onFieldSubmitted: signUp
                                         ? null
                                         : (_) => _submit(),
+                                    // Check buyer signup passwords separately.
                                     validator: (value) {
+                                      if (_buyerSignUp) {
+                                        return BuyerValidators.password(value);
+                                      }
                                       if (value == null || value.isEmpty) {
                                         return 'Enter your password.';
                                       }
@@ -474,7 +488,14 @@ class _AuthFormState extends State<AuthForm> {
                                       ],
                                       textInputAction: TextInputAction.done,
                                       onFieldSubmitted: (_) => _submit(),
+                                      // Check that the buyer passwords match.
                                       validator: (value) {
+                                        if (_buyerSignUp) {
+                                          return BuyerValidators.confirmPassword(
+                                            value,
+                                            _password.text,
+                                          );
+                                        }
                                         if (value == null || value.isEmpty) {
                                           return 'Confirm your password.';
                                         }

@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:artisan_marketplace/app.dart';
+import 'package:artisan_marketplace/features/artisan/artisan_dashboard_screen.dart';
 import 'package:artisan_marketplace/features/auth/models/marketplace_role.dart';
 import 'package:artisan_marketplace/features/auth/widgets/auth_form.dart';
 import 'package:artisan_marketplace/routes/route_names.dart';
@@ -461,14 +462,14 @@ void main() {
   ) async {
     await openSignIn(tester);
     await tapVisible(tester, 'Continue without an account');
-    expect(find.text('Artisan Dashboard'), findsOneWidget);
+    expect(find.byType(ArtisanDashboardScreen), findsOneWidget);
     expect(find.text('Enter your email address.'), findsNothing);
     final navigator = tester.state<NavigatorState>(find.byType(Navigator));
     navigator.pop();
     await tester.pumpAndSettle();
     await tapVisible(tester, 'Sign Up');
     await tapVisible(tester, 'Continue without an account');
-    expect(find.text('Artisan Dashboard'), findsOneWidget);
+    expect(find.byType(ArtisanDashboardScreen), findsOneWidget);
     expect(find.text('Enter your full name.'), findsNothing);
     expect(tester.takeException(), isNull);
   });

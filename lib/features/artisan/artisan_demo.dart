@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../shared/data/community_repository.dart';
 import '../../shared/data/marketplace_repository.dart';
@@ -137,6 +138,31 @@ class ArtisanOrder {
 /// when the artisan profile does not contain a name.
 class ArtisanDemo extends ChangeNotifier {
   MarketplaceRepository? repository;
+  final Map<String, canonical.Product> catalogRecords = {};
+  List<canonical.Order> dashboardOrders = [];
+  bool productsLoading = false;
+  bool ordersLoading = false;
+  String? productsError;
+  String? ordersError;
+
+  Future<void> refreshDashboard() async {
+    final backend = repository;
+    if (backend == null) return;
+    await Future.wait([
+      backend.db
+          .collection('products')
+          .where('artisanId', isEqualTo: backend.uid)
+          .get(const GetOptions(source: Source.server)),
+      backend.db
+          .collection('orders')
+          .where('artisanId', isEqualTo: backend.uid)
+          .get(const GetOptions(source: Source.server)),
+      backend.db
+          .collection('users')
+          .doc(backend.uid)
+          .get(const GetOptions(source: Source.server)),
+    ]);
+  }
 
   final List<StreamSubscription<dynamic>> _subscriptions = [];
 
@@ -156,6 +182,8 @@ class ArtisanDemo extends ChangeNotifier {
     orders.clear();
 
     repository = backend ?? MarketplaceRepository();
+    productsLoading = true;
+    ordersLoading = true;
     profileLoading = true;
 
     try {
@@ -203,55 +231,82 @@ class ArtisanDemo extends ChangeNotifier {
 
       // Listen to the current artisan's products.
       _subscriptions.add(
-        repository!.products(own: true).listen((rows) {
-          if (_disposed) return;
+        repository!
+            .products(own: true)
+            .listen(
+              (rows) {
+                if (_disposed) return;
+                productsLoading = false;
+                productsError = null;
+                catalogRecords
+                  ..clear()
+                  ..addEntries(rows.map((p) => MapEntry(p.id, p)));
 
-          products
-            ..clear()
-            ..addAll(rows.map(artisanProduct));
+                products
+                  ..clear()
+                  ..addAll(rows.map(artisanProduct));
 
-          notifyListeners();
-        }, onError: _failed),
+                notifyListeners();
+              },
+              onError: (Object e) {
+                productsLoading = false;
+                productsError = marketplaceError(e);
+                _failed(e);
+              },
+            ),
       );
 
       // Listen to the artisan's orders.
       _subscriptions.add(
-        repository!.orders('artisanId').listen((rows) {
-          if (_disposed) return;
+        repository!
+            .orders('artisanId')
+            .listen(
+              (rows) {
+                if (_disposed) return;
+                ordersLoading = false;
+                ordersError = null;
+                dashboardOrders = rows;
 
-          orders.clear();
+                orders.clear();
 
-          for (final order in rows) {
-            for (final item in order.items) {
-              orders.add(
-                ArtisanOrder(
-                  order.id,
-                  order.buyerId,
-                  order.deliveryAddress,
-                  ArtisanProduct(
-                    id: item.productId,
-                    name: item.productName,
-                    category: '',
-                    price: item.unitPrice,
-                    description: '',
-                    images: item.imageUrl == null
-                        ? [-1]
-                        : [registerArtisanPhoto(url: item.imageUrl)],
-                  ),
-                  item.quantity,
-                  switch (order.status) {
-                    canonical.OrderStatus.pending => 'Needs packing',
-                    canonical.OrderStatus.confirmed => 'Ready for dispatch',
-                    _ => order.status.name,
-                  },
-                  order.courierId ?? 'Awaiting courier assignment',
-                ),
-              );
-            }
-          }
+                for (final order in rows) {
+                  for (final item in order.items) {
+                    orders.add(
+                      ArtisanOrder(
+                        order.id,
+                        order.buyerId,
+                        order.deliveryAddress,
+                        ArtisanProduct(
+                          id: item.productId,
+                          name: item.productName,
+                          category: '',
+                          price: item.unitPrice,
+                          description: '',
+                          images: item.imageUrl == null
+                              ? [-1]
+                              : [registerArtisanPhoto(url: item.imageUrl)],
+                        ),
+                        item.quantity,
+                        switch (order.status) {
+                          canonical.OrderStatus.pending => 'Needs packing',
+                          canonical.OrderStatus.confirmed =>
+                            'Ready for dispatch',
+                          _ => order.status.name,
+                        },
+                        order.courierId ?? 'Awaiting courier assignment',
+                      ),
+                    );
+                  }
+                }
 
-          notifyListeners();
-        }, onError: _failed),
+                notifyListeners();
+              },
+              onError: (Object e) {
+                ordersLoading = false;
+                ordersError = marketplaceError(e);
+                _failed(e);
+              },
+            ),
       );
     } catch (e) {
       profileLoading = false;
@@ -444,7 +499,14 @@ class ArtisanDemo extends ChangeNotifier {
 
   void markPacked(String id) {
     if (repository != null) {
-      repository!.advanceOrder(id).catchError(_failed);
+      if (saving) return;
+      saving = true;
+      notifyListeners();
+      repository!.advanceOrder(id).catchError(_failed).whenComplete(() {
+        if (_disposed) return;
+        saving = false;
+        notifyListeners();
+      });
       return;
     }
 

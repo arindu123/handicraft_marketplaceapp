@@ -1,6 +1,9 @@
+import 'artisan_orders_widgets.dart';
+import 'artisan_dashboard_widgets.dart';
+
 import '../../shared/data/community_repository.dart';
 
- import 'package:image_picker/image_picker.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../shared/data/marketplace_repository.dart';
 
@@ -23,13 +26,19 @@ void _dashboard(BuildContext context) => Navigator.popUntil(
 );
 
 class ArtisanDashboardScreen extends StatefulWidget {
-  const ArtisanDashboardScreen({super.key});
+  const ArtisanDashboardScreen({super.key, this.backend});
+  final MarketplaceRepository? backend;
   @override
   State<ArtisanDashboardScreen> createState() => _ArtisanDashboardScreenState();
 }
 
 class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
-  final demo = ArtisanDemo();
+  late final demo = ArtisanDemo(backend: widget.backend);
+  final _search = TextEditingController();
+  String _filter = 'All';
+  String get _query => _search.text.trim().toLowerCase();
+  bool _matches(ArtisanProduct p) =>
+      '${p.name} ${p.category} ${p.id}'.toLowerCase().contains(_query);
   @override
   void initState() {
     super.initState();
@@ -52,6 +61,7 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
   int tab = 0;
   @override
   void dispose() {
+    _search.dispose();
     demo.dispose();
     super.dispose();
   }
@@ -60,6 +70,8 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: demo,
     builder: (context, _) => _Page(
+      hideAppBar: true,
+      onRefresh: _refreshDashboard,
       back: () => Navigator.pushNamedAndRemoveUntil(
         context,
         RouteNames.roleSelection,
@@ -82,241 +94,489 @@ class _ArtisanDashboardScreenState extends State<ArtisanDashboardScreen> {
           ),
         ),
       ],
-      navigation: NavigationBar(
-        selectedIndex: tab,
-        onDestinationSelected: (value) => setState(() => tab = value),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.dashboard_outlined),
-            label: 'Dashboard',
+      navigation: Theme(
+        data: Theme.of(context).copyWith(
+          navigationBarTheme: NavigationBarThemeData(
+            backgroundColor: studioBlush,
+            indicatorColor: const Color(0xFFF8D2C4),
+            elevation: 0,
+            labelTextStyle: WidgetStateProperty.resolveWith(
+              (states) => TextStyle(
+                fontSize: 11,
+                color: states.contains(WidgetState.selected)
+                    ? studioClay
+                    : AppColors.muted,
+                fontWeight: states.contains(WidgetState.selected)
+                    ? FontWeight.w600
+                    : FontWeight.w400,
+              ),
+            ),
+            iconTheme: WidgetStateProperty.resolveWith(
+              (states) => IconThemeData(
+                color: states.contains(WidgetState.selected)
+                    ? studioClay
+                    : AppColors.muted,
+              ),
+            ),
           ),
-          NavigationDestination(
-            icon: Icon(Icons.inventory_2_outlined),
-            label: 'Products',
+        ),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          child: NavigationBar(
+            selectedIndex: tab,
+            onDestinationSelected: (value) => setState(() => tab = value),
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.home_outlined),
+                selectedIcon: Icon(Icons.home_rounded),
+                label: 'Dashboard',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.inventory_2_outlined),
+                label: 'Products',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.assignment_outlined),
+                label: 'Orders',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.person_outline_rounded),
+                label: 'Profile',
+              ),
+            ],
           ),
-          NavigationDestination(
-            icon: Icon(Icons.local_shipping_outlined),
-            label: 'Orders',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline),
-            label: 'Profile',
-          ),
-        ],
+        ),
       ),
-      children: switch (tab) {
-        0 => [
-          const _Caption('CERAMICS & KILN'),
-          _Heading('Welcome back, ${demo.artisanName}'),
-          _Card(
-            color: AppColors.terracotta,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'LIVE CATALOG',
-                  style: TextStyle(color: Colors.white70, letterSpacing: 1),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  '${demo.products.length} handcrafted pieces',
-                  style: Theme.of(context).textTheme.headlineLarge
-                      ?.copyWith(color: Colors.white),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  '${demo.orders.where((o) => o.status != 'In transit').length} studio orders awaiting dispatch',
-                  style: const TextStyle(color: Colors.white),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Shop status: accepting orders',
-                  style: TextStyle(color: Colors.white),
-                ),
-              ],
-            ),
+      children: [
+        ArtisanStudioHeader(
+          demo: demo,
+          onProfile: () => setState(() => tab = 3),
+          onNotifications: () => setState(() => tab = 2),
+          onMessages: () => _open(
+            context,
+            const CraftisanMessagesInbox(viewer: DemoMessageAuthor.artisan),
           ),
-          CustomButton(
-            label: 'Add Product',
-            onPressed: () => _open(context, ArtisanProductForm(demo: demo)),
-          ),
-          _Card(
-            child: Wrap(
-              spacing: 32,
-              runSpacing: 16,
-              children: [
-                _Stat(
-                  'DEMO ORDER VALUE',
-                  artisanMoney(
-                    demo.orders.fold<double>(0, (sum, o) => sum + o.total),
-                  ),
-                ),
-                _Stat('ORDERS', '${demo.orders.length}'),
-                _Stat(
-                  'STUDIO STATUS',
-                  MarketplaceBackend.enabled
-                      ? (demo.profile['verificationStatus'] as String? ??
-                            'pending')
-                      : 'Guild certified',
-                ),
-              ],
-            ),
-          ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const _Heading('My Products'),
-            trailing: const Icon(Icons.arrow_forward),
-            onTap: () => setState(() => tab = 1),
-          ),
-          ...demo.products
-              .take(2)
-              .map((p) => _ProductCard(demo: demo, product: p)),
-        ],
-        1 => [
-          const _Caption('STUDIO ATELIER'),
-          const _Heading('Ceramic Collection'),
-          CustomButton(
-            label: 'Add Product',
-            onPressed: () => _open(context, ArtisanProductForm(demo: demo)),
-          ),
-          const SizedBox(height: 12),
-          Text('${demo.products.length} pieces · Live Catalog'),
-          ...demo.products.map((p) => _ProductCard(demo: demo, product: p)),
-        ],
-        2 => [
-          const _Caption('STUDIO DISPATCH & LOGISTICS'),
-          _Heading("${demo.artisanName}'s Studio Orders"),
-          Text('${demo.orders.length} demo orders'),
-          const _Card(
+        ),
+        const SizedBox(height: 24),
+        if (demo.repository == null)
+          const Padding(
+            padding: EdgeInsets.only(bottom: 12),
             child: Text(
-              'Studio Packaging Checklist\nPlace the hand-signed Certificate of Kiln Provenance inside the protective crate before sealing.',
+              'Preview mode · Sample catalogue',
+              style: TextStyle(color: AppColors.muted, fontSize: 12),
             ),
           ),
-          ...demo.orders.map(
-            (o) => _Card(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _Caption('#${o.id} · ${o.status}'),
-                  const SizedBox(height: 12),
-                  Text('${o.buyer} · ${o.location}'),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: SizedBox(
-                      width: 60,
-                      height: 60,
-                      child: _Photo(o.product.images.first),
-                    ),
-                    title: Text(o.product.name),
-                    subtitle: Text(
-                      'Qty: ${o.quantity} · ${artisanMoney(o.total)}',
-                    ),
+        ...switch (tab) {
+          0 => [
+            Text(
+              _greeting,
+              style: const TextStyle(
+                color: AppColors.muted,
+                fontSize: 11,
+                letterSpacing: 1.6,
+              ),
+            ),
+            _Heading(
+              demo.profileLoading
+                  ? 'Loading your studio…'
+                  : 'Welcome back,\n${demo.artisanName}',
+            ),
+            _searchBar(),
+            ArtisanStudioHero(
+              onAdd: () => _open(context, ArtisanProductForm(demo: demo)),
+            ),
+            ArtisanStudioStats(demo: demo),
+            if (demo.ordersLoading)
+              const Padding(
+                padding: EdgeInsets.all(12),
+                child: LinearProgressIndicator(),
+              ),
+            if (demo.ordersError != null) _Card(child: Text(demo.ordersError!)),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                const Expanded(child: _Heading('My Products')),
+                TextButton(
+                  onPressed: () => setState(() => tab = 1),
+                  child: const Wrap(
+                    spacing: 6,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text('View All'),
+                      Icon(Icons.arrow_forward_rounded, size: 18),
+                    ],
                   ),
-                  OutlinedButton(
-                    onPressed: () => _open(
+                ),
+              ],
+            ),
+            ..._productList(limit: _query.isEmpty ? 3 : null),
+            if (_query.isNotEmpty) ...[
+              const _Heading('Matching Orders'),
+              if (_matchingOrders.isEmpty)
+                const _Card(child: Text('No orders match your search.')),
+              ..._matchingOrders.map(
+                (o) => _Card(
+                  child: ListTile(
+                    title: Text('#${o.id}'),
+                    subtitle: Text('${o.product.name} · ${o.status}'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => _open(
                       context,
                       ArtisanOrderDetails(demo: demo, orderId: o.id),
                     ),
-                    child: const Text('Order Details'),
+                  ),
+                ),
+              ),
+            ],
+          ],
+          1 => [
+            const _Heading('My Products'),
+            _searchBar(),
+            const SizedBox(height: 12),
+            CustomButton(
+              label: 'Add Product',
+              onPressed: () => _open(context, ArtisanProductForm(demo: demo)),
+            ),
+            const SizedBox(height: 16),
+            ..._productList(),
+          ],
+          2 when demo.repository != null => [
+            ArtisanStudioOrders(
+              demo: demo,
+              onOpen: (id) =>
+                  _open(context, ArtisanOrderDetails(demo: demo, orderId: id)),
+              onRetry: _refreshDashboard,
+            ),
+          ],
+          2 => [
+            _searchBar(),
+            const SizedBox(height: 16),
+            if (demo.ordersLoading) const LinearProgressIndicator(),
+            if (demo.ordersError != null) _Card(child: Text(demo.ordersError!)),
+            if (!demo.ordersLoading && demo.orders.isEmpty)
+              const _Card(
+                child: Text(
+                  'No orders yet. Your studio orders will appear here.',
+                ),
+              ),
+            const _Caption('STUDIO DISPATCH & LOGISTICS'),
+            _Heading("${demo.artisanName}'s Studio Orders"),
+            Text('${demo.orders.map((o) => o.id).toSet().length} orders'),
+            const _Card(
+              child: Text(
+                'Studio Packaging Checklist\nPlace the hand-signed Certificate of Kiln Provenance inside the protective crate before sealing.',
+              ),
+            ),
+            ...(_query.isEmpty ? demo.orders : _matchingOrders).map(
+              (o) => _Card(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _Caption('#${o.id} · ${o.status}'),
+                    const SizedBox(height: 12),
+                    Text('${o.buyer} · ${o.location}'),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: SizedBox(
+                        width: 60,
+                        height: 60,
+                        child: _Photo(o.product.images.first),
+                      ),
+                      title: Text(o.product.name),
+                      subtitle: Text(
+                        'Qty: ${o.quantity} · ${artisanMoney(o.total)}',
+                      ),
+                    ),
+                    OutlinedButton(
+                      onPressed: () => _open(
+                        context,
+                        ArtisanOrderDetails(demo: demo, orderId: o.id),
+                      ),
+                      child: const Text('Order Details'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          _ => [
+            Center(
+              child: CircleAvatar(
+                radius: 44,
+                backgroundColor: studioBlush,
+                child: Text(
+                  demo.artisanName.characters.first,
+                  style: studioHeading(40),
+                ),
+              ),
+            ),
+            _Heading(demo.artisanName),
+            Text(
+              demo.artisanLocation.isNotEmpty
+                  ? demo.artisanLocation
+                  : (demo.studioName.isNotEmpty
+                        ? demo.studioName
+                        : 'Artisan profile'),
+            ),
+            _Caption(
+              MarketplaceBackend.enabled
+                  ? (demo.profile['verificationStatus'] as String? ?? 'pending')
+                  : 'GUILD CERTIFIED POTTER',
+            ),
+            _Card(
+              child: Wrap(
+                spacing: 28,
+                runSpacing: 16,
+                children: [
+                  _Stat('CREATIONS', '${demo.products.length}'),
+                  _Stat('REVIEWS', MarketplaceBackend.enabled ? '' : '4.9'),
+                  _Stat(
+                    'IN GUILD',
+                    MarketplaceBackend.enabled ? '' : '3 years',
                   ),
                 ],
               ),
             ),
-          ),
-        ],
-        _ => [
-          Center(
-            child: CircleAvatar(
-              radius: 44,
-              backgroundImage: MemoryImage(artisanPhotos[4]),
+            TextButton.icon(
+              onPressed: () => Navigator.pushNamedAndRemoveUntil(
+                context,
+                RouteNames.roleSelection,
+                (_) => false,
+                arguments: AuthEntry.signIn,
+              ),
+              icon: const Icon(Icons.arrow_back_rounded),
+              label: const Text('Back to roles'),
             ),
-          ),
-          _Heading(demo.artisanName),
-          Text(
-            demo.artisanLocation.isNotEmpty
-                ? demo.artisanLocation
-                : (demo.studioName.isNotEmpty
-                      ? demo.studioName
-                      : 'Artisan profile'),
-          ),
-          _Caption(
-            MarketplaceBackend.enabled
-                ? (demo.profile['verificationStatus'] as String? ?? 'pending')
-                : 'GUILD CERTIFIED POTTER',
-          ),
-          _Card(
-            child: Wrap(
-              spacing: 28,
-              runSpacing: 16,
-              children: [
-                _Stat('CREATIONS', '${demo.products.length}'),
-                _Stat('REVIEWS', MarketplaceBackend.enabled ? '' : '4.9'),
-                _Stat('IN GUILD', MarketplaceBackend.enabled ? '' : '3 years'),
-              ],
+            const _Heading('Studio Information'),
+            _Card(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const _Caption('ATELIER NAME'),
+                  Text(
+                    demo.studioName.isNotEmpty
+                        ? demo.studioName
+                        : 'Studio name not added',
+                  ),
+                  SizedBox(height: 18),
+                  _Caption('PUBLIC BIO'),
+                  Text(
+                    demo.artisanBio.isNotEmpty
+                        ? demo.artisanBio
+                        : 'No public bio has been added yet.',
+                  ),
+                  SizedBox(height: 18),
+                  _Caption('STUDIO LOCATION'),
+                  Text(
+                    demo.artisanLocation.isNotEmpty
+                        ? demo.artisanLocation
+                        : 'Location not added',
+                  ),
+                  SizedBox(height: 18),
+                  _Caption('KILN SPECIFICATIONS'),
+                  Text(
+                    MarketplaceBackend.enabled
+                        ? (demo.profile['kilnSpecifications'] as String? ?? '')
+                        : 'Wood-Fired Noborigama',
+                  ),
+                ],
+              ),
             ),
-          ),
-          const _Heading('Studio Information'),
-          _Card(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const _Caption('ATELIER NAME'),
-                Text(
-                  demo.studioName.isNotEmpty
-                      ? demo.studioName
-                      : 'Studio name not added',
+            _Card(
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(
+                  Icons.verified_outlined,
+                  color: AppColors.sage,
                 ),
-                SizedBox(height: 18),
-                _Caption('PUBLIC BIO'),
-                Text(
-                  demo.artisanBio.isNotEmpty
-                      ? demo.artisanBio
-                      : 'No public bio has been added yet.',
-                ),
-                SizedBox(height: 18),
-                _Caption('STUDIO LOCATION'),
-                Text(
-                  demo.artisanLocation.isNotEmpty
-                      ? demo.artisanLocation
-                      : 'Location not added',
-                ),
-                SizedBox(height: 18),
-                _Caption('KILN SPECIFICATIONS'),
-                Text(
+                title: const Text('Verification Status'),
+                subtitle: Text(
                   MarketplaceBackend.enabled
-                      ? (demo.profile['kilnSpecifications'] as String? ?? '')
-                      : 'Wood-Fired Noborigama',
+                      ? (demo.profile['verificationStatus'] as String? ??
+                            'pending')
+                      : 'Verified Provenance Seal',
                 ),
-              ],
-            ),
-          ),
-          _Card(
-            child: ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(
-                Icons.verified_outlined,
-                color: AppColors.sage,
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => _open(context, const ArtisanVerificationScreen()),
               ),
-              title: const Text('Verification Status'),
-              subtitle: Text(
-                MarketplaceBackend.enabled
-                    ? (demo.profile['verificationStatus'] as String? ??
-                          'pending')
-                    : 'Verified Provenance Seal',
+            ),
+            const _Card(
+              child: Text(
+                'Shop status: Accepting orders\nCustom wood-wool crating & compostable wrap',
               ),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () => _open(context, const ArtisanVerificationScreen()),
             ),
-          ),
-          const _Card(
-            child: Text(
-              'Shop status: Accepting orders\nCustom wood-wool crating & compostable wrap',
-            ),
-          ),
-        ],
-      },
+          ],
+        },
+      ],
     ),
   );
+
+  String get _greeting {
+    final hour = DateTime.now().hour;
+    return hour < 12
+        ? 'GOOD MORNING,'
+        : hour < 18
+        ? 'GOOD AFTERNOON,'
+        : 'GOOD EVENING,';
+  }
+
+  Iterable<ArtisanOrder> get _matchingOrders {
+    final seen = <String>{};
+    return demo.orders.where(
+      (o) =>
+          '${o.id} ${o.buyer} ${o.product.name} ${o.status}'
+              .toLowerCase()
+              .contains(_query) &&
+          seen.add(o.id),
+    );
+  }
+
+  Future<void> _refreshDashboard() async {
+    try {
+      await demo.refreshDashboard();
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(marketplaceError(error))));
+      }
+    }
+  }
+
+  Widget _searchBar() => TextField(
+    controller: _search,
+    onChanged: (_) => setState(() {}),
+    decoration: InputDecoration(
+      hintText: 'Search products, orders, or categories…',
+      hintStyle: const TextStyle(fontSize: 13, color: AppColors.muted),
+      prefixIcon: const Icon(Icons.search_rounded),
+      suffixIcon: _query.isEmpty
+          ? null
+          : IconButton(
+              tooltip: 'Clear search',
+              icon: const Icon(Icons.close),
+              onPressed: () => setState(() => _search.clear()),
+            ),
+      filled: true,
+      fillColor: Colors.white,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(20),
+        borderSide: const BorderSide(color: Color(0xFFEEDFD5)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(20),
+        borderSide: const BorderSide(color: Color(0xFFF0E8E0)),
+      ),
+    ),
+  );
+
+  List<Widget> _productList({int? limit}) {
+    final filtered = demo.products.where((p) {
+      final status = demo.catalogRecords[p.id]?.status.name ?? 'active';
+      final expected = _filter == 'Drafts' ? 'draft' : _filter.toLowerCase();
+      return _matches(p) && (_filter == 'All' || status == expected);
+    }).toList();
+    return [
+      SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final filter in [
+              'All',
+              'Active',
+              'Pending',
+              'Drafts',
+              'Hidden',
+            ])
+              Padding(
+                padding: const EdgeInsets.only(right: 8, bottom: 16),
+                child: ChoiceChip(
+                  label: Text(filter),
+                  selected: _filter == filter,
+                  showCheckmark: false,
+                  backgroundColor: const Color(0xFFF1EAE3),
+                  selectedColor: studioClay,
+                  side: BorderSide.none,
+                  shape: const StadiumBorder(),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  labelStyle: TextStyle(
+                    color: _filter == filter ? Colors.white : AppColors.muted,
+                  ),
+                  onSelected: (_) => setState(() => _filter = filter),
+                ),
+              ),
+          ],
+        ),
+      ),
+      if (demo.productsLoading)
+        const Padding(
+          padding: EdgeInsets.all(28),
+          child: Center(child: CircularProgressIndicator()),
+        )
+      else if (demo.productsError != null)
+        _Card(
+          child: Column(
+            children: [
+              Text(demo.productsError!),
+              TextButton(
+                onPressed: _refreshDashboard,
+                child: const Text('Try again'),
+              ),
+            ],
+          ),
+        )
+      else if (filtered.isEmpty)
+        _Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                const Icon(
+                  Icons.inventory_2_outlined,
+                  color: studioClay,
+                  size: 32,
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  _query.isNotEmpty
+                      ? 'No products match your search.'
+                      : 'No ${_filter == 'All' ? '' : _filter.toLowerCase()} products yet.',
+                  textAlign: TextAlign.center,
+                ),
+                if (_filter == 'All' && _query.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Add your first creation to start your collection.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: AppColors.muted),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        )
+      else
+        ...filtered
+            .take(limit ?? filtered.length)
+            .map(
+              (p) => ArtisanStudioProductTile(
+                product: p,
+                demo: demo,
+                photo: _Photo(p.images.first),
+                onView: () => _open(
+                  context,
+                  ArtisanProductScreen(demo: demo, productId: p.id),
+                ),
+                onEdit: () =>
+                    _open(context, ArtisanProductForm(demo: demo, product: p)),
+              ),
+            ),
+    ];
+  }
 }
 
 class _Page extends StatelessWidget {
@@ -327,33 +587,46 @@ class _Page extends StatelessWidget {
     this.navigation,
     this.back,
     this.actions,
+    this.hideAppBar = false,
+    this.onRefresh,
   });
   final String title;
+  final bool hideAppBar;
+  final Future<void> Function()? onRefresh;
   final List<Widget> children;
   final Widget? footer, navigation;
   final VoidCallback? back;
   final List<Widget>? actions;
+  Widget _refreshable(Widget child) => onRefresh == null
+      ? child
+      : RefreshIndicator(onRefresh: onRefresh!, child: child);
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      backgroundColor: AppColors.background,
-      leading: back == null ? null : BackButton(onPressed: back),
-      title: Text(
-        title,
-        style: Theme.of(context).textTheme.headlineLarge
-            ?.copyWith(fontSize: 25),
-      ),
-      actions: actions,
-    ),
+    backgroundColor: studioCream,
+    appBar: hideAppBar
+        ? null
+        : AppBar(
+            backgroundColor: AppColors.background,
+            leading: back == null ? null : BackButton(onPressed: back),
+            title: Text(
+              title,
+              style: Theme.of(context).textTheme.headlineLarge
+                  ?.copyWith(fontSize: 25),
+            ),
+            actions: actions,
+          ),
     body: SafeArea(
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 640),
-          child: ListView(
-            key: ValueKey(title),
-            padding: const EdgeInsets.all(20),
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            children: children,
+          child: _refreshable(
+            ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              key: ValueKey(title),
+              padding: const EdgeInsets.all(20),
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+              children: children,
+            ),
           ),
         ),
       ),
@@ -410,14 +683,13 @@ class _Stat extends StatelessWidget {
 }
 
 class _Card extends StatelessWidget {
-  const _Card({required this.child, this.color = Colors.white});
+  const _Card({required this.child});
   final Widget child;
-  final Color color;
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 10),
     child: Material(
-      color: color,
+      color: Colors.white,
       borderRadius: BorderRadius.circular(18),
       clipBehavior: Clip.antiAlias,
       child: Padding(padding: const EdgeInsets.all(16), child: child),
@@ -463,60 +735,6 @@ class _Photo extends StatelessWidget {
                     'Artisan portrait',
                   ][index],
           ),
-  );
-}
-
-class _ProductCard extends StatelessWidget {
-  const _ProductCard({required this.demo, required this.product});
-  final ArtisanDemo demo;
-  final ArtisanProduct product;
-  @override
-  Widget build(BuildContext context) => _Card(
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        InkWell(
-          onTap: () => _open(
-            context,
-            ArtisanProductScreen(demo: demo, productId: product.id),
-          ),
-          child: _Photo(product.images.first, height: 210),
-        ),
-        const SizedBox(height: 12),
-        _Caption(
-          '${product.category.toUpperCase()} · ${product.stock <= 2 ? 'LOW STOCK' : 'LIVE CATALOG'}',
-        ),
-        _Heading(product.name),
-        Text(
-          artisanMoney(product.price),
-          style: const TextStyle(color: AppColors.terracotta, fontSize: 21),
-        ),
-        Text('${product.stock} in studio stock · ${product.id}'),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () => _open(
-                  context,
-                  ArtisanProductScreen(demo: demo, productId: product.id),
-                ),
-                child: const Text('View Product'),
-              ),
-            ),
-            const SizedBox(width: 8),
-            TextButton.icon(
-              onPressed: () => _open(
-                context,
-                ArtisanProductForm(demo: demo, product: product),
-              ),
-              icon: const Icon(Icons.edit_outlined),
-              label: const Text('Edit'),
-            ),
-          ],
-        ),
-      ],
-    ),
   );
 }
 
@@ -1016,6 +1234,77 @@ class ArtisanOrderDetails extends StatelessWidget {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: demo,
     builder: (_, _) {
+      final record = demo.dashboardOrders
+          .where((o) => o.id == orderId)
+          .firstOrNull;
+      if (record != null) {
+        return _Page(
+          title: 'Order Details',
+          children: [
+            ArtisanStudioOrderCard(
+              order: record,
+              showAction: false,
+              onOpen: () {},
+            ),
+            Text('Payment: ${record.paymentMethod}'),
+            Text(
+              'Delivery fee: ${studioOrderMoney(record, record.deliveryFee)}',
+            ),
+            Text(
+              'Order total: ${studioOrderMoney(record, record.total)}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            if (record.recipientPhone.isNotEmpty)
+              Text('Contact: ${record.recipientPhone}'),
+            if (record.deliveryInstructions.isNotEmpty)
+              Text('Delivery instructions: ${record.deliveryInstructions}'),
+            Text(
+              'Courier: ${record.courierId ?? 'Awaiting courier assignment'}',
+            ),
+            const SizedBox(height: 16),
+            const _Heading('Studio Packaging'),
+            const _Card(
+              child: Text(
+                'Protect with wood-wool wrapping.\nInclude the signed Certificate of Kiln Provenance.\nSeal and label the fragile crate.',
+              ),
+            ),
+            if (record.status.name == 'pending')
+              CustomButton(
+                label: demo.saving ? 'Updating order...' : 'Mark as Packed',
+                onPressed: demo.saving
+                    ? null
+                    : () async {
+                        final confirmed = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Mark this order as packed?'),
+                            content: const Text(
+                              'Confirm the packaging checklist is complete and this order is ready for dispatch.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('Cancel'),
+                              ),
+                              FilledButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                child: const Text('Mark as Packed'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirmed == true &&
+                            demo.dashboardOrders.any(
+                              (o) =>
+                                  o.id == orderId && o.status.name == 'pending',
+                            )) {
+                          demo.markPacked(orderId);
+                        }
+                      },
+              ),
+          ],
+        );
+      }
       final o = demo.orders.where((o) => o.id == orderId).firstOrNull;
       if (o == null) {
         return const _Page(

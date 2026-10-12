@@ -12,6 +12,7 @@ import '../../../shared/widgets/role_selection_back_button.dart';
 import '../models/admin_demo_store.dart';
 import '../widgets/admin_widgets.dart';
 import '../widgets/admin_courier_assignment.dart';
+import '../widgets/admin_image_carousel.dart';
 import 'admin_management_screen.dart';
 
 class AdminDashboardScreen extends StatefulWidget {
@@ -116,79 +117,82 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   @override
   Widget build(BuildContext context) => AnimatedBuilder(
     animation: _store,
-    builder: (context, _) => Scaffold(
-      backgroundColor: AdminStyle.cream,
-      appBar: AppBar(
-        leading: const RoleSelectionBackButton(),
+    builder: (context, _) => Theme(
+      data: AdminStyle.theme(context),
+      child: Scaffold(
         backgroundColor: AdminStyle.cream,
-        surfaceTintColor: Colors.transparent,
-        foregroundColor: AdminStyle.navy,
-        title: const Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'CRAFTISAN',
-              style: TextStyle(
-                fontSize: 10,
-                letterSpacing: 2,
-                color: AdminStyle.clay,
+        appBar: AppBar(
+          leading: const RoleSelectionBackButton(),
+          backgroundColor: AdminStyle.cream,
+          surfaceTintColor: Colors.transparent,
+          foregroundColor: AdminStyle.navy,
+          title: const Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'CRAFTISAN',
+                style: TextStyle(
+                  fontSize: 10,
+                  letterSpacing: 2,
+                  color: AdminStyle.clay,
+                ),
+              ),
+              Text(
+                'Control',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          actions: [
+            IconButton(
+              tooltip: 'Notifications',
+              onPressed: () => _manage(AdminSection.notifications),
+              icon: Badge(
+                label: Text('${_store.unreadNotifications}'),
+                child: const Icon(Icons.notifications_none),
               ),
             ),
-            Text(
-              'Control',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-            ),
+            const SizedBox(width: 12),
           ],
         ),
-        actions: [
-          IconButton(
-            tooltip: 'Notifications',
-            onPressed: () => _manage(AdminSection.notifications),
-            icon: Badge(
-              label: Text('${_store.unreadNotifications}'),
-              child: const Icon(Icons.notifications_none),
-            ),
-          ),
-          const SizedBox(width: 12),
-        ],
-      ),
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 650),
-            child: IndexedStack(
-              index: _tab,
-              children: [
-                _page('overview', _overview()),
-                _page('approvals', _approvals()),
-                _page('orders', _orders()),
-                _page('more', _more()),
-              ],
+        body: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 650),
+              child: IndexedStack(
+                index: _tab,
+                children: [
+                  _page('overview', _overview()),
+                  _page('approvals', _approvals()),
+                  _page('orders', _orders()),
+                  _page('more', _more()),
+                ],
+              ),
             ),
           ),
         ),
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (value) => setState(() => _tab = value),
-        backgroundColor: Colors.white,
-        indicatorColor: const Color(0xFFF2DED3),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.grid_view_outlined),
-            selectedIcon: Icon(Icons.grid_view_rounded),
-            label: 'Overview',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.verified_outlined),
-            label: 'Approvals',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.inventory_2_outlined),
-            label: 'Orders',
-          ),
-          NavigationDestination(icon: Icon(Icons.more_horiz), label: 'More'),
-        ],
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _tab,
+          onDestinationSelected: (value) => setState(() => _tab = value),
+          backgroundColor: Colors.white,
+          indicatorColor: const Color(0xFFF2DED3),
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.grid_view_outlined),
+              selectedIcon: Icon(Icons.grid_view_rounded),
+              label: 'Overview',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.verified_outlined),
+              label: 'Approvals',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.inventory_2_outlined),
+              label: 'Orders',
+            ),
+            NavigationDestination(icon: Icon(Icons.more_horiz), label: 'More'),
+          ],
+        ),
       ),
     ),
   );
@@ -245,59 +249,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   );
 
   List<Widget> _overview() => [
-    Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: AdminStyle.navy,
-        borderRadius: BorderRadius.circular(24),
-        image: const DecorationImage(
-          image: AssetImage('lib/features/auth/widgets/pottery_vase.png'),
-          fit: BoxFit.cover,
-          alignment: Alignment(0, 0.3),
-          colorFilter: ColorFilter.mode(Color(0xB3243447), BlendMode.srcATop),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'GUILD ADMINISTRATION  /  LIVE',
-            style: TextStyle(
-              fontSize: 10,
-              letterSpacing: 1.4,
-              color: Color(0xFFEAC9AE),
-            ),
-          ),
-          _space(14),
-          const Text(
-            'Your marketplace,\nat a glance.',
-            style: TextStyle(
-              fontFamily: 'CormorantGaramond',
-              fontSize: 34,
-              height: 1.05,
-              color: Colors.white,
-            ),
-          ),
-          _space(12),
-          const Text(
-            'A little oversight. A thriving creative community.',
-            style: TextStyle(
-              fontSize: 12,
-              height: 1.6,
-              color: Color(0xFFCFD6DD),
-            ),
-          ),
-          _space(18),
-          FilledButton.icon(
-            onPressed: () => _manage(AdminSection.products),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFF2DED3),
-              foregroundColor: AdminStyle.navy,
-            ),
-            icon: const Icon(Icons.arrow_outward, size: 18),
-            label: const Text('Explore catalogue'),
-          ),
-        ],
+    AdminPhotoBanner(
+      title: 'Your marketplace,\nat a glance.',
+      subtitle: 'A little oversight. A thriving creative community.',
+      imagePath: 'assets/images/admin/craft_collection.png',
+      photo: AdminImageCarousel(active: _tab == 0),
+      action: FilledButton.icon(
+        onPressed: () => _manage(AdminSection.products),
+        icon: const Icon(Icons.arrow_outward, size: 18),
+        label: const Text('Explore catalogue'),
       ),
     ),
     _space(),
@@ -310,29 +270,34 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             (constraints.maxWidth - 12) / 2,
             'Total orders',
             '${_store.orders.length}',
-            Icons.inventory_2_outlined,
+            Icons.inventory_2_rounded,
             () => setState(() => _tab = 2),
           ),
           _metric(
             (constraints.maxWidth - 12) / 2,
             'Active artisans',
             '${_store.activeArtisans}',
-            Icons.palette_outlined,
+            Icons.palette_rounded,
             () => _manage(AdminSection.users),
+            tint: const Color(0xFFE9EEE6),
+            accent: AdminStyle.sage,
           ),
           _metric(
             (constraints.maxWidth - 12) / 2,
             'Pending approvals',
             '${_store.pending}',
-            Icons.verified_outlined,
+            Icons.verified_rounded,
             () => setState(() => _tab = 1),
+            tint: const Color(0xFFF4ECDD),
+            accent: AdminStyle.amber,
           ),
           _metric(
             (constraints.maxWidth - 12) / 2,
             'Order value',
             adminMoney(_store.revenue),
-            Icons.account_balance_wallet_outlined,
+            Icons.account_balance_wallet_rounded,
             () => setState(() => _tab = 2),
+            tint: const Color(0xFFEFE8E2),
           ),
         ],
       ),
@@ -488,18 +453,28 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     String label,
     String value,
     IconData icon,
-    VoidCallback action,
-  ) => SizedBox(
+    VoidCallback action, {
+    Color tint = const Color(0xFFF3E7DD),
+    Color accent = AdminStyle.clay,
+  }) => SizedBox(
     width: width,
     child: Semantics(
       button: true,
       child: GestureDetector(
         onTap: action,
         child: AdminPanel(
+          color: tint,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(icon, color: AdminStyle.clay, size: 22),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: accent,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: Colors.white, size: 28),
+              ),
               _space(14),
               Text(
                 value,
@@ -606,10 +581,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       (a) => _approvalFilter == 'All' || a.status == _approvalFilter,
     );
     return [
-      _title(
-        'Make room for great craft.',
-        'Review studio and courier applications.',
+      AdminPhotoBanner(
+        title: 'Make room for great craft.',
+        overlayText: true,
+        subtitle: 'Review studio and courier applications.',
+        imagePath: 'assets/images/onboarding/artisans.png',
       ),
+      _space(),
       _filters(
         ['Pending', 'Approved', 'Rejected', 'All'],
         _approvalFilter,
@@ -723,10 +701,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           '${o.id} ${o.customer} ${o.product}'.toLowerCase().contains(query),
     );
     return [
-      _title(
-        'Every piece has a journey.',
-        'Browse and update marketplace orders.',
+      const AdminPhotoBanner(
+        title: 'Every piece has a journey.',
+        subtitle: 'Browse and update marketplace orders.',
+        imagePath: 'lib/features/auth/widgets/pottery_mug.png',
       ),
+      _space(),
       TextField(
         controller: _search,
         onChanged: (_) => setState(() {}),
@@ -910,7 +890,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           Navigator.pop(sheetContext);
                         },
                   style: FilledButton.styleFrom(
-                    backgroundColor: AdminStyle.navy,
+                    backgroundColor: AdminStyle.clay,
                   ),
                   child: const Text('Update status'),
                 ),
@@ -923,10 +903,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   List<Widget> _more() => [
-    _title(
-      'Your guild workspace.',
-      'Manage the details that keep the community moving.',
+    AdminPhotoBanner(
+      title: 'Your guild workspace.',
+      subtitle: 'Manage the details that keep the community moving.',
+      imagePath: 'lib/features/auth/widgets/pottery_vase.png',
     ),
+    _space(),
     AdminPanel(
       child: Column(
         children: [

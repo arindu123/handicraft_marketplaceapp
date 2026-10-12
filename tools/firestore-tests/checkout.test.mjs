@@ -31,6 +31,27 @@ beforeEach(async () => {
 });
 const dbFor = uid => env.authenticatedContext(uid).firestore();
 
+test('couriers can edit their contact number but not another profile or identity', async () => {
+  await env.withSecurityRulesDisabled(async ctx => {
+    await updateDoc(doc(ctx.firestore(), 'users/courier'), {displayName: 'Courier One', email: 'courier@example.com'});
+  });
+  const courier = dbFor('courier'), ref = doc(courier, 'users/courier');
+  await assertSucceeds(runTransaction(courier, async tx => {
+    tx.update(ref, {phone: '0771234567', updatedAt: serverTimestamp()});
+    tx.set(doc(courier, 'courierPublicProfiles/courier'), {
+      displayName: 'Courier One', area: 'Colombo', photoUrl: '', phone: '0771234567',
+    });
+  }));
+  assert.equal((await getDoc(ref)).data().phone, '0771234567');
+  await assertFails(updateDoc(ref, {phone: 'invalid', updatedAt: serverTimestamp()}));
+  await assertFails(updateDoc(ref, {email: 'changed@example.com', phone: '0777654321', updatedAt: serverTimestamp()}));
+  await assertFails(updateDoc(doc(dbFor('courier2'), 'users/courier'), {phone: '0777654321', updatedAt: serverTimestamp()}));
+  await env.withSecurityRulesDisabled(async ctx => {
+    await updateDoc(doc(ctx.firestore(), 'users/buyer'), {displayName: 'Buyer'});
+  });
+  await assertFails(updateDoc(doc(dbFor('buyer'), 'users/buyer'), {phone: '0777654321', updatedAt: serverTimestamp()}));
+});
+
 test('buyers report only their own orders and read only their own resolutions', async () => {
   const buyer = dbFor('buyer'), other = dbFor('other'), admin = dbFor('admin');
   await checkout(buyer, order('buyer-problem'));

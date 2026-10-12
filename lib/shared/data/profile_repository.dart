@@ -53,10 +53,14 @@ class ProfileRepository {
     required String displayName,
     required String area,
     Uint8List? photo,
+    String? phone,
   }) async {
     final owner = uid;
     final name = displayName.trim();
     final location = area.trim();
+    final contact = phone?.trim();
+    final phoneError = validatePhone(contact);
+    if (phoneError != null) throw MarketplaceFailure(phoneError);
     if (name.isEmpty || name.length > 100 || location.length > 100) {
       throw const MarketplaceFailure(
         'Enter a name and use at most 100 characters per field.',
@@ -86,9 +90,18 @@ class ProfileRepository {
     }
     final userRef = db.collection('users').doc(owner);
     final currentProfile = await userRef.get();
-    await userRef.update(changes);
+    if (contact != null) {
+      if (currentProfile.data()?['role'] != 'courier') {
+        throw const MarketplaceFailure(
+          'Only couriers can edit this contact number.',
+        );
+      }
+      changes['phone'] = contact;
+    }
+    final batch = db.batch();
+    batch.update(userRef, changes);
     if (currentProfile.data()?['role'] == 'courier') {
-      await db.collection('courierPublicProfiles').doc(owner).set({
+      batch.set(db.collection('courierPublicProfiles').doc(owner), {
         'displayName': name,
         'area': location,
         'photoUrl':
@@ -96,10 +109,25 @@ class ProfileRepository {
             currentProfile.data()?['photoUrl'] as String? ??
             '',
         'phone':
-            auth.currentUser?.phoneNumber ??
+            contact ??
             currentProfile.data()?['phone'] as String? ??
+            auth.currentUser?.phoneNumber ??
             '',
       });
     }
+    await batch.commit();
+  }
+
+  static String? validatePhone(String? value) {
+    final phone = value?.trim() ?? '';
+    if (phone.isEmpty) return null;
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    if (phone.length > 40 ||
+        !RegExp(r'^\+?[0-9 ()-]+$').hasMatch(phone) ||
+        digits.length < 7 ||
+        digits.length > 15) {
+      return 'Enter a valid mobile number.';
+    }
+    return null;
   }
 }

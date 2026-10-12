@@ -105,6 +105,7 @@ class DeliveryProfileField extends StatelessWidget {
     this.maxLength,
     this.validator,
     this.onChanged,
+    this.keyboardType,
   });
   final String label;
   final IconData icon;
@@ -114,6 +115,7 @@ class DeliveryProfileField extends StatelessWidget {
   final int? maxLength;
   final FormFieldValidator<String>? validator;
   final ValueChanged<String>? onChanged;
+  final TextInputType? keyboardType;
 
   @override
   Widget build(BuildContext context) => Padding(
@@ -146,6 +148,7 @@ class DeliveryProfileField extends StatelessWidget {
           maxLength: maxLength,
           validator: validator,
           onChanged: onChanged,
+          keyboardType: keyboardType,
           style: const TextStyle(fontSize: 14, color: DeliveryStyle.ink),
           decoration: InputDecoration(
             filled: true,

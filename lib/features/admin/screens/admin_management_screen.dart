@@ -48,56 +48,49 @@ class _AdminManagementScreenState extends State<AdminManagementScreen> {
   };
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: AdminStyle.cream,
-    appBar: AppBar(
-      title: Text(
-        _title,
-        style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w600),
-      ),
+  Widget build(BuildContext context) => Theme(
+    data: AdminStyle.theme(context),
+    child: Scaffold(
       backgroundColor: AdminStyle.cream,
-      foregroundColor: AdminStyle.navy,
-      surfaceTintColor: Colors.transparent,
-    ),
-    body: SafeArea(
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 650),
-          child: AnimatedBuilder(
-            animation: widget.store,
-            builder: (context, _) => ListView(
-              padding: const EdgeInsets.all(20),
-              children: [
-                const Text(
-                  'ADMIN WORKSPACE',
-                  style: TextStyle(
-                    fontSize: 10,
-                    letterSpacing: 1.5,
-                    color: AdminStyle.clay,
-                    fontWeight: FontWeight.w700,
+      appBar: AppBar(
+        title: Text(
+          _title,
+          style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: AdminStyle.cream,
+        foregroundColor: AdminStyle.navy,
+        surfaceTintColor: Colors.transparent,
+      ),
+      body: SafeArea(
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 650),
+            child: AnimatedBuilder(
+              animation: widget.store,
+              builder: (context, _) => ListView(
+                padding: const EdgeInsets.all(20),
+                children: [
+                  AdminWorkspaceHeader(
+                    subtitle: 'Manage live marketplace records and approvals.',
+                    imagePath: widget.section == AdminSection.couriers
+                        ? 'lib/features/delivery/widgets/courier_hero.png'
+                        : widget.section == AdminSection.users
+                        ? 'assets/images/onboarding/artisans.png'
+                        : 'lib/features/auth/widgets/pottery_mug.png',
                   ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Manage live marketplace records and approvals.',
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1.5,
-                    color: AdminStyle.muted,
-                  ),
-                ),
-                const SizedBox(height: 20),
-                if (widget.section == AdminSection.settings)
-                  ..._settings()
-                else if (widget.section == AdminSection.reports)
-                  ..._reports()
-                else if (widget.section == AdminSection.activity)
-                  AdminActivityPanel(store: widget.store)
-                else if (widget.section == AdminSection.notifications)
-                  AdminNotificationPanel(store: widget.store)
-                else
-                  ..._directory(),
-              ],
+                  const SizedBox(height: 20),
+                  if (widget.section == AdminSection.settings)
+                    ..._settings()
+                  else if (widget.section == AdminSection.reports)
+                    ..._reports()
+                  else if (widget.section == AdminSection.activity)
+                    AdminActivityPanel(store: widget.store)
+                  else if (widget.section == AdminSection.notifications)
+                    AdminNotificationPanel(store: widget.store)
+                  else
+                    ..._directory(),
+                ],
+              ),
             ),
           ),
         ),

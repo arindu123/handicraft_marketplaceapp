@@ -32,8 +32,56 @@ void main() {
     store.updateOrder(order, 'Processing');
     expect(order.status, 'Processing');
     store.updateOrder(order, 'Delivered');
+    expect(order.status, 'Processing');
+    order.status = 'Shipped';
+    store.updateOrder(order, 'Delivered');
     store.updateOrder(order, 'Pending');
     expect(order.status, 'Delivered');
+  });
+
+  test('Order transitions match admin delivery permissions', () {
+    for (final status in AdminOrder.statusLabels.keys) {
+      final order = AdminOrder('o1', 'Buyer', 'Vase', 'Studio', 100, status);
+      store.orders
+        ..clear()
+        ..add(order);
+      final next = {
+        'pending': 'Processing',
+        'pickedUp': 'Shipped',
+        'onTheWay': 'Delivered',
+      }[status];
+      for (final target in ['Pending', 'Processing', 'Shipped', 'Delivered']) {
+        order.status = status;
+        store.updateOrder(order, target);
+        expect(order.status, target == next ? target : status);
+      }
+    }
+  });
+
+  test('Invalid document IDs cannot be reviewed', () {
+    for (final id in ['', ' ', ' a1', 'a1 ', '.', '..', 'a/b']) {
+      final application = AdminApproval(
+        id,
+        'Studio',
+        'Artisan',
+        'Galle',
+        'Bio',
+      );
+      store.approvals.add(application);
+      store.decide(application, true);
+      expect(application.status, 'Pending');
+    }
+  });
+
+  test('Rejected artisan profiles cannot be directly verified', () {
+    final artisan = AdminDirectoryItem(
+      'Studio',
+      'Artisan',
+      verification: 'Rejected',
+    );
+    store.users.add(artisan);
+    store.verifyArtisan(artisan);
+    expect(artisan.verification, 'Rejected');
   });
 
   test('Removed records and unexpected collections cannot be toggled', () {

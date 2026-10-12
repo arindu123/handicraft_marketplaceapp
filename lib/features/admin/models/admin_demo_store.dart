@@ -14,6 +14,35 @@ class AdminApproval {
 }
 
 class AdminOrder {
+  static const statusLabels = {
+    'pending': 'Pending',
+    'confirmed': 'Processing',
+    'courierAssigned': 'Courier assigned',
+    'pickedUp': 'Picked up',
+    'onTheWay': 'Shipped',
+    'delivered': 'Delivered',
+    'cancelled': 'Cancelled',
+  };
+
+  static String canonicalStatus(String status) {
+    for (final entry in statusLabels.entries) {
+      if (entry.value == status) return entry.key;
+    }
+    return status;
+  }
+
+  static String displayStatus(String status) =>
+      statusLabels[canonicalStatus(status)] ?? status;
+
+  // Status-only transitions permitted by the administrator Firestore rules.
+  bool canUpdateTo(String next) =>
+      const {
+        'pending': 'confirmed',
+        'pickedUp': 'onTheWay',
+        'onTheWay': 'delivered',
+      }[canonicalStatus(status)] ==
+      canonicalStatus(next);
+
   AdminOrder(
     this.id,
     this.customer,
@@ -48,6 +77,7 @@ class AdminDemoStore extends ChangeNotifier {
   bool _disposed = false;
 
   bool _validate(bool valid, String message) {
+    if (_disposed) return false;
     if (!valid && !_disposed) {
       error = message;
       notifyListeners();
@@ -55,7 +85,12 @@ class AdminDemoStore extends ChangeNotifier {
     return valid;
   }
 
-  bool _validId(String id) => id.trim().isNotEmpty && !id.contains('/');
+  bool _validId(String id) =>
+      id.isNotEmpty &&
+      id == id.trim() &&
+      !id.contains('/') &&
+      id != '.' &&
+      id != '..';
 
   void _save(String key, Future<void> Function() action) {
     if (!_validate(
@@ -145,7 +180,7 @@ class AdminDemoStore extends ChangeNotifier {
               o.items.map((i) => i.productName).join(', '),
               o.artisanId,
               o.total.round(),
-              o.status.name,
+              AdminOrder.displayStatus(o.status.name),
             );
           }),
         );
@@ -356,7 +391,7 @@ class AdminDemoStore extends ChangeNotifier {
       return;
     }
     final mappedStatus = statuses[status];
-    final currentStatus = statuses[order.status] ?? order.status;
+    final currentStatus = AdminOrder.canonicalStatus(order.status);
     if (!_validate(mappedStatus != null, 'Select a valid order status.')) {
       return;
     }
@@ -372,25 +407,23 @@ class AdminDemoStore extends ChangeNotifier {
     )) {
       return;
     }
+    if (!_validate(
+      order.canUpdateTo(status),
+      'This status change is not allowed. Complete the required delivery steps first.',
+    )) {
+      return;
+    }
     if (MarketplaceBackend.enabled) {
-      final mapped = {
-        'Pending': 'pending',
-        'Processing': 'confirmed',
-        'Shipped': 'onTheWay',
-        'Delivered': 'delivered',
-      }[status];
-      if (mapped != null) {
-        _save(
-          'order:${order.id}',
-          () => MarketplaceRepository().db
-              .collection('orders')
-              .doc(order.id)
-              .update({
-                'status': mapped,
-                'updatedAt': DateTime.now().toUtc().toIso8601String(),
-              }),
-        );
-      }
+      _save(
+        'order:${order.id}',
+        () => MarketplaceRepository().db
+            .collection('orders')
+            .doc(order.id)
+            .update({
+              'status': mappedStatus,
+              'updatedAt': DateTime.now().toUtc().toIso8601String(),
+            }),
+      );
       return;
     }
     order.status = status;
@@ -443,8 +476,8 @@ class AdminDemoStore extends ChangeNotifier {
       return;
     }
     if (!_validate(
-      item.verification != 'Approved',
-      'This artisan is already verified.',
+      item.verification == 'Pending',
+      'Only pending artisan profiles can be verified.',
     )) {
       return;
     }

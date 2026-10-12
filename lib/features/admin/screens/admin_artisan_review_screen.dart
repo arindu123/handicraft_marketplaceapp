@@ -187,12 +187,14 @@ class AdminArtisanReviewScreen extends StatelessWidget {
                     spacing: 12,
                     runSpacing: 8,
                     children: [
-                      if (artisan.verification != 'Approved')
+                      if (artisan.verification == 'Pending')
                         FilledButton(
                           style: FilledButton.styleFrom(
                             backgroundColor: AdminStyle.sage,
                           ),
-                          onPressed: () => _action(context, verify: true),
+                          onPressed: artisan.active
+                              ? () => _action(context, verify: true)
+                              : null,
                           child: const Text('Verify artisan'),
                         ),
                       TextButton(

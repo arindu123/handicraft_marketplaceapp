@@ -36,7 +36,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final _search = TextEditingController();
   int _tab = 0;
   String _approvalFilter = 'Pending', _orderFilter = 'All';
-  static const _statuses = ['Pending', 'Processing', 'Shipped', 'Delivered'];
+  static final _statuses = AdminOrder.statusLabels.values.toList();
 
   @override
   void dispose() {
@@ -533,7 +533,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('Recorded completed-order value', style: TextStyle(color: AdminStyle.muted)),
+          const Text(
+            'Recorded completed-order value',
+            style: TextStyle(color: AdminStyle.muted),
+          ),
           Text(
             adminMoney(values.fold<int>(0, (a, b) => a + b)),
             style: const TextStyle(
@@ -619,7 +622,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             Text(item.description, style: const TextStyle(height: 1.6)),
             _space(),
             const Text(
-        'Review the submitted application before making a decision.',
+              'Review the submitted application before making a decision.',
               style: TextStyle(fontSize: 12, color: AdminStyle.muted),
             ),
             _space(),
@@ -775,7 +778,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Future<void> _orderDetails(AdminOrder order) {
     FocusScope.of(context).unfocus();
-    var status = order.status;
+    var status = AdminOrder.displayStatus(order.status);
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -818,7 +821,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       ChoiceChip(
                         label: Text(value),
                         selected: value == status,
-                        onSelected: (_) => change(() => status = value),
+                        onSelected: order.canUpdateTo(value)
+                            ? (_) => change(() => status = value)
+                            : null,
                       ),
                   ],
                 ),
@@ -829,13 +834,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
                 _space(),
                 FilledButton(
-                  onPressed: status == order.status
+                  onPressed:
+                      !_store.orders.contains(order) ||
+                          !order.canUpdateTo(status)
                       ? null
                       : () async {
                           final confirmed = await confirmAdminAction(
                             sheetContext,
                             'Update order?',
-                            'Change ${order.id} to $status in this preview?',
+                            'Change ${order.id} to $status?',
                           );
                           if (!mounted || !sheetContext.mounted || !confirmed) {
                             return;

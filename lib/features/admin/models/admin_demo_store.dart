@@ -44,6 +44,31 @@ class AdminDirectoryItem {
 // Session-only sample data: no network, account authorization or real payments.
 class AdminDemoStore extends ChangeNotifier {
   final _subscriptions = <StreamSubscription<dynamic>>[];
+  final _pendingActions = <String>{};
+  bool _disposed = false;
+
+  bool _validate(bool valid, String message) {
+    if (!valid && !_disposed) {
+      error = message;
+      notifyListeners();
+    }
+    return valid;
+  }
+
+  bool _validId(String id) => id.trim().isNotEmpty && !id.contains('/');
+
+  void _save(String key, Future<void> Function() action) {
+    if (!_validate(
+      _pendingActions.add(key),
+      'This record is already being updated. Please wait.',
+    )) {
+      return;
+    }
+    Future<void>.sync(action).catchError(_failed).whenComplete(() {
+      _pendingActions.remove(key);
+    });
+  }
+
   String? error;
   AdminDemoStore() {
     // Never expose the legacy preview fixtures. When Firebase is unavailable
@@ -146,12 +171,14 @@ class AdminDemoStore extends ChangeNotifier {
     );
   }
   void _failed(Object e) {
+    if (_disposed) return;
     error = marketplaceError(e);
     notifyListeners();
   }
 
   @override
   void dispose() {
+    _disposed = true;
     for (final s in _subscriptions) {
       s.cancel();
     }
@@ -269,15 +296,37 @@ class AdminDemoStore extends ChangeNotifier {
       (deliveryIssueResolved ? 0 : 1);
 
   void decide(AdminApproval item, bool approved) {
+    if (!_validate(
+      approvals.contains(item) &&
+          _validId(item.id) &&
+          item.name.trim().isNotEmpty &&
+          (item.type == 'Artisan' || item.type == 'Courier'),
+      'Select a valid application before making a decision.',
+    )) {
+      return;
+    }
+    if (!_validate(
+      item.status == 'Pending',
+      'This application has already been reviewed.',
+    )) {
+      return;
+    }
     if (MarketplaceBackend.enabled) {
-      CommunityRepository()
-          .verify(
-            item.id,
-            approved
-                ? canonical.VerificationStatus.verified
-                : canonical.VerificationStatus.rejected,
-          )
-          .catchError(_failed);
+      if (!_validate(
+        item.type == 'Artisan',
+        'Courier approval is not configured.',
+      )) {
+        return;
+      }
+      _save(
+        'artisan:${item.id}',
+        () => CommunityRepository().verify(
+          item.id,
+          approved
+              ? canonical.VerificationStatus.verified
+              : canonical.VerificationStatus.rejected,
+        ),
+      );
       return;
     }
     if (item.status != 'Pending') return;
@@ -294,6 +343,35 @@ class AdminDemoStore extends ChangeNotifier {
   }
 
   void updateOrder(AdminOrder order, String status) {
+    const statuses = {
+      'Pending': 'pending',
+      'Processing': 'confirmed',
+      'Shipped': 'onTheWay',
+      'Delivered': 'delivered',
+    };
+    if (!_validate(
+      orders.contains(order) && _validId(order.id),
+      'Select a valid order before updating its status.',
+    )) {
+      return;
+    }
+    final mappedStatus = statuses[status];
+    final currentStatus = statuses[order.status] ?? order.status;
+    if (!_validate(mappedStatus != null, 'Select a valid order status.')) {
+      return;
+    }
+    if (!_validate(
+      mappedStatus != currentStatus,
+      'Select a different order status.',
+    )) {
+      return;
+    }
+    if (!_validate(
+      currentStatus != 'delivered' && currentStatus != 'cancelled',
+      'Completed or cancelled orders cannot be updated.',
+    )) {
+      return;
+    }
     if (MarketplaceBackend.enabled) {
       final mapped = {
         'Pending': 'pending',
@@ -302,14 +380,16 @@ class AdminDemoStore extends ChangeNotifier {
         'Delivered': 'delivered',
       }[status];
       if (mapped != null) {
-        MarketplaceRepository().db
-            .collection('orders')
-            .doc(order.id)
-            .update({
-              'status': mapped,
-              'updatedAt': DateTime.now().toUtc().toIso8601String(),
-            })
-            .catchError(_failed);
+        _save(
+          'order:${order.id}',
+          () => MarketplaceRepository().db
+              .collection('orders')
+              .doc(order.id)
+              .update({
+                'status': mapped,
+                'updatedAt': DateTime.now().toUtc().toIso8601String(),
+              }),
+        );
       }
       return;
     }
@@ -318,16 +398,33 @@ class AdminDemoStore extends ChangeNotifier {
   }
 
   void toggleItem(AdminDirectoryItem item) {
+    if (!_validate(
+      (item.collection == 'users' &&
+              (users.contains(item) || couriers.contains(item))) ||
+          (item.collection == 'products' && products.contains(item)),
+      'This record is no longer available. Refresh and try again.',
+    )) {
+      return;
+    }
+    if (!_validate(
+      item.name.trim().isNotEmpty &&
+          (!MarketplaceBackend.enabled || _validId(item.id)),
+      'This record has missing or invalid details.',
+    )) {
+      return;
+    }
     if (MarketplaceBackend.enabled) {
-      MarketplaceRepository().db
-          .collection(item.collection)
-          .doc(item.id)
-          .update(
-            item.collection == 'products'
-                ? {'status': item.active ? 'hidden' : 'active'}
-                : {'active': !item.active},
-          )
-          .catchError(_failed);
+      _save(
+        '${item.collection}:${item.id}',
+        () => MarketplaceRepository().db
+            .collection(item.collection)
+            .doc(item.id)
+            .update(
+              item.collection == 'products'
+                  ? {'status': item.active ? 'hidden' : 'active'}
+                  : {'active': !item.active},
+            ),
+      );
       return;
     }
     item.active = !item.active;
@@ -335,10 +432,36 @@ class AdminDemoStore extends ChangeNotifier {
   }
 
   void verifyArtisan(AdminDirectoryItem item) {
+    if (!_validate(
+      users.contains(item) &&
+          item.isArtisan &&
+          item.collection == 'users' &&
+          item.name.trim().isNotEmpty &&
+          (!MarketplaceBackend.enabled || _validId(item.id)),
+      'Select a valid artisan profile before verifying.',
+    )) {
+      return;
+    }
+    if (!_validate(
+      item.verification != 'Approved',
+      'This artisan is already verified.',
+    )) {
+      return;
+    }
+    if (!_validate(
+      item.active,
+      'Reactivate this artisan before verifying the profile.',
+    )) {
+      return;
+    }
     if (MarketplaceBackend.enabled) {
-      CommunityRepository()
-          .verify(item.id, canonical.VerificationStatus.verified)
-          .catchError(_failed);
+      _save(
+        'artisan:${item.id}',
+        () => CommunityRepository().verify(
+          item.id,
+          canonical.VerificationStatus.verified,
+        ),
+      );
       return;
     }
     if (!users.contains(item) ||

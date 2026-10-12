@@ -54,6 +54,10 @@ void main() {
       expect(demo.orderAlerts, [
         'Order #order-1: ${BuyerDemo.statusMessage(status)}',
       ]);
+      expect(
+        demo.notifications.where((n) => n['status'] == status.name),
+        hasLength(1),
+      );
       demo.orderAlerts.clear();
       await db.doc('orders/order-1').update({
         'updatedAt': DateTime.utc(2026, 1, status.index + 1).toIso8601String(),
@@ -63,6 +67,59 @@ void main() {
     }
     demo.dispose();
   });
+
+  testWidgets(
+    'Live inbox works without a worker and merges delayed server history',
+    (tester) async {
+      final demo = BuyerDemo(backend: repository);
+      await tester.pumpAndSettle();
+      expect(demo.notifications, isEmpty);
+      await db.doc('orders/order-1').update({'status': 'confirmed'});
+      await tester.pumpAndSettle();
+      expect(demo.unreadNotifications, 1);
+      await demo.readNotification('order-1_confirmed');
+      expect(demo.unreadNotifications, 0);
+      expect(
+        (await db.doc('users/buyer/notifications/order-1_confirmed').get())
+            .exists,
+        isFalse,
+      );
+      await db.doc('users/buyer/notifications/order-1_confirmed').set({
+        'orderId': 'order-1',
+        'status': 'confirmed',
+        'body': 'Your artisan has confirmed your order.',
+        'createdAt': Timestamp.now(),
+        'read': false,
+      });
+      await tester.pumpAndSettle();
+      expect(demo.notifications, hasLength(1));
+      expect(demo.unreadNotifications, 0);
+      demo.dispose();
+    },
+  );
+
+  testWidgets(
+    'Confirmation shows a live alert and opens from the bell without server history',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(home: BuyerMarketplace(backend: repository)),
+      );
+      await tester.pumpAndSettle();
+      await db.doc('orders/order-1').update({'status': 'confirmed'});
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Order #order-1: Your artisan has confirmed your order.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.byTooltip('Order notifications'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Your artisan has confirmed your order.'));
+      await tester.pumpAndSettle();
+      expect(find.text('Order details\n#order-1'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    },
+  );
 
   testWidgets(
     'bell opens persisted updates and reading opens the matching order',

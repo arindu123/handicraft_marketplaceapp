@@ -155,10 +155,12 @@ void main() {
       await open(tester);
       await tap(tester, 'Profile Information');
       expect(find.byTooltip('Choose profile photo'), findsOneWidget);
+      expect(find.text('Mobile number'), findsNothing);
       await tester.enterText(find.byType(TextFormField).first, 'Nimal Silva');
       await tester.ensureVisible(find.text('Save changes'));
       await tester.tap(find.text('Save changes'));
       await tester.pumpAndSettle();
+      expect(find.text('Save changes'), findsNothing);
       await tap(tester, 'Log Out');
       expect(find.text('Log out of Craftisan?'), findsOneWidget);
       await tester.tap(find.text('Cancel'));

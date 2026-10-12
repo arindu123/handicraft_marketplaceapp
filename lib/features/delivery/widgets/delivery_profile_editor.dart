@@ -74,6 +74,7 @@ class DeliveryProfileEditor extends StatefulWidget {
 }
 
 class _DeliveryProfileEditorState extends State<DeliveryProfileEditor> {
+  bool get _isCourier => widget.profile['role'] == 'courier';
   final _form = GlobalKey<FormState>();
   late final _name = TextEditingController(
     text: widget.profile['displayName'] as String? ?? '',
@@ -135,7 +136,7 @@ class _DeliveryProfileEditorState extends State<DeliveryProfileEditor> {
       await widget.repository.save(
         displayName: _name.text,
         area: _area.text,
-        phone: _phone.text,
+        phone: _isCourier ? _phone.text : null,
         photo: _photo,
       );
       if (mounted) Navigator.pop(context, true);
@@ -205,15 +206,16 @@ class _DeliveryProfileEditorState extends State<DeliveryProfileEditor> {
                       value: widget.profile['email'] as String? ?? '',
                       readOnly: true,
                     ),
-                    DeliveryProfileField(
-                      label: 'Mobile number',
-                      icon: Icons.phone_outlined,
-                      controller: _phone,
-                      enabled: !_busy,
-                      keyboardType: TextInputType.phone,
-                      maxLength: 40,
-                      validator: ProfileRepository.validatePhone,
-                    ),
+                    if (_isCourier)
+                      DeliveryProfileField(
+                        label: 'Mobile number',
+                        icon: Icons.phone_outlined,
+                        controller: _phone,
+                        enabled: !_busy,
+                        keyboardType: TextInputType.phone,
+                        maxLength: 40,
+                        validator: ProfileRepository.validatePhone,
+                      ),
                     DeliveryProfileField(
                       label: 'Delivery area',
                       icon: Icons.location_on_outlined,

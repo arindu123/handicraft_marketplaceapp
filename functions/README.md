@@ -16,7 +16,12 @@ Verification: `flutter test test/admin_notifications_test.dart` and `node --test
 The buyer marketplace displays a live alert when an existing order changes status.
 The notification bell lists saved confirmation, courier assignment, pickup, on-the-way,
 delivery and cancellation updates. Opening an entry marks it read and opens that order.
-Initial order snapshots and unrelated edits do not generate live alerts.
+Initial order snapshots and unrelated edits do not generate live popup alerts.
+The app also builds an inbox fallback from each order's actual current milestone
+and milestones observed while open. It merges these entries with server history
+by order and status, so a delayed trigger does not duplicate an entry. Fallback
+read markers and observed history last for the current marketplace session; durable
+history, cross-device read state, and background phone alerts still need the trigger.
 
 Deploy the buyer trigger and updated rules from the repository root:
 
@@ -29,6 +34,7 @@ opens. The bell screen also provides **Enable phone alerts** to retry registrati
 Web and desktop receive live in-app alerts and the saved inbox; Android background
 alerts use FCM. Notification taps open the buyer inbox. Notification history is written
 only by the function; buyers can only read their own entries and mark them read.
+The fallback never writes notification content from the client.
 One entry is saved per order milestone, and trigger retries preserve its read state.
 FCM may redeliver a push on a retry; the Android tag replaces the same milestone alert.
 

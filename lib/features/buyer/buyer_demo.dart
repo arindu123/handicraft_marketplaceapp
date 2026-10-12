@@ -283,14 +283,43 @@ class BuyerDemo extends ChangeNotifier {
   Set<String> _favoriteIds = {};
   final List<String> orderAlerts = [];
   List<Map<String, dynamic>> notifications = [];
+  final Map<String, Map<String, dynamic>> _orderNotices = {};
+  final Map<String, Map<String, dynamic>> _serverNotices = {};
+  final Set<String> _locallyReadNotices = {};
   String? notificationError;
   int get unreadNotifications =>
       notifications.where((n) => n['read'] != true).length;
 
   Future<void> readNotification(String id) async {
-    await repository!.userCollection('notifications').doc(id).update({
-      'read': true,
-    });
+    if (_serverNotices.containsKey(id)) {
+      await repository!.userCollection('notifications').doc(id).update({
+        'read': true,
+      });
+    }
+    if (_disposed) return;
+    _locallyReadNotices.add(id);
+    _mergeNotifications();
+    notifyListeners();
+  }
+
+  void _mergeNotifications() {
+    // Server history wins; live order records also work without the push worker.
+    notifications =
+        {..._orderNotices, ..._serverNotices}.entries
+            .map(
+              (entry) => <String, dynamic>{
+                ...entry.value,
+                'id': entry.key,
+                if (_locallyReadNotices.contains(entry.key)) 'read': true,
+              },
+            )
+            .toList()
+          ..sort(
+            (a, b) => (canonical.documentDate(b['createdAt']) ?? DateTime(1970))
+                .compareTo(
+                  canonical.documentDate(a['createdAt']) ?? DateTime(1970),
+                ),
+          );
   }
 
   static String statusMessage(BuyerOrderStatus status) => switch (status) {
@@ -323,14 +352,21 @@ class BuyerDemo extends ChangeNotifier {
     orders.clear();
     try {
       repository = backend ?? MarketplaceRepository();
-      _subscriptions.add(repository!.db.collection('marketplaceSettings')
-          .doc('deliveryLkr').snapshots().listen((snapshot) {
-        if (_disposed) return;
-        try {
-          _deliveryPolicy = DeliveryFeePolicy.fromMap(snapshot.data());
-          notifyListeners();
-        } catch (error) { _failed(error); }
-      }, onError: _failed));
+      _subscriptions.add(
+        repository!.db
+            .collection('marketplaceSettings')
+            .doc('deliveryLkr')
+            .snapshots()
+            .listen((snapshot) {
+              if (_disposed) return;
+              try {
+                _deliveryPolicy = DeliveryFeePolicy.fromMap(snapshot.data());
+                notifyListeners();
+              } catch (error) {
+                _failed(error);
+              }
+            }, onError: _failed),
+      );
       _subscriptions.add(
         repository!.auth.authStateChanges().listen((_) {
           _loadFollows();
@@ -432,19 +468,11 @@ class BuyerDemo extends ChangeNotifier {
               (s) {
                 if (_disposed) return;
                 notificationError = null;
-                notifications =
-                    s.docs
-                        .map((d) => <String, dynamic>{...d.data(), 'id': d.id})
-                        .toList()
-                      ..sort(
-                        (a, b) =>
-                            (canonical.documentDate(b['createdAt']) ??
-                                    DateTime(1970))
-                                .compareTo(
-                                  canonical.documentDate(a['createdAt']) ??
-                                      DateTime(1970),
-                                ),
-                      );
+                _serverNotices.clear();
+                for (final doc in s.docs) {
+                  _serverNotices[doc.id] = doc.data();
+                }
+                _mergeNotifications();
                 notifyListeners();
               },
               onError: (Object e) {
@@ -461,6 +489,20 @@ class BuyerDemo extends ChangeNotifier {
           orders.clear();
           for (final row in rows) {
             final order = fromOrder(row);
+            if (order.status != BuyerOrderStatus.pending) {
+              final id = '${order.id}_${order.status.name}';
+              _orderNotices.putIfAbsent(
+                id,
+                () => {
+                  'orderId': order.id,
+                  'status': order.status.name,
+                  'title': 'Order update',
+                  'body': statusMessage(order.status),
+                  'createdAt': row.updatedAt ?? row.createdAt,
+                  'read': false,
+                },
+              );
+            }
             final old = previous[row.id];
             if (old != null) {
               if (old.status != order.status) {
@@ -474,6 +516,7 @@ class BuyerDemo extends ChangeNotifier {
               orders.add(order);
             }
           }
+          _mergeNotifications();
           notifyListeners();
         }, onError: _failed),
       );
@@ -684,9 +727,13 @@ class BuyerDemo extends ChangeNotifier {
   int get count => cart.values.fold(0, (a, b) => a + b);
   double get subtotal =>
       cart.entries.fold(0, (a, e) => a + e.key.price * e.value);
-  double get delivery =>
-      cart.isEmpty ? 0 : MarketplaceRepository.deliveryFeeFor(subtotal,
-          currency: currency, policy: _deliveryPolicy);
+  double get delivery => cart.isEmpty
+      ? 0
+      : MarketplaceRepository.deliveryFeeFor(
+          subtotal,
+          currency: currency,
+          policy: _deliveryPolicy,
+        );
   double get total => subtotal + delivery;
   String get currency => cart.keys.firstOrNull?.currency ?? 'LKR';
   String get destination =>
